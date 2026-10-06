@@ -1,0 +1,1546 @@
+<title>Relay Harness</title>
+<meta name="description" content="Design proposal for Relay, a stack-agnostic AI delivery harness for small teams.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650;12..96,750&family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+:root{
+  --bg:#F4F6F9; --surface:#FFFFFF; --surface-2:#EBEFF5; --ink:#131A25; --ink-2:#384354; --muted:#5E6B7D;
+  --line:#D6DCE5; --line-strong:#8E9AAB;
+  --acc:#2B52C4; --acc-ink:#1F3E9A; --acc-soft:#E2E9FA;
+  --warm:#B35816; --warm-soft:#FAE8D9;
+  --ok:#2A7549; --ok-soft:#DDF0E4; --bad:#AF3129; --bad-soft:#F8E0DD; --warn:#8C5B00; --warn-soft:#F6ECD2;
+  --mark:#FFE59A; --shadow:0 10px 30px rgba(19,26,37,.16);
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E131A; --surface:#151C26; --surface-2:#1C2531; --ink:#E5EAF1; --ink-2:#BCC6D3; --muted:#8C98AA;
+    --line:#28323F; --line-strong:#617087;
+    --acc:#86A2FF; --acc-ink:#AFC1FF; --acc-soft:#1B2747;
+    --warm:#F0A266; --warm-soft:#3A2515;
+    --ok:#66C792; --ok-soft:#16301F; --bad:#F2857C; --bad-soft:#3A1A18; --warn:#E3B55A; --warn-soft:#342812;
+    --mark:#5C4B10; --shadow:0 10px 30px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E131A; --surface:#151C26; --surface-2:#1C2531; --ink:#E5EAF1; --ink-2:#BCC6D3; --muted:#8C98AA;
+  --line:#28323F; --line-strong:#617087;
+  --acc:#86A2FF; --acc-ink:#AFC1FF; --acc-soft:#1B2747;
+  --warm:#F0A266; --warm-soft:#3A2515;
+  --ok:#66C792; --ok-soft:#16301F; --bad:#F2857C; --bad-soft:#3A1A18; --warn:#E3B55A; --warn-soft:#342812;
+  --mark:#5C4B10; --shadow:0 10px 30px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto} *{transition:none!important;animation:none!important}}
+body{background:var(--bg);color:var(--ink);font:16px/1.62 var(--f-body);-webkit-font-smoothing:antialiased}
+a{color:var(--acc-ink);text-underline-offset:2px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+
+.wrap{max-width:1160px;margin:0 auto;padding-inline:20px;padding-block:40px 140px;display:grid;grid-template-columns:minmax(0,1fr);gap:40px}
+@media (min-width:1100px){.wrap{grid-template-columns:206px minmax(0,1fr);gap:56px}}
+
+/* table of contents */
+.toc{display:none}
+@media (min-width:1100px){
+  .toc{display:block;position:sticky;top:calc(env(safe-area-inset-top,0px) + 28px);align-self:start;max-height:calc(100vh - 56px);overflow:auto;font-size:13.5px}
+}
+.toc .brand{font-family:var(--f-display);font-weight:750;font-size:22px;letter-spacing:-.01em;margin:0 0 4px}
+.toc .brand-sub{color:var(--muted);font-size:12.5px;margin:0 0 20px}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.toc a{display:grid;grid-template-columns:24px 1fr;padding:4px 8px 4px 0;color:var(--ink-2);text-decoration:none;border-radius:6px}
+.toc a:hover{color:var(--acc-ink)}
+.toc .n{font-family:var(--f-mono);font-size:11px;color:var(--muted);padding-top:2px}
+
+main{min-width:0;max-width:900px}
+
+/* header */
+.hdr{padding-bottom:28px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+h1{font-family:var(--f-display);font-weight:750;font-size:clamp(40px,6vw,64px);line-height:1;letter-spacing:-.025em;margin:0 0 16px}
+h1 .dim{color:var(--acc)}
+.lede{font-size:clamp(18px,2.2vw,21px);line-height:1.5;color:var(--ink-2);max-width:40em;margin:0 0 20px;text-wrap:pretty}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13.5px;color:var(--muted);margin:0}
+.meta b{color:var(--ink);font-weight:600}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--warn-soft);color:var(--warn)}
+
+/* sections */
+section{padding-top:48px}
+h2{font-family:var(--f-display);font-weight:650;font-size:clamp(25px,3vw,31px);line-height:1.15;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+h2 .num{font-family:var(--f-mono);font-size:.5em;font-weight:500;color:var(--muted);vertical-align:.35em;margin-right:10px;letter-spacing:0}
+h3{font-family:var(--f-display);font-weight:650;font-size:19px;line-height:1.3;margin:32px 0 10px;text-wrap:balance}
+p,ul,ol{max-width:68ch}
+p{margin:0 0 14px}
+ul,ol{padding-left:22px;margin:0 0 16px}
+li{margin:0 0 6px}
+li::marker{color:var(--muted)}
+strong{font-weight:650}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--surface-2);padding:1px 5px;border-radius:4px;color:var(--ink)}
+pre{font-family:var(--f-mono);font-size:12.8px;line-height:1.6;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;margin:0 0 20px;color:var(--ink-2);tab-size:2}
+pre code{background:none;padding:0;font-size:inherit;color:inherit}
+pre .c{color:var(--muted)}
+pre .k{color:var(--acc-ink);font-weight:500}
+pre .w{color:var(--warm)}
+pre[data-file]{position:relative;padding-top:38px}
+pre[data-file]::before{content:attr(data-file);position:absolute;top:0;left:0;right:0;padding:7px 18px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--line);background:var(--surface-2);border-radius:10px 10px 0 0}
+
+.note{background:var(--acc-soft);border-radius:12px;padding:16px 20px;margin:0 0 22px;max-width:72ch}
+.note p:last-child,.note ul:last-child{margin-bottom:0}
+.note .lbl{display:block;font-family:var(--f-mono);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--acc-ink);margin-bottom:6px;font-weight:600}
+.note.warm{background:var(--warm-soft)}
+.note.warm .lbl{color:var(--warm)}
+
+.summary{display:grid;gap:12px;list-style:none;padding:0;max-width:none}
+.summary li{display:grid;grid-template-columns:132px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line);margin:0}
+.summary li:last-child{border-bottom:1px solid var(--line)}
+.summary .k{font-family:var(--f-mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--acc-ink);padding-top:3px}
+@media (max-width:560px){.summary li{grid-template-columns:1fr;gap:4px}}
+
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px 32px;margin:0 0 18px}
+.two h4{font-size:13px;font-family:var(--f-mono);letter-spacing:.06em;text-transform:uppercase;margin:0 0 8px;color:var(--muted);font-weight:600}
+.two ul{margin:0}
+
+/* tables */
+.tbl{overflow-x:auto;margin:0 0 22px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5}
+th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+th{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);white-space:nowrap}
+td code{white-space:nowrap}
+td.cmd{white-space:nowrap}
+.tbl.skills td:first-child{white-space:nowrap}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.acc{background:var(--acc-soft);color:var(--acc-ink)}
+.grp-row td{background:var(--surface-2);font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:7px 14px;font-weight:600}
+
+/* figures */
+figure{margin:8px 0 28px;position:relative}
+.fig-body{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 16px;overflow-x:auto}
+figure svg{display:block;width:100%;height:auto;min-width:720px}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;max-width:72ch}
+figcaption b{color:var(--ink-2);font-weight:600}
+
+.d text{font-family:var(--f-body);font-size:12.5px;fill:var(--ink)}
+.d .s{font-size:11px;fill:var(--muted)}
+.d .m{font-family:var(--f-mono);font-size:11px;fill:var(--ink-2)}
+.d .b{font-weight:650}
+.d .ta{fill:var(--acc-ink)}
+.d .tw{fill:var(--warm)}
+.d .box{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.2}
+.d .box-a{fill:var(--acc-soft);stroke:var(--acc);stroke-width:1.4}
+.d .box-w{fill:var(--warm-soft);stroke:var(--warm);stroke-width:1.4}
+.d .grp{fill:var(--surface-2);stroke:none}
+.d .ln{stroke:var(--ink-2);stroke-width:1.3;fill:none}
+.d .ln-a{stroke:var(--acc);stroke-width:1.7;fill:none}
+.d .ln-w{stroke:var(--warm);stroke-width:1.6;fill:none}
+.d .life{stroke:var(--line-strong);stroke-width:1;stroke-dasharray:3 4;fill:none}
+.d .dash{stroke-dasharray:5 4}
+.d .ah{fill:var(--ink-2)}
+.d .ah-a{fill:var(--acc)}
+.d .ah-w{fill:var(--warm)}
+.d .gate{fill:var(--warm);stroke:none}
+.d .dot{fill:var(--surface);stroke:var(--ink-2);stroke-width:1.6}
+.d .dot-a{fill:var(--acc);stroke:none}
+.d .dot-w{fill:var(--warm);stroke:none}
+
+/* layered stack (agnostic) */
+.layers{display:grid;gap:0;margin:0 0 12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.layer{display:grid;grid-template-columns:200px 1fr;gap:18px;padding:16px 18px;border-top:1px solid var(--line)}
+.layer:first-child{border-top:none}
+.layer h4{margin:0;font-family:var(--f-display);font-size:16px;font-weight:650}
+.layer .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+.chip{font-family:var(--f-mono);font-size:12px;padding:3px 9px;border-radius:6px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.layer.core{background:var(--acc-soft)}
+.layer.core .chip{background:var(--surface);border-color:transparent}
+.chip-grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%}
+.chip-grp .lab{font-size:12px;color:var(--muted);min-width:78px}
+@media (max-width:640px){.layer{grid-template-columns:1fr;gap:10px}}
+
+/* change table styling */
+.changes td:nth-child(2){font-weight:500}
+
+/* stage strip under hero */
+.stages{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px;padding:0;list-style:none;max-width:none}
+.stages li{margin:0;font-family:var(--f-mono);font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.stages li.g{border-color:var(--warm);color:var(--warm)}
+
+.footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+
+/* ---------- review / comment UI ---------- */
+mark.cmt{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px;cursor:pointer}
+.fig-cmt{position:absolute;top:10px;right:10px;font:600 12px/1 var(--f-body);padding:7px 10px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer;opacity:.0;transition:opacity .15s}
+figure:hover .fig-cmt,.fig-cmt:focus-visible{opacity:1}
+@media (hover:none){.fig-cmt{opacity:1}}
+#sel-add{position:fixed;z-index:40;font:600 13px/1 var(--f-body);padding:8px 12px;border-radius:8px;border:none;background:var(--acc);color:var(--bg);box-shadow:var(--shadow);cursor:pointer}
+.dock{position:fixed;z-index:30;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:var(--shadow)}
+.btn{font:600 13px/1 var(--f-body);padding:9px 13px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--line-strong)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:var(--bg)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.danger{color:var(--bad)}
+.count{display:inline-block;min-width:20px;padding:2px 6px;border-radius:999px;background:var(--acc-soft);color:var(--acc-ink);font-size:11.5px;text-align:center;margin-left:4px}
+.panel{position:fixed;z-index:50;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+#composer{left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(540px,calc(100vw - 32px));padding:16px}
+#composer .where{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+#composer blockquote{margin:0 0 10px;padding:8px 12px;background:var(--surface-2);border-radius:8px;font-size:13.5px;color:var(--ink-2);max-height:96px;overflow:auto}
+#composer textarea,#fallback-text{width:100%;min-height:92px;font:14px/1.5 var(--f-body);padding:10px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg);color:var(--ink);resize:vertical}
+#composer .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+#composer .hint{font-size:12px;color:var(--muted)}
+#drawer{top:calc(12px + env(safe-area-inset-top,0px));right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(430px,calc(100vw - 24px));display:flex;flex-direction:column}
+#drawer header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+#drawer header h3{margin:0;font-size:17px}
+#drawer .list{overflow:auto;padding:8px 16px;flex:1}
+#drawer .empty{color:var(--muted);font-size:14px;padding:18px 0}
+.cm{padding:12px 0;border-bottom:1px solid var(--line)}
+.cm:last-child{border-bottom:none}
+.cm .where{font-size:12px;color:var(--muted);margin-bottom:4px}
+.cm .q{font-size:13px;color:var(--ink-2);background:var(--surface-2);border-radius:6px;padding:5px 8px;margin-bottom:6px}
+.cm .t{font-size:14px;white-space:pre-wrap;margin-bottom:6px}
+.cm .acts{display:flex;gap:6px}
+.cm .acts .btn{padding:5px 9px;font-size:12px}
+#drawer footer{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
+#fallback{padding:0 16px 12px}
+#fallback p{font-size:12.5px;color:var(--muted);margin:0 0 6px}
+#fallback-text{min-height:140px;font-family:var(--f-mono);font-size:12px}
+#toast{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);font-size:14px;padding:10px 16px;border-radius:10px;box-shadow:var(--shadow)}
+</style>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Contents">
+    <p class="brand">Relay</p>
+    <p class="brand-sub">Design proposal v0.1</p>
+    <ol>
+      <li><a href="#summary"><span class="n">01</span>In one minute</a></li>
+      <li><a href="#problem"><span class="n">02</span>Why we need this</a></li>
+      <li><a href="#goals"><span class="n">03</span>Goals and non-goals</a></li>
+      <li><a href="#flow"><span class="n">04</span>The whole flow</a></li>
+      <li><a href="#changes"><span class="n">05</span>What I changed</a></li>
+      <li><a href="#agnostic"><span class="n">06</span>Stack agnostic</a></li>
+      <li><a href="#workspace"><span class="n">07</span>The _relay workspace</a></li>
+      <li><a href="#sync"><span class="n">08</span>Sharing with the team</a></li>
+      <li><a href="#skills"><span class="n">09</span>All skills</a></li>
+      <li><a href="#requirements"><span class="n">10</span>Requirements</a></li>
+      <li><a href="#design"><span class="n">11</span>Design + review page</a></li>
+      <li><a href="#tasks"><span class="n">12</span>Independent tasks</a></li>
+      <li><a href="#build"><span class="n">13</span>Building a task</a></li>
+      <li><a href="#branches"><span class="n">14</span>Branches + freshen</a></li>
+      <li><a href="#review"><span class="n">15</span>PR review</a></li>
+      <li><a href="#leads"><span class="n">16</span>Jira and the sheet</a></li>
+      <li><a href="#diagnose"><span class="n">17</span>Diagnose bugs</a></li>
+      <li><a href="#style"><span class="n">18</span>Communication style</a></li>
+      <li><a href="#package"><span class="n">19</span>How we package it</a></li>
+      <li><a href="#roadmap"><span class="n">20</span>Build order</a></li>
+      <li><a href="#questions"><span class="n">21</span>Open questions</a></li>
+    </ol>
+  </nav>
+
+  <main id="doc">
+    <header class="hdr">
+      <p class="eyebrow">Design proposal · v0.1 · 23 Sep 2026</p>
+      <h1>Relay<span class="dim">.</span></h1>
+      <p class="lede">A harness that takes BA stories all the way to reviewed, merged code. It works with any language or stack, and it lets a small team of people and their AI agents build one feature together without stepping on each other.</p>
+      <p class="meta"><span><span class="pill">Draft for discussion</span></span><span><b>Name:</b> placeholder, see Q1</span><span><b>Reads in:</b> about 20 minutes</span></p>
+    </header>
+
+    <div class="note warm" style="margin-top:24px">
+      <span class="lbl">Review this page the Relay way</span>
+      <p>Select any text on this page and press <b>Comment</b>. On a diagram, use the <b>Comment on diagram</b> button in its corner. When you are done, press <b>Copy feedback</b> at the bottom right and paste it to me in chat. Each comment carries its section, the exact words you picked and the text around them. This is the same review page Relay will generate for every design (see <a href="#design">section 11</a>).</p>
+    </div>
+
+    <!-- 01 -->
+    <section id="summary">
+      <h2><span class="num">01</span>In one minute</h2>
+      <ul class="summary">
+        <li><span class="k">What</span><span>A set of skills (slash commands) plus one shared folder. Together they turn stories into requirements, a design, small tasks, code and reviewed PRs.</span></li>
+        <li><span class="k">Any stack</span><span>The skills never assume a language. Relay reads each repo once, writes down how that repo builds, tests and is structured, and follows those rules.</span></li>
+        <li><span class="k">Memory</span><span>Every step writes plain markdown into <code>_relay/features/&lt;feature&gt;/</code>. The code repo ignores this folder, but the folder is its own small git repo, so the whole team shares it.</span></li>
+        <li><span class="k">Team</span><span>Tasks are cut so people can work in parallel: contracts first, then independent slices. Every finished task leaves a changelog with <em>heads-up</em> notes that the next agent reads before it writes code.</span></li>
+        <li><span class="k">Control</span><span>People approve at four gates. Agents never merge to develop, never resolve merge conflicts and never write to production.</span></li>
+        <li><span class="k">One command</span><span><code>/relay next</code> checks where the feature is and offers the next step, so nobody has to remember every command.</span></li>
+      </ul>
+    </section>
+
+    <!-- 02 -->
+    <section id="problem">
+      <h2><span class="num">02</span>Why we need this</h2>
+      <p>AI works well for one person in one chat. In a team it breaks in small, annoying ways:</p>
+      <ul>
+        <li><strong>Every agent starts from zero.</strong> My agent does not know what my teammate's agent changed an hour ago.</li>
+        <li><strong>Specs live in chat history.</strong> When a story changes, nobody knows which parts of the design or the code are now wrong.</li>
+        <li><strong>Status lives in people's heads,</strong> or in a board that nobody updates.</li>
+        <li><strong>Every project is different.</strong> Java here, Node there, Bitbucket for one client, GitHub for another. Prompts written for one project do not carry over.</li>
+      </ul>
+      <p>Relay fixes this with one idea: <strong>every step leaves a file behind, and those files are the team's shared memory.</strong> Agents read them before they act and write to them after.</p>
+    </section>
+
+    <!-- 03 -->
+    <section id="goals">
+      <h2><span class="num">03</span>Goals and non-goals</h2>
+      <div class="two">
+        <div>
+          <h4>Goals</h4>
+          <ul>
+            <li>Works for any language, framework and stack.</li>
+            <li>Works with GitHub, Bitbucket, GitLab and Azure DevOps. Works with Jira, other trackers, or no tracker.</li>
+            <li>A small team can split one feature and work in parallel.</li>
+            <li>Every step can be run again. It updates what is there; it does not start over.</li>
+            <li>People decide. Agents do the heavy lifting.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Not goals</h4>
+          <ul>
+            <li>Replacing the BA or Jira. Stories still come from the BA.</li>
+            <li>Merging anything into develop by itself.</li>
+            <li>Resolving merge conflicts by itself.</li>
+            <li>Changing production systems, ever.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 -->
+    <section id="flow">
+      <h2><span class="num">04</span>The whole flow</h2>
+      <p>A feature (usually one epic) moves through eight stages. Each stage is one skill. Each skill reads what the earlier stages wrote and adds its own files.</p>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 980 252" role="img" aria-label="Eight stages from requirements to ship. People approve after requirements, design, check and review. Review can send work back to build. Every stage saves to the shared _relay spec repo.">
+            <defs>
+              <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+              <marker id="f1w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-w"/></marker>
+            </defs>
+            <!-- loop review -> build -->
+            <path d="M795 72 C 795 30, 673 30, 673 64" class="ln-w" marker-end="url(#f1w)"/>
+            <text x="734" y="26" text-anchor="middle" class="s tw">changes requested</text>
+            <!-- build stack -->
+            <rect x="629" y="64" width="104" height="62" rx="8" class="box"/>
+            <rect x="625" y="68" width="104" height="62" rx="8" class="box"/>
+            <!-- boxes -->
+            <g>
+              <rect x="11" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="63" y="98" text-anchor="middle" class="b">Requirements</text>
+              <text x="63" y="117" text-anchor="middle" class="m">/relay intake</text>
+              <rect x="133" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="185" y="98" text-anchor="middle" class="b">Design</text>
+              <text x="185" y="117" text-anchor="middle" class="m">/relay design</text>
+              <rect x="255" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="307" y="98" text-anchor="middle" class="b">Tasks</text>
+              <text x="307" y="117" text-anchor="middle" class="m">/relay plan</text>
+              <rect x="377" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="429" y="98" text-anchor="middle" class="b">Check</text>
+              <text x="429" y="117" text-anchor="middle" class="m">/relay check</text>
+              <rect x="499" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="551" y="98" text-anchor="middle" class="b">Publish</text>
+              <text x="551" y="117" text-anchor="middle" class="m">/relay publish</text>
+              <rect x="621" y="72" width="104" height="62" rx="8" class="box-a"/>
+              <text x="673" y="98" text-anchor="middle" class="b">Build</text>
+              <text x="673" y="117" text-anchor="middle" class="m">/relay build</text>
+              <rect x="743" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="795" y="98" text-anchor="middle" class="b">Review</text>
+              <text x="795" y="117" text-anchor="middle" class="m">/relay review</text>
+              <rect x="865" y="72" width="104" height="62" rx="8" class="box"/>
+              <text x="917" y="98" text-anchor="middle" class="b">Ship</text>
+              <text x="917" y="117" text-anchor="middle" class="m">/relay ship</text>
+            </g>
+            <!-- connectors: gates after 1,2,4,7 ; arrows after 3,5,6 -->
+            <path d="M124 96 L131 103 L124 110 L117 103 Z" class="gate"/>
+            <path d="M246 96 L253 103 L246 110 L239 103 Z" class="gate"/>
+            <line x1="359" y1="103" x2="375" y2="103" class="ln" marker-end="url(#f1a)"/>
+            <path d="M490 96 L497 103 L490 110 L483 103 Z" class="gate"/>
+            <line x1="603" y1="103" x2="619" y2="103" class="ln" marker-end="url(#f1a)"/>
+            <line x1="733" y1="103" x2="741" y2="103" class="ln" marker-end="url(#f1a)"/>
+            <path d="M856 96 L863 103 L856 110 L849 103 Z" class="gate"/>
+            <!-- outputs -->
+            <text x="63" y="153" text-anchor="middle" class="m">requirements/</text>
+            <text x="185" y="153" text-anchor="middle" class="m">design/</text>
+            <text x="307" y="153" text-anchor="middle" class="m">tasks/T*/</text>
+            <text x="429" y="153" text-anchor="middle" class="m">check.md</text>
+            <text x="551" y="153" text-anchor="middle" class="m">Jira + branch</text>
+            <text x="673" y="153" text-anchor="middle" class="m">code + PR</text>
+            <text x="795" y="153" text-anchor="middle" class="m">PR comments</text>
+            <text x="917" y="153" text-anchor="middle" class="m">into develop</text>
+            <!-- save lines -->
+            <g class="life">
+              <line x1="63" y1="162" x2="63" y2="190"/><line x1="185" y1="162" x2="185" y2="190"/>
+              <line x1="307" y1="162" x2="307" y2="190"/><line x1="429" y1="162" x2="429" y2="190"/>
+              <line x1="551" y1="162" x2="551" y2="190"/><line x1="673" y1="162" x2="673" y2="190"/>
+              <line x1="795" y1="162" x2="795" y2="190"/><line x1="917" y1="162" x2="917" y2="190"/>
+            </g>
+            <rect x="11" y="190" width="958" height="34" rx="8" class="grp"/>
+            <text x="490" y="212" text-anchor="middle" class="ta b">Shared memory: the _relay/ spec repo. Every step reads it first and writes to it last.</text>
+            <path d="M18 238 L24 244 L18 250 L12 244 Z" class="gate"/>
+            <text x="32" y="248" class="s">a person approves before the next stage starts</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 1.</b> The eight stages. Orange diamonds are gates where a person signs off. Build runs many times in parallel, once per task, by different people.</figcaption>
+      </figure>
+
+      <h3>Stage and gate status</h3>
+      <p>Each feature has one small file, <code>feature.yaml</code>, that says which stage it is in and who approved each gate. Anyone can run <code>/relay status</code> to see it.</p>
+<pre data-file="_relay/features/PAY-120-refund-flow/feature.yaml"><code>feature: PAY-120-refund-flow
+epic: PAY-120
+stage: building     <span class="c"># requirements | design | tasks | checked | building | feature-review | done</span>
+gates:
+  requirements: { approved_by: ba-lead,   at: 2026-09-18 }
+  design:       { approved_by: tech-lead, at: 2026-09-20 }
+  tasks:        { approved_by: tech-lead, at: 2026-09-21 }
+  ship:         null
+feature_branch: feature/PAY-120-refund-flow
+repos: [payments-api, payments-web]</code></pre>
+
+      <div class="note">
+        <span class="lbl">One command to start with</span>
+        <p><code>/relay next</code> reads <code>feature.yaml</code> and the task files, then says what should happen next and offers to run it. For example: <em>"Design is approved. Next: cut tasks with /relay plan. Run it now?"</em> or <em>"T05 is ready and nobody owns it. Build it?"</em> New people only need to learn this one command.</p>
+      </div>
+    </section>
+
+    <!-- 05 -->
+    <section id="changes">
+      <h2><span class="num">05</span>What I changed from your idea, and why</h2>
+      <p>Most of your idea stays as it is. These are the places where I think a different approach works better. Each one is open for discussion.</p>
+      <div class="tbl changes">
+        <table>
+          <thead><tr><th>Your idea</th><th>My change</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>A local <code>_something</code> folder, not in git</td><td>Keep the folder, but make it a clone of a separate <strong>spec repo</strong></td><td>You get sharing, history and undo for free. The code repo stays clean. See <a href="#sync">section 8</a>.</td></tr>
+            <tr><td>A status file for the feature</td><td>Each task has its <strong>own</strong> status file. The feature board is computed, never edited by hand</td><td>Two people never edit the same file, so there are no merge conflicts in the spec repo.</td></tr>
+            <tr><td>Tasks with few dependencies</td><td>A fixed shape: <strong>contracts first</strong>, then parallel slices, then one join-up task</td><td>Independence becomes a rule the planner must follow and the checker can test, not luck.</td></tr>
+            <tr><td>A separate skill per step</td><td>Keep them, and add <code>/relay next</code></td><td>People learn one command. The others are still there for power users.</td></tr>
+            <tr><td>A scheduler that updates the feature branch</td><td>A plain script in CI. AI only writes the report</td><td>Git merges do not need AI. A script is cheaper, predictable, and runs when laptops are off.</td></tr>
+            <tr><td>Best practices so diagnose does no harm</td><td>Read-only credentials, plus a hook that blocks bad commands, plus the skill rules</td><td>An instruction can be ignored. A read-only database user cannot. See <a href="#diagnose">section 17</a>.</td></tr>
+            <tr><td>A review skill</td><td>Review findings that repeat are added to the project's <code>learnings.md</code></td><td>The next build reads them, so the same mistake is not made twice. The harness gets better every sprint.</td></tr>
+            <tr><td>Check tasks against acceptance criteria</td><td>Every AC gets an <strong>ID</strong> (like <code>PAY-121.AC2</code>) that tasks, tests and reviews all point to</td><td>The checker can prove there are no gaps. When a story changes, we know exactly which tasks are affected.</td></tr>
+            <tr><td>Task PRs merge into the feature branch</td><td>Add a final <strong>feature review</strong> before the feature branch goes to develop</td><td>Each task can pass review alone while the whole still misses something. <code>/relay ship</code> checks the whole.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 06 -->
+    <section id="agnostic">
+      <h2><span class="num">06</span>Staying stack agnostic</h2>
+      <p>Relay has three layers. Only the bottom two know anything about your tools, and both are either learned or picked in config. The skills themselves never name a language.</p>
+
+      <figure>
+        <div class="layers" role="img" aria-label="Three layers: core skills that are the same for everyone, a project profile learned per repo, and adapters picked in config.">
+          <div class="layer core">
+            <div><h4>Core skills</h4><div class="sub">Same for every team</div></div>
+            <div class="chips"><span class="chip">intake</span><span class="chip">context</span><span class="chip">design</span><span class="chip">plan</span><span class="chip">check</span><span class="chip">publish</span><span class="chip">branch</span><span class="chip">build</span><span class="chip">review</span><span class="chip">ship</span><span class="chip">freshen</span><span class="chip">diagnose</span><span class="chip">next</span></div>
+          </div>
+          <div class="layer">
+            <div><h4>Project profile</h4><div class="sub">Learned once per repo, you correct it</div></div>
+            <div class="chips"><span class="chip">build command</span><span class="chip">test command</span><span class="chip">lint command</span><span class="chip">folder layout</span><span class="chip">house rules</span><span class="chip">exemplar files</span><span class="chip">learnings</span></div>
+          </div>
+          <div class="layer">
+            <div><h4>Adapters</h4><div class="sub">Picked in relay.yaml</div></div>
+            <div class="chips">
+              <div class="chip-grp"><span class="lab">Git platform</span><span class="chip">GitHub</span><span class="chip">Bitbucket Cloud</span><span class="chip">Bitbucket DC</span><span class="chip">GitLab</span><span class="chip">Azure Repos</span></div>
+              <div class="chip-grp"><span class="lab">Tracker</span><span class="chip">Jira</span><span class="chip">Azure Boards</span><span class="chip">Linear</span><span class="chip">GitHub Issues</span><span class="chip">none</span></div>
+              <div class="chip-grp"><span class="lab">Sheet</span><span class="chip">CSV</span><span class="chip">Excel</span><span class="chip">Google Sheets</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Figure 2.</b> When a skill needs to run tests, it asks the profile for the test command. When it needs to post a PR comment, it asks the adapter. It never knows it is talking to Gradle or Bitbucket.</figcaption>
+      </figure>
+
+      <h3>How Relay learns a repo</h3>
+      <p><code>/relay learn</code> runs once per repo (and again when things change). It:</p>
+      <ol>
+        <li>Reads build and CI files it finds: <code>package.json</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>go.mod</code>, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Makefile</code>, pipeline files.</li>
+        <li>Reads the README and the folder layout.</li>
+        <li>Runs the build and the tests once, to prove the commands work.</li>
+        <li>Picks two or three <strong>exemplar</strong> files for each kind of thing (an endpoint, a test, a migration, a UI component). These show the house style better than any rule list.</li>
+        <li>Writes <code>profile.md</code> and asks you to fix anything wrong.</li>
+      </ol>
+<pre data-file="_relay/projects/payments-api/profile.md"><code># payments-api
+Stack:   Java 21, Spring Boot 3, PostgreSQL, Flyway
+Build:   ./gradlew build
+Test:    ./gradlew test        <span class="c">(one class: ./gradlew test --tests &lt;Class&gt;)</span>
+Lint:    ./gradlew spotlessCheck
+Layout:  api/ (controllers) · domain/ (logic) · infra/ (db, clients)
+
+## Exemplars
+endpoint:  src/main/java/.../payments/PaymentController.java
+test:      src/test/java/.../payments/PaymentControllerTest.java
+migration: src/main/resources/db/migration/V42__add_payment_index.sql
+
+## House rules
+- Controllers call services, never repositories.
+- Money is BigDecimal, never double.
+- Every endpoint has an integration test with Testcontainers.</code></pre>
+
+      <h3>Setup: config and secrets</h3>
+      <p><code>/relay init</code> asks a few questions (platform, tracker, spec repo URL) and writes <code>relay.yaml</code>. Secrets never go in files. They come from environment variables, and <code>init</code> checks they are set.</p>
+<pre data-file="_relay/relay.yaml"><code>team: payments
+base_branch: develop
+branches:
+  feature: feature/{epic}-{slug}
+  task:    feature/{epic}/{task}-{slug}
+git:
+  platform: bitbucket          <span class="c"># github | bitbucket | bitbucket-dc | gitlab | azure</span>
+  url:   ${RELAY_GIT_URL}
+  token: ${RELAY_GIT_TOKEN}    <span class="c"># read from the environment, never stored</span>
+tracker:
+  type: jira                   <span class="c"># jira | azure-boards | linear | github | none</span>
+  url:   ${RELAY_TRACKER_URL}
+  token: ${RELAY_TRACKER_TOKEN}
+repos:
+  payments-api: git@bitbucket.org:acme/payments-api.git
+  payments-web: git@bitbucket.org:acme/payments-web.git
+freshen:
+  schedule: "0 6 * * 1-5"      <span class="c"># weekdays 06:00, optional</span>
+  run_tests: true
+gates:
+  requirements: ba
+  design: tech-lead
+  tasks: tech-lead</code></pre>
+      <p>Where an MCP server exists (for example the Atlassian one), the adapter uses it. Where it does not, the adapter falls back to a CLI (<code>gh</code>) or plain REST calls. Either way the skill sees the same small set of actions: <em>get story, create sub-task, get PR diff, post inline comment</em>.</p>
+    </section>
+
+    <!-- 07 -->
+    <section id="workspace">
+      <h2><span class="num">07</span>The <code>_relay</code> workspace</h2>
+      <p>Everything Relay knows lives in one folder at the root of your code repo. The code repo's <code>.gitignore</code> lists it, so none of it ever lands in a code PR.</p>
+<pre><code><span class="k">_relay/</span>                              <span class="c">in .gitignore of the code repo; its own git repo</span>
+├── relay.yaml                       <span class="c">team config, no secrets</span>
+├── style.md                         <span class="c">how we write, read by every skill</span>
+├── safety.yaml                      <span class="c">commands the guard hook blocks</span>
+├── projects/
+│   └── payments-api/
+│       ├── profile.md               <span class="c">how this repo works (/relay learn)</span>
+│       └── learnings.md             <span class="c">repeated review findings</span>
+├── features/
+│   └── <span class="k">PAY-120-refund-flow/</span>
+│       ├── feature.yaml             <span class="c">stage, gates, branch</span>
+│       ├── requirements/
+│       │   ├── overview.md          <span class="c">epic summary + story index</span>
+│       │   ├── stories/PAY-121.md   <span class="c">one file per story, ACs with IDs</span>
+│       │   ├── context/             <span class="c">notes from grooming calls, linked to stories</span>
+│       │   │   └── raw/             <span class="c">original transcripts, untouched</span>
+│       │   └── questions.md         <span class="c">open questions for the BA</span>
+│       ├── design/
+│       │   ├── design.md
+│       │   ├── design.html          <span class="c">review page, generated</span>
+│       │   ├── decisions/           <span class="c">ADR-001-sync-vs-async.md</span>
+│       │   └── changelog.md         <span class="c">what changed in the design and why</span>
+│       ├── tasks/
+│       │   ├── check.md             <span class="c">gap report</span>
+│       │   └── T03-refund-api/
+│       │       ├── task.md          <span class="c">what to build (planner writes)</span>
+│       │       ├── status.yaml      <span class="c">state, owner, branch, PR (owner writes)</span>
+│       │       └── changelog.md     <span class="c">what was done + heads-up (owner writes)</span>
+│       └── reviews/PR-412.md
+├── bugs/PAY-310/                    <span class="c">diagnose notes, root cause, fix</span>
+└── .generated/                      <span class="c">board.md, sheet.csv (not committed)</span></code></pre>
+
+      <h3>Running a skill again</h3>
+      <p>Every skill is safe to run twice. By default it <strong>updates</strong>: it reads the current file, changes only what needs to change, and lists what it changed. Pass <code>--fresh</code> to rewrite from scratch. The old version is still in the spec repo's git history.</p>
+      <p>Anything a person writes between these markers is never touched by a skill:</p>
+<pre><code>&lt;!-- keep --&gt;
+Dev note: orders before 2024 have no payment date. Handle null.
+&lt;!-- /keep --&gt;</code></pre>
+
+      <h3>Deleting a feature</h3>
+      <p><code>/relay drop PAY-120</code> lists every file it will delete, asks you to confirm, deletes the folder and pushes. Because the spec repo is git, a dropped feature can still be brought back. It does not touch Jira tickets or branches unless you pass <code>--with-branches</code> or <code>--with-tickets</code>, and even then it asks again.</p>
+    </section>
+
+    <!-- 08 -->
+    <section id="sync">
+      <h2><span class="num">08</span>Sharing with the team</h2>
+      <p>This is the hardest part of your idea. The folder must be shared, because Dev B needs to see what Dev A did. But it must not go into the code repo, and many people update it at the same time. Here are the options:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Option</th><th>Good</th><th>Bad</th></tr></thead>
+          <tbody>
+            <tr><td>Commit into the code repo</td><td>Simple. Lives next to the code.</td><td>Noise in every PR. Status changes cause conflicts on feature branches. You did not want this.</td></tr>
+            <tr><td><strong>Separate spec repo</strong> <span class="tag ok">pick</span></td><td>Full history and undo. Works offline. One spec repo can cover a feature that spans many code repos.</td><td>One more repo. Needs the rules below to avoid conflicts.</td></tr>
+            <tr><td>Tracker only (Jira holds everything)</td><td>Leads already look there.</td><td>Jira is bad at long markdown, diagrams and changelogs. Agents read files far better than tickets.</td></tr>
+            <tr><td>Shared drive folder</td><td>No git knowledge needed.</td><td>No real conflict handling. Silent overwrites. No history.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 900 330" role="img" aria-label="Each laptop has a code repo with a gitignored _relay folder that is a clone of the shared spec repo. The spec repo syncs task status with the tracker, which exports to the lead's sheet. The git platform tells the spec repo when a task PR is merged.">
+            <defs>
+              <marker id="f3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+              <marker id="f3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-a"/></marker>
+            </defs>
+            <rect x="20" y="20" width="300" height="194" rx="12" class="grp"/>
+            <text x="36" y="44" class="b">Your laptop</text>
+            <rect x="40" y="58" width="262" height="140" rx="8" class="box"/>
+            <text x="56" y="80" class="b">payments-api</text>
+            <text x="56" y="97" class="s">code repo: src/, tests/, .gitignore</text>
+            <rect x="56" y="112" width="230" height="72" rx="8" class="box-a"/>
+            <text x="72" y="136" class="m b">_relay/</text>
+            <text x="72" y="155" class="s">ignored by the code repo</text>
+            <text x="72" y="171" class="s">a clone of the spec repo</text>
+
+            <rect x="20" y="236" width="300" height="74" rx="12" class="grp"/>
+            <text x="36" y="262" class="b">Teammate's laptop</text>
+            <text x="36" y="282" class="s">same code repo + own _relay/ clone</text>
+
+            <rect x="420" y="116" width="190" height="78" rx="8" class="box-a"/>
+            <text x="515" y="143" text-anchor="middle" class="b">Spec repo</text>
+            <text x="515" y="162" text-anchor="middle" class="s">shared git remote</text>
+            <text x="515" y="178" text-anchor="middle" class="s">features, tasks, status</text>
+
+            <rect x="700" y="20" width="180" height="66" rx="8" class="box"/>
+            <text x="790" y="47" text-anchor="middle" class="b">Git platform</text>
+            <text x="790" y="66" text-anchor="middle" class="s">GitHub · Bitbucket · GitLab</text>
+            <rect x="700" y="134" width="180" height="64" rx="8" class="box"/>
+            <text x="790" y="161" text-anchor="middle" class="b">Tracker</text>
+            <text x="790" y="179" text-anchor="middle" class="s">Jira · Azure Boards · none</text>
+            <rect x="700" y="246" width="180" height="64" rx="8" class="box"/>
+            <text x="790" y="273" text-anchor="middle" class="b">Lead's sheet</text>
+            <text x="790" y="291" text-anchor="middle" class="s">Excel · Google Sheets</text>
+
+            <line x1="288" y1="150" x2="418" y2="150" class="ln-a" marker-start="url(#f3b)" marker-end="url(#f3b)"/>
+            <text x="352" y="142" text-anchor="middle" class="s ta">pull · push</text>
+            <line x1="322" y1="272" x2="468" y2="196" class="ln-a" marker-start="url(#f3b)" marker-end="url(#f3b)"/>
+            <text x="404" y="262" class="s ta">pull · push</text>
+            <line x1="304" y1="72" x2="698" y2="54" class="ln" marker-start="url(#f3a)" marker-end="url(#f3a)"/>
+            <text x="500" y="54" text-anchor="middle" class="s">branches · PRs</text>
+            <line x1="760" y1="88" x2="612" y2="128" class="ln dash" marker-end="url(#f3a)"/>
+            <text x="676" y="100" text-anchor="end" class="s">PR merged → task done</text>
+            <line x1="612" y1="166" x2="698" y2="166" class="ln" marker-start="url(#f3a)" marker-end="url(#f3a)"/>
+            <text x="655" y="158" text-anchor="middle" class="s">sub-tasks</text>
+            <line x1="790" y1="200" x2="790" y2="244" class="ln" marker-end="url(#f3a)"/>
+            <text x="798" y="226" class="s">export</text>
+            <line x1="590" y1="196" x2="698" y2="264" class="ln dash" marker-end="url(#f3a)"/>
+            <text x="640" y="252" text-anchor="end" class="s">no tracker? export</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 3.</b> The code repo and the spec repo are separate. Your <code>_relay/</code> folder is just your local copy of the spec repo. Leads never need to open it; they look at Jira or the sheet.</figcaption>
+      </figure>
+
+      <h3>Rules that prevent conflicts</h3>
+      <ol>
+        <li><strong>One writer per file.</strong> The planner writes <code>task.md</code>. Only the task's owner writes its <code>status.yaml</code> and <code>changelog.md</code>. Two people almost never touch the same file.</li>
+        <li><strong>Nothing summed up is stored.</strong> The board, the sheet and the feature's progress are computed from the task files each time. There is no shared <code>STATUS.md</code> to fight over.</li>
+        <li><strong>Small commits, pushed right away.</strong> Every skill starts with <code>git pull --rebase</code> and ends with commit and push. Commit messages look like <code>relay(PAY-120): T03 in-review</code>.</li>
+        <li><strong>Claiming a task is a commit.</strong> If two people claim T05 at once, the second push fails. The skill pulls, sees T05 already has an owner, and stops. Git gives us a free lock.</li>
+      </ol>
+
+      <h3>How status updates when a PR is merged</h3>
+      <div class="two">
+        <div>
+          <h4>Default: on the next sync</h4>
+          <p>Every skill starts with a sync. The sync asks the git platform which task PRs are merged and marks those tasks <code>done</code>. Task branches carry the task ID in their name, so matching is exact. No CI setup needed.</p>
+        </div>
+        <div>
+          <h4>Optional: right away, from CI</h4>
+          <p>A small pipeline step in the code repo runs when a PR into a feature branch merges. It reads the task ID from the branch name and pushes <code>done</code> to the spec repo. Relay ships ready-made pipeline files for GitHub Actions and Bitbucket Pipelines.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 09 -->
+    <section id="skills">
+      <h2><span class="num">09</span>All skills at a glance</h2>
+      <p>Every skill writes into the feature folder and pushes to the spec repo when it is done. Commands in bold are the everyday ones.</p>
+      <div class="tbl skills">
+        <table>
+          <thead><tr><th>Skill</th><th>You give it</th><th>What it does</th><th>Writes</th></tr></thead>
+          <tbody>
+            <tr class="grp-row"><td colspan="4">Setup</td></tr>
+            <tr><td><code>/relay init</code></td><td>Platform, tracker, spec repo URL</td><td>Clones the spec repo into <code>_relay/</code>, adds it to <code>.gitignore</code>, writes config, checks env vars</td><td><code>relay.yaml</code></td></tr>
+            <tr><td><code>/relay learn</code></td><td>Nothing, or a repo path</td><td>Reads the repo, runs build and tests once, picks exemplars</td><td><code>profile.md</code></td></tr>
+            <tr class="grp-row"><td colspan="4">Understand</td></tr>
+            <tr><td><strong><code>/relay intake</code></strong></td><td>Epic ID. Or a file or pasted text if there is no tracker</td><td>Pulls the epic and all its stories, gives each AC an ID, lists open questions. Run again to update and see what changed</td><td><code>requirements/</code></td></tr>
+            <tr><td><code>/relay context</code></td><td>Transcript, notes or email, and optionally a story ID</td><td>Pulls out decisions and answers per story. Keeps the raw file</td><td><code>requirements/context/</code></td></tr>
+            <tr class="grp-row"><td colspan="4">Design</td></tr>
+            <tr><td><strong><code>/relay design</code></strong></td><td>Nothing (reads requirements and code)</td><td>Writes the technical design with diagrams, contracts and risks. Builds the review page</td><td><code>design/</code></td></tr>
+            <tr><td><code>/relay feedback</code></td><td>The pasted feedback block</td><td>Applies each comment, answers each one, logs the change</td><td><code>design/changelog.md</code></td></tr>
+            <tr class="grp-row"><td colspan="4">Plan</td></tr>
+            <tr><td><strong><code>/relay plan</code></strong></td><td>Nothing (reads the design)</td><td>Cuts small tasks in waves, maps each one to ACs</td><td><code>tasks/T*/task.md</code></td></tr>
+            <tr><td><code>/relay check</code></td><td>Nothing</td><td>Proves every AC is covered. Finds overlaps, loops and tasks that are too big</td><td><code>tasks/check.md</code></td></tr>
+            <tr><td><code>/relay publish</code></td><td><code>--to jira</code>, <code>csv</code> or <code>xlsx</code></td><td>Creates sub-tasks under stories, or exports a sheet. Pulls assignees back</td><td>tracker, <code>.generated/</code></td></tr>
+            <tr class="grp-row"><td colspan="4">Build</td></tr>
+            <tr><td><code>/relay branch</code></td><td>Nothing, or a task ID</td><td>Creates the feature branch, or a task branch from it. Offers to set up freshen</td><td>git branches</td></tr>
+            <tr><td><strong><code>/relay build</code></strong></td><td>Task ID</td><td>Claims, learns, reads others' changelogs, codes, tests, opens a PR to the feature branch</td><td>code, status, changelog</td></tr>
+            <tr><td><strong><code>/relay review</code></strong></td><td>PR link or number, or a folder</td><td>Reviews against task, ACs, design and house rules. Posts inline comments</td><td><code>reviews/</code>, PR comments</td></tr>
+            <tr><td><code>/relay ship</code></td><td>Nothing</td><td>Reviews the whole feature against every AC, then opens the feature PR into develop</td><td><code>reviews/feature.md</code></td></tr>
+            <tr class="grp-row"><td colspan="4">Keep healthy</td></tr>
+            <tr><td><code>/relay freshen</code></td><td>Nothing, or <code>--schedule</code></td><td>Merges the latest develop into the feature branch. Stops on conflict</td><td>freshen report</td></tr>
+            <tr><td><code>/relay sync</code></td><td>Nothing</td><td>Pulls and pushes the spec repo, marks merged PRs as done</td><td>status files</td></tr>
+            <tr><td><strong><code>/relay status</code></strong></td><td>Nothing</td><td>Shows stage, gates, and who is doing what</td><td><code>.generated/board.md</code></td></tr>
+            <tr><td><strong><code>/relay next</code></strong></td><td>Nothing</td><td>Finds the next step and offers to run it</td><td>depends on the step</td></tr>
+            <tr><td><code>/relay drop</code></td><td>Feature name</td><td>Shows what will go, asks, deletes the feature folder</td><td>removes folder</td></tr>
+            <tr class="grp-row"><td colspan="4">Fix</td></tr>
+            <tr><td><code>/relay diagnose</code></td><td>Bug ID or description, and the access you allow</td><td>Finds the root cause safely, reproduces it with a test, proposes a fix</td><td><code>bugs/&lt;id&gt;/</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section id="requirements">
+      <h2><span class="num">10</span>Requirements and grooming notes</h2>
+      <h3><code>/relay intake PAY-120</code></h3>
+      <p>Pulls the epic and every story under it. It writes one overview file and one file per story. Every acceptance criterion gets a stable ID so the rest of the flow can point at it.</p>
+      <p>When you run it again, it compares the new stories with the saved ones. Changed stories get marked, and it lists what they affect downstream: <em>"PAY-121.AC2 changed. Design §4.2 and tasks T03 and T05 point at it."</em> Use <code>--story PAY-121</code> to refresh one story, or <code>--fresh</code> to rebuild everything.</p>
+<pre data-file="requirements/stories/PAY-121.md"><code>---
+id: PAY-121
+title: Customer can request a refund
+source: jira, fetched 2026-09-17 10:02
+status: changed-since-design     <span class="c"># new | unchanged | changed-since-design</span>
+---
+## Story
+As a customer, I want to request a refund for a paid order,
+so that I get my money back.
+
+## Acceptance criteria
+- <span class="k">PAY-121.AC1</span>  The refund button shows only for orders paid in the last 30 days.
+- <span class="k">PAY-121.AC2</span>  Partial refunds are allowed, minimum 1.00.   <span class="w">(changed: was 0.01)</span>
+- <span class="k">PAY-121.AC3</span>  The customer gets an email when the refund is done.
+
+## From grooming  <span class="c">(context/2026-09-17-grooming.md)</span>
+- AC2: BA confirmed the minimum is 1.00, not 0.01. [12:40]
+- AC1: "30 days" means from payment date, not delivery. [18:05]
+
+## Open questions
+- Q1: Can a customer refund an order that is still shipping?
+
+&lt;!-- keep --&gt;
+Dev note: orders before 2024 have no payment date.
+&lt;!-- /keep --&gt;</code></pre>
+
+      <h3><code>/relay context grooming.vtt --story PAY-121</code></h3>
+      <p>Give it a call transcript, meeting notes, an email thread or a screenshot. It saves the raw file untouched in <code>context/raw/</code>, then writes a clean note file with decisions, answers and new questions. Each point links to a story or AC and carries a timestamp or quote, so anyone can check the source.</p>
+      <div class="note">
+        <span class="lbl">Rule</span>
+        <p>The story is the contract. Call notes add detail. If a note conflicts with the story, Relay does not pick one. It adds a question to <code>questions.md</code> for the BA.</p>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section id="design">
+      <h2><span class="num">11</span>Design and the review page</h2>
+      <h3><code>/relay design</code></h3>
+      <p>Reads the requirements, the context notes, the profile, and the real code the feature will touch. Then writes <code>design.md</code> with these parts:</p>
+      <ul>
+        <li><strong>Summary</strong> and what is in and out of scope.</li>
+        <li><strong>What exists today</strong>, with file paths. Every claim about the code points to a file.</li>
+        <li><strong>Proposed design:</strong> components, data model, API and event contracts, sequence diagrams (Mermaid).</li>
+        <li><strong>AC map:</strong> a table showing which design section covers each AC.</li>
+        <li><strong>Risks, rollout</strong> (flags, migrations, backfills) and <strong>open questions</strong>.</li>
+        <li><strong>Decisions</strong> as short ADR files, so the "why" survives.</li>
+      </ul>
+
+      <h3>The review page</h3>
+      <p>Reading a long design in chat and then typing "in the part about refunds, the second paragraph..." is slow and loses context. So <code>design</code> also builds <code>design.html</code>: one self-contained page that renders the markdown and the Mermaid diagrams. Reviewers comment right on it.</p>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 900 160" role="img" aria-label="design.md renders to design.html. The reviewer comments and presses Copy feedback. The feedback block is pasted into chat. The agent edits design.md, logs each change and re-renders the page.">
+            <defs>
+              <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+              <marker id="f4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-a"/></marker>
+            </defs>
+            <rect x="20" y="28" width="176" height="58" rx="8" class="box"/>
+            <text x="108" y="52" text-anchor="middle" class="m b">design.md</text>
+            <text x="108" y="71" text-anchor="middle" class="s">source of truth</text>
+            <rect x="250" y="28" width="176" height="58" rx="8" class="box"/>
+            <text x="338" y="52" text-anchor="middle" class="m b">design.html</text>
+            <text x="338" y="71" text-anchor="middle" class="s">select text, add comments</text>
+            <rect x="480" y="28" width="176" height="58" rx="8" class="box-w"/>
+            <text x="568" y="52" text-anchor="middle" class="b">Feedback block</text>
+            <text x="568" y="71" text-anchor="middle" class="s">from the Copy button</text>
+            <rect x="704" y="28" width="176" height="58" rx="8" class="box"/>
+            <text x="792" y="52" text-anchor="middle" class="b">Agent</text>
+            <text x="792" y="71" text-anchor="middle" class="m">/relay feedback</text>
+            <line x1="196" y1="57" x2="248" y2="57" class="ln" marker-end="url(#f4a)"/>
+            <text x="223" y="49" text-anchor="middle" class="s">renders</text>
+            <line x1="426" y1="57" x2="478" y2="57" class="ln" marker-end="url(#f4a)"/>
+            <text x="453" y="49" text-anchor="middle" class="s">copy</text>
+            <line x1="656" y1="57" x2="702" y2="57" class="ln" marker-end="url(#f4a)"/>
+            <text x="679" y="49" text-anchor="middle" class="s">paste</text>
+            <path d="M792 86 L792 122 L108 122 L108 90" class="ln-a" marker-end="url(#f4b)"/>
+            <text x="450" y="144" text-anchor="middle" class="s ta">edits design.md, answers each comment, logs the change, re-renders the page</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 4.</b> The review loop. No server, no login. The page is a plain file; the clipboard carries the feedback.</figcaption>
+      </figure>
+
+      <p>How it works:</p>
+      <ul>
+        <li>Select any text, a table row, or a whole diagram (or one node in it) and write a comment. Comments are saved in the browser, so closing the tab loses nothing.</li>
+        <li>When the page is built, every block remembers which lines of <code>design.md</code> it came from. So each comment knows its exact source lines, even after edits.</li>
+        <li><strong>Copy feedback</strong> puts one block on the clipboard. Paste it in chat. The agent goes through each comment, changes the design or answers the question, and says which it did.</li>
+      </ul>
+<pre data-file="clipboard"><code>RELAY DESIGN FEEDBACK
+Doc: features/PAY-120-refund-flow/design/design.md
+Comments: 2
+
+[1] §4.2 Refund API  (design.md lines 88-97)
+Quote:   "POST /refunds returns 202 and processes in the background"
+Around:  "...the ledger call can take up to 8 s, so POST /refunds returns 202 and..."
+Comment: For amounts under 100, can we do it inline and return 200?
+
+[2] Diagram "Refund sequence", node "Ledger"
+Comment: Ledger also needs the original payment ID.</code></pre>
+      <div class="note warm">
+        <span class="lbl">Try it now</span>
+        <p>This page has the same comment tool built in. Select any sentence here and press <b>Comment</b>, then press <b>Copy feedback</b>. That is the exact experience your reviewers will get.</p>
+      </div>
+    </section>
+
+    <!-- 12 -->
+    <section id="tasks">
+      <h2><span class="num">12</span>Small, independent tasks</h2>
+      <p>Parallel work only happens if tasks do not wait on each other. <code>/relay plan</code> always cuts tasks in the same shape:</p>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 900 300" role="img" aria-label="Tasks in three waves. Wave 0 has small contract tasks. Wave 1 has four slices that only depend on wave 0 and run in parallel across three developers. Wave 2 has one join-up task.">
+            <defs>
+              <marker id="f5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-a"/></marker>
+            </defs>
+            <rect x="20" y="20" width="240" height="266" rx="12" class="grp"/>
+            <rect x="320" y="20" width="260" height="266" rx="12" class="grp"/>
+            <rect x="640" y="20" width="240" height="266" rx="12" class="grp"/>
+            <text x="36" y="46" class="b">Wave 0 · contracts</text>
+            <text x="36" y="64" class="s">tiny, merged first</text>
+            <text x="336" y="46" class="b">Wave 1 · parallel slices</text>
+            <text x="336" y="64" class="s">each needs only wave 0</text>
+            <text x="656" y="46" class="b">Wave 2 · join up</text>
+            <text x="656" y="64" class="s">wiring and end-to-end test</text>
+
+            <rect x="34" y="118" width="212" height="40" rx="7" class="box"/>
+            <text x="46" y="143" class="m b">T01</text><text x="80" y="143">API contracts</text><text x="236" y="143" text-anchor="end" class="s">Dev A</text>
+            <rect x="34" y="170" width="212" height="40" rx="7" class="box"/>
+            <text x="46" y="195" class="m b">T02</text><text x="80" y="195">DB migration</text><text x="236" y="195" text-anchor="end" class="s">Dev B</text>
+
+            <rect x="334" y="84" width="232" height="40" rx="7" class="box"/>
+            <text x="346" y="109" class="m b">T03</text><text x="380" y="109">Refund API</text><text x="556" y="109" text-anchor="end" class="s">Dev A</text>
+            <rect x="334" y="134" width="232" height="40" rx="7" class="box"/>
+            <text x="346" y="159" class="m b">T04</text><text x="380" y="159">Ledger posting</text><text x="556" y="159" text-anchor="end" class="s">Dev B</text>
+            <rect x="334" y="184" width="232" height="40" rx="7" class="box"/>
+            <text x="346" y="209" class="m b">T05</text><text x="380" y="209">Refund form (UI)</text><text x="556" y="209" text-anchor="end" class="s">Dev C</text>
+            <rect x="334" y="234" width="232" height="40" rx="7" class="box"/>
+            <text x="346" y="259" class="m b">T06</text><text x="380" y="259">Refund email</text><text x="556" y="259" text-anchor="end" class="s">Dev C</text>
+
+            <rect x="654" y="144" width="212" height="40" rx="7" class="box-a"/>
+            <text x="666" y="169" class="m b">T07</text><text x="700" y="169">Wire up + e2e</text><text x="856" y="169" text-anchor="end" class="s">Dev A</text>
+
+            <line x1="262" y1="164" x2="318" y2="164" class="ln-a" marker-end="url(#f5a)"/>
+            <text x="290" y="155" text-anchor="middle" class="s ta">merged</text>
+            <line x1="582" y1="164" x2="638" y2="164" class="ln-a" marker-end="url(#f5a)"/>
+            <text x="610" y="155" text-anchor="middle" class="s ta">all merged</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 5.</b> Contracts first. Once T01 and T02 are merged (a few hours), three developers work on four slices at the same time. They code against the contracts, not against each other.</figcaption>
+      </figure>
+
+      <h3>Rules the planner follows</h3>
+      <ul>
+        <li><strong>One task, one PR, one day or less.</strong> Sizes are S (half a day) or M (one day). Anything bigger is split.</li>
+        <li><strong>Wave 0 is contracts only:</strong> API schemas, shared types, DB migrations, interfaces with stub code. Small and fast, so others are unblocked quickly.</li>
+        <li><strong>Each task lists the files it will touch.</strong> Two tasks in the same wave may not touch the same files. The checker enforces this.</li>
+        <li><strong>Each task says what it gives to others</strong> and what it must not change.</li>
+        <li><strong>Every task covers at least one AC, and every AC is covered</strong> by at least one task with a named test.</li>
+      </ul>
+<pre data-file="tasks/T03-refund-api/task.md"><code>---
+id: T03
+title: Refund API endpoint
+wave: 1
+stories: [PAY-121]
+covers: [PAY-121.AC1, PAY-121.AC2]
+depends_on: [T01]
+repo: payments-api
+touches: [src/**/refunds/api/**, src/**/refunds/RefundService.*]
+size: M
+---
+## Goal
+Customers can ask for a full or partial refund with POST /refunds.
+
+## Read first
+- design.md §4.2 Refund API, §5 Error codes
+- T01 changelog (the RefundRequest contract)
+
+## Gives to others
+- RefundService.request(orderId, amount), used by T05 and T07.
+
+## Must not change
+- The RefundRequest / RefundStatus contract from T01. If you must,
+  write it under "Heads-up" in your changelog.
+
+## Done when
+- [ ] AC1: refund refused after 30 days     → test: refuses_refund_after_30_days
+- [ ] AC2: partial refund of 1.00 accepted  → test: accepts_partial_refund
+- [ ] Build, lint and all tests pass</code></pre>
+
+      <h3><code>/relay check</code></h3>
+      <p>A second agent, with fresh eyes, reads the stories, the design and the tasks and builds a coverage table. It looks for gaps (an AC with no task, a task with no test), overlaps (two tasks, same files, same wave), loops in dependencies, and tasks that are too big. The tasks gate cannot pass while there are gaps.</p>
+<pre data-file="tasks/check.md"><code>Check: PAY-120      result: <span class="w">2 gaps, 1 warning</span>
+
+Gaps
+- PAY-122.AC4 (admin can cancel a refund) is not covered by any task.
+- T05 has no test for PAY-121.AC1.
+
+Warnings
+- T03 and T04 both touch RefundMapper.java in wave 1.
+
+Coverage: 11 of 13 ACs · Tasks: 7 · Waves: 3 · Biggest: T04 (M)</code></pre>
+    </section>
+
+    <!-- 13 -->
+    <section id="build">
+      <h2><span class="num">13</span>Building a task</h2>
+      <p><code>/relay build T05</code> is where most of the time goes. The steps run in this order:</p>
+      <ol>
+        <li><strong>Sync.</strong> Pull the spec repo and mark any merged PRs as done.</li>
+        <li><strong>Claim.</strong> Set the task to <code>in-progress</code> with your name and push. If someone else already owns it, stop.</li>
+        <li><strong>Check it is ready.</strong> Are the tasks it depends on merged? If not, say which ones and stop, unless you ask it to work against the contract with stubs.</li>
+        <li><strong>Learn.</strong> Read <code>profile.md</code>, <code>learnings.md</code> and the exemplar files. Then read the real code the task touches.</li>
+        <li><strong>Catch up.</strong> Read the changelog of every done task in this feature, <em>Heads-up</em> and <em>Different from the design</em> notes first. Read the design changelog. If a story this task covers has changed since the task was written, stop and flag it.</li>
+        <li><strong>Branch.</strong> Create the task branch from the latest feature branch.</li>
+        <li><strong>Build.</strong> Write the tests from "Done when" first where it fits, then the code, in the house style.</li>
+        <li><strong>Verify.</strong> Run build, lint and tests with the profile commands. Fix until green.</li>
+        <li><strong>Record.</strong> Write <code>changelog.md</code>: what changed, heads-up for others, and anything different from the design.</li>
+        <li><strong>Hand off.</strong> Push, open a PR into the feature branch, set status to <code>in-review</code> and save the PR link.</li>
+      </ol>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 900 340" role="img" aria-label="Dev A's agent writes a changelog with a heads-up and gets PR T01 merged. The next sync marks T01 done. Later Dev B runs build for T05, syncs, and reads T01's heads-up before writing code.">
+            <defs>
+              <marker id="f6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+              <marker id="f6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-a"/></marker>
+            </defs>
+            <rect x="30" y="16" width="160" height="38" rx="8" class="box"/><text x="110" y="40" text-anchor="middle" class="b">Dev A's agent</text>
+            <rect x="260" y="16" width="160" height="38" rx="8" class="box"/><text x="340" y="40" text-anchor="middle" class="b">Git platform</text>
+            <rect x="490" y="16" width="160" height="38" rx="8" class="box-a"/><text x="570" y="40" text-anchor="middle" class="b">Spec repo</text>
+            <rect x="710" y="16" width="160" height="38" rx="8" class="box"/><text x="790" y="40" text-anchor="middle" class="b">Dev B's agent</text>
+            <line x1="110" y1="54" x2="110" y2="330" class="life"/>
+            <line x1="340" y1="54" x2="340" y2="330" class="life"/>
+            <line x1="570" y1="54" x2="570" y2="330" class="life"/>
+            <line x1="790" y1="54" x2="790" y2="330" class="life"/>
+
+            <line x1="110" y1="92" x2="568" y2="92" class="ln" marker-end="url(#f6a)"/>
+            <text x="120" y="84" class="s">T01 changelog with heads-up</text>
+            <line x1="110" y1="130" x2="338" y2="130" class="ln" marker-end="url(#f6a)"/>
+            <text x="120" y="122" class="s">PR for T01 merged</text>
+            <line x1="340" y1="170" x2="568" y2="170" class="ln dash" marker-end="url(#f6a)"/>
+            <text x="350" y="162" class="s">sync sees merge: T01 done</text>
+
+            <rect x="714" y="196" width="152" height="28" rx="6" class="box-w"/>
+            <text x="790" y="214" text-anchor="middle" class="m">/relay build T05</text>
+            <line x1="790" y1="252" x2="572" y2="252" class="ln-a" marker-end="url(#f6b)"/>
+            <text x="780" y="244" text-anchor="end" class="s ta">pull, read done changelogs</text>
+            <line x1="570" y1="290" x2="788" y2="290" class="ln-a dash" marker-end="url(#f6b)"/>
+            <text x="780" y="282" text-anchor="end" class="s ta">T01 done · heads-up: PARTIAL</text>
+            <text x="780" y="322" text-anchor="end" class="s">T05 shows the new PARTIAL state in the UI</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 6.</b> How Dev B learns about Dev A's change without a meeting. The changelog is the baton passed between tasks.</figcaption>
+      </figure>
+
+      <p>The changelog is short and has fixed parts, so agents can find what matters fast:</p>
+<pre data-file="tasks/T01-api-contracts/changelog.md"><code>## 2026-09-22 · T01 API contracts · PR #398 merged
+
+### What changed
+- Added RefundRequest and RefundStatus in src/**/refunds/contract/.
+- Added the refund.completed event schema.
+
+### Heads-up for other tasks
+- RefundStatus has a new value PARTIAL (not in the design). T05 must show it.
+- Amounts are in minor units (cents, long), not decimals.
+
+### Different from the design
+- Design §4.1 said decimal amounts. Changed to minor units after a talk
+  with the tech lead. Design changelog entry D-4 added.</code></pre>
+
+      <h3>Task states</h3>
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 820 176" role="img" aria-label="Task states: todo, ready when dependencies merge, in progress when claimed, in review when a PR opens, done when the PR merges. Review can send it back to in progress. In progress can move to blocked and back.">
+            <defs>
+              <marker id="f7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+              <marker id="f7w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-w"/></marker>
+            </defs>
+            <path d="M580 44 C 580 12, 410 12, 410 42" class="ln-w" marker-end="url(#f7w)"/>
+            <text x="495" y="11" text-anchor="middle" class="s tw">changes requested</text>
+            <rect x="20" y="44" width="100" height="40" rx="8" class="box"/><text x="70" y="69" text-anchor="middle">todo</text>
+            <rect x="190" y="44" width="100" height="40" rx="8" class="box"/><text x="240" y="69" text-anchor="middle">ready</text>
+            <rect x="360" y="44" width="100" height="40" rx="8" class="box"/><text x="410" y="69" text-anchor="middle">in progress</text>
+            <rect x="530" y="44" width="100" height="40" rx="8" class="box"/><text x="580" y="69" text-anchor="middle">in review</text>
+            <rect x="700" y="44" width="100" height="40" rx="8" class="box-a"/><text x="750" y="69" text-anchor="middle" class="b">done</text>
+            <line x1="120" y1="64" x2="188" y2="64" class="ln" marker-end="url(#f7a)"/><text x="155" y="56" text-anchor="middle" class="s">deps merged</text>
+            <line x1="290" y1="64" x2="358" y2="64" class="ln" marker-end="url(#f7a)"/><text x="325" y="56" text-anchor="middle" class="s">claimed</text>
+            <line x1="460" y1="64" x2="528" y2="64" class="ln" marker-end="url(#f7a)"/><text x="495" y="56" text-anchor="middle" class="s">PR opened</text>
+            <line x1="630" y1="64" x2="698" y2="64" class="ln" marker-end="url(#f7a)"/><text x="665" y="56" text-anchor="middle" class="s">PR merged</text>
+            <rect x="360" y="128" width="100" height="38" rx="8" class="box-w"/><text x="410" y="152" text-anchor="middle">blocked</text>
+            <line x1="398" y1="84" x2="398" y2="126" class="ln" marker-end="url(#f7a)"/>
+            <line x1="422" y1="128" x2="422" y2="86" class="ln" marker-end="url(#f7a)"/>
+            <text x="390" y="110" text-anchor="end" class="s">waiting on someone</text>
+            <text x="430" y="110" class="s">unblocked</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 7.</b> Only two things change a task's state: the owner's build skill, and the sync when a PR merges. People never edit <code>status.yaml</code> by hand.</figcaption>
+      </figure>
+<pre data-file="tasks/T03-refund-api/status.yaml"><code>state: in-review
+owner: dev-b
+branch: feature/PAY-120/T03-refund-api
+pr: https://bitbucket.org/acme/payments-api/pull-requests/412
+jira: PAY-133
+updated: 2026-09-23T10:12:00+05:30</code></pre>
+    </section>
+
+    <!-- 14 -->
+    <section id="branches">
+      <h2><span class="num">14</span>Branches and staying fresh</h2>
+      <p>Task PRs cannot go straight to develop, because half a feature would break things. So each feature gets a <strong>feature branch</strong> (your "mother branch"). Every task gets its own branch from it, and its PR goes back into it. Only when the whole feature is done and reviewed does one PR go from the feature branch into develop.</p>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 920 270" role="img" aria-label="Git graph. The feature branch comes off develop. Task branches T01, T03 and T04 come off the feature branch and merge back through PRs. Every day, develop is merged into the feature branch. At the end, one PR merges the feature branch into develop.">
+            <text x="20" y="38" class="m b">develop</text>
+            <line x1="20" y1="50" x2="880" y2="50" class="ln"/>
+            <path d="M100 50 C 120 50, 120 130, 140 130 L 820 130" class="ln-a"/>
+            <text x="132" y="148" text-anchor="end" class="m b ta">feature/PAY-120</text>
+            <path d="M820 130 C 840 130, 840 50, 860 50" class="ln-a"/>
+            <text x="846" y="98" class="s ta">final PR</text>
+
+            <path d="M250 50 C 270 50, 270 130, 290 130" class="ln-w dash"/>
+            <path d="M470 50 C 490 50, 490 130, 510 130" class="ln-w dash"/>
+            <path d="M730 50 C 750 50, 750 130, 770 130" class="ln-w dash"/>
+            <text x="252" y="94" text-anchor="end" class="s tw">daily freshen</text>
+
+            <path d="M170 130 C 185 130, 185 200, 200 200 L 310 200 C 325 200, 325 130, 340 130" class="ln"/>
+            <text x="212" y="192" class="m">T01</text>
+            <text x="212" y="222" class="s">each task: PR into feature</text>
+            <path d="M370 130 C 385 130, 385 240, 400 240 L 680 240 C 695 240, 695 130, 710 130" class="ln"/>
+            <text x="414" y="232" class="m">T03</text>
+            <path d="M420 130 C 435 130, 435 200, 450 200 L 600 200 C 615 200, 615 130, 630 130" class="ln"/>
+            <text x="464" y="192" class="m">T04</text>
+
+            <circle cx="60" cy="50" r="5" class="dot"/><circle cx="250" cy="50" r="5" class="dot"/>
+            <circle cx="470" cy="50" r="5" class="dot"/><circle cx="730" cy="50" r="5" class="dot"/>
+            <circle cx="860" cy="50" r="6" class="dot-a"/>
+            <circle cx="240" cy="200" r="4.5" class="dot"/><circle cx="280" cy="200" r="4.5" class="dot"/>
+            <circle cx="490" cy="200" r="4.5" class="dot"/><circle cx="560" cy="200" r="4.5" class="dot"/>
+            <circle cx="450" cy="240" r="4.5" class="dot"/><circle cx="560" cy="240" r="4.5" class="dot"/><circle cx="650" cy="240" r="4.5" class="dot"/>
+            <circle cx="290" cy="130" r="5" class="dot-w"/><circle cx="510" cy="130" r="5" class="dot-w"/><circle cx="770" cy="130" r="5" class="dot-w"/>
+            <circle cx="340" cy="130" r="5" class="dot-a"/><circle cx="630" cy="130" r="5" class="dot-a"/><circle cx="710" cy="130" r="5" class="dot-a"/>
+          </svg>
+        </div>
+        <figcaption><b>Figure 8.</b> T03 and T04 run at the same time. Orange merges are the daily freshen, bringing other teams' work from develop into the feature branch so the final PR has no surprises.</figcaption>
+      </figure>
+
+      <ul>
+        <li>Task branch names carry the task ID (<code>feature/PAY-120/T03-refund-api</code>). That is how sync matches PRs to tasks.</li>
+        <li>We <strong>merge</strong> develop into the feature branch. We never rebase it, because rebasing a shared branch breaks everyone's task branches.</li>
+        <li>When <code>build</code> starts, it merges the latest feature branch into the task branch, so tasks pick up the freshen too.</li>
+      </ul>
+
+      <h3><code>/relay freshen</code>: keep the feature branch up to date</h3>
+      <p>Other teams keep merging into develop. If the feature branch falls days behind, the final merge hurts. When you create the feature branch, <code>/relay branch</code> asks: <em>"Do you want develop merged into this branch every weekday at 06:00?"</em> This is optional.</p>
+
+      <figure>
+        <div class="fig-body">
+          <svg class="d" viewBox="0 0 950 222" role="img" aria-label="Freshen flow. A scheduled job fetches. If develop has not moved, it stops without a commit. If it has, it tries to merge. On conflict it aborts and asks a human. Otherwise it runs tests; on failure it does not push; on success it pushes and reports.">
+            <defs>
+              <marker id="f8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+            </defs>
+            <rect x="10" y="48" width="100" height="44" rx="8" class="box"/>
+            <text x="60" y="67" text-anchor="middle" class="b">06:00 job</text><text x="60" y="83" text-anchor="middle" class="s">CI schedule</text>
+            <rect x="140" y="48" width="90" height="44" rx="8" class="box"/>
+            <text x="185" y="74" text-anchor="middle" class="m">git fetch</text>
+            <path d="M300 25 L345 70 L300 115 L255 70 Z" class="box"/>
+            <text x="300" y="67" text-anchor="middle" class="s">develop</text><text x="300" y="81" text-anchor="middle" class="s">moved?</text>
+            <rect x="380" y="48" width="120" height="44" rx="8" class="box"/>
+            <text x="440" y="67" text-anchor="middle">merge develop</text><text x="440" y="83" text-anchor="middle">into feature</text>
+            <path d="M575 25 L620 70 L575 115 L530 70 Z" class="box"/>
+            <text x="575" y="74" text-anchor="middle" class="s">conflict?</text>
+            <rect x="655" y="48" width="100" height="44" rx="8" class="box"/>
+            <text x="705" y="74" text-anchor="middle">build + tests</text>
+            <rect x="790" y="48" width="150" height="44" rx="8" class="box-a"/>
+            <text x="865" y="67" text-anchor="middle" class="b">push + report</text><text x="865" y="83" text-anchor="middle" class="s">tell task branches</text>
+
+            <line x1="110" y1="70" x2="138" y2="70" class="ln" marker-end="url(#f8a)"/>
+            <line x1="230" y1="70" x2="253" y2="70" class="ln" marker-end="url(#f8a)"/>
+            <line x1="345" y1="70" x2="378" y2="70" class="ln" marker-end="url(#f8a)"/><text x="362" y="62" text-anchor="middle" class="s">yes</text>
+            <line x1="500" y1="70" x2="528" y2="70" class="ln" marker-end="url(#f8a)"/>
+            <line x1="620" y1="70" x2="653" y2="70" class="ln" marker-end="url(#f8a)"/><text x="637" y="62" text-anchor="middle" class="s">no</text>
+            <line x1="755" y1="70" x2="788" y2="70" class="ln" marker-end="url(#f8a)"/><text x="772" y="62" text-anchor="middle" class="s">pass</text>
+
+            <line x1="300" y1="115" x2="300" y2="158" class="ln" marker-end="url(#f8a)"/><text x="308" y="140" class="s">no</text>
+            <rect x="230" y="160" width="140" height="48" rx="8" class="box"/>
+            <text x="300" y="180" text-anchor="middle" class="b">stop</text><text x="300" y="197" text-anchor="middle" class="s">no empty commit</text>
+            <line x1="575" y1="115" x2="575" y2="158" class="ln" marker-end="url(#f8a)"/><text x="583" y="140" class="s">yes</text>
+            <rect x="500" y="160" width="150" height="48" rx="8" class="box-w"/>
+            <text x="575" y="180" text-anchor="middle" class="b">abort the merge</text><text x="575" y="197" text-anchor="middle" class="s">list files, ask a human</text>
+            <line x1="705" y1="92" x2="725" y2="158" class="ln" marker-end="url(#f8a)"/><text x="722" y="128" class="s">fail</text>
+            <rect x="665" y="160" width="130" height="48" rx="8" class="box-w"/>
+            <text x="730" y="180" text-anchor="middle" class="b">do not push</text><text x="730" y="197" text-anchor="middle" class="s">report the failure</text>
+          </svg>
+        </div>
+        <figcaption><b>Figure 9.</b> Freshen never resolves a conflict and never makes an empty commit. When nothing changed on develop, it does nothing at all.</figcaption>
+      </figure>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Where it runs</th><th>Good</th><th>Watch out</th></tr></thead>
+          <tbody>
+            <tr><td>CI scheduled pipeline <span class="tag ok">pick</span></td><td>Runs even when laptops are off. Uses the team's normal CI.</td><td>Needs a bot user that can push to feature branches.</td></tr>
+            <tr><td>Claude Code scheduled routine</td><td>No pipeline to write. Can explain conflicts in plain words.</td><td>Uses AI credits for what is mostly a script.</td></tr>
+            <tr><td>Local cron</td><td>Zero setup.</td><td>Only runs if that laptop is awake at 06:00.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The merge itself is a plain script. AI is only used to write the report when something goes wrong, for example: <em>"Conflict in RefundService.java: develop renamed calculateFee, T03 added a call to the old name."</em></p>
+    </section>
+
+    <!-- 15 -->
+    <section id="review">
+      <h2><span class="num">15</span>PR review</h2>
+      <p><code>/relay review 412</code> works for any language because it does not bring its own rule book. It judges the PR against things this project already has:</p>
+      <ol>
+        <li><strong>The task and its ACs.</strong> Does the PR do what the task says? Is every AC tested?</li>
+        <li><strong>The design and contracts.</strong> Does it match? If not, is the difference written in the changelog?</li>
+        <li><strong>The house style.</strong> <code>profile.md</code>, <code>learnings.md</code> and the exemplar files.</li>
+        <li><strong>General quality.</strong> Bugs, security, error handling, missing tests.</li>
+      </ol>
+      <p>It posts <strong>inline comments</strong> on the exact lines, each marked <span class="tag bad">must fix</span> <span class="tag warn">should fix</span> or <span class="tag acc">nit</span>, plus one summary comment. It never approves or merges; that stays with people. A copy of the review is saved in <code>reviews/PR-412.md</code>.</p>
+      <p>Without a PR, <code>/relay review --path src/refunds</code> reviews existing code and writes the findings to a file.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Platform</th><th>How it talks</th><th>Env vars</th></tr></thead>
+          <tbody>
+            <tr><td>GitHub</td><td><code>gh</code> CLI or REST</td><td><code>RELAY_GIT_TOKEN</code></td></tr>
+            <tr><td>Bitbucket Cloud</td><td>REST 2.0</td><td><code>RELAY_GIT_URL</code>, <code>RELAY_GIT_USER</code>, <code>RELAY_GIT_TOKEN</code></td></tr>
+            <tr><td>Bitbucket Data Center</td><td>REST 1.0</td><td><code>RELAY_GIT_URL</code>, <code>RELAY_GIT_TOKEN</code></td></tr>
+            <tr><td>GitLab</td><td><code>glab</code> CLI or REST</td><td><code>RELAY_GIT_URL</code>, <code>RELAY_GIT_TOKEN</code></td></tr>
+            <tr><td>Azure DevOps</td><td>REST</td><td><code>RELAY_GIT_URL</code>, <code>RELAY_GIT_TOKEN</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="lbl">Learning loop</span>
+        <p>When the same kind of finding shows up in three reviews (say, "missing null check on optional payment date"), review proposes a line for <code>learnings.md</code>. Once a person accepts it, every future build reads it.</p>
+      </div>
+    </section>
+
+    <!-- 16 -->
+    <section id="leads">
+      <h2><span class="num">16</span>Jira sub-tasks and the lead's sheet</h2>
+      <p>There are two audiences. <strong>Agents</strong> read the markdown in <code>_relay/</code>. <strong>People</strong>, and leads most of all, look at Jira or a spreadsheet. <code>/relay publish</code> keeps the two in step.</p>
+      <div class="two">
+        <div>
+          <h4>With Jira</h4>
+          <ul>
+            <li>Creates one sub-task per task under the story it mainly covers, and links any other stories.</li>
+            <li>The sub-task holds a short summary and a pointer to the task file.</li>
+            <li>The Jira key is saved in <code>status.yaml</code>, so running it again updates instead of duplicating.</li>
+            <li>The lead assigns people in Jira. The next sync copies the assignee into the task's owner.</li>
+            <li>Status changes move the Jira ticket too (the mapping lives in <code>relay.yaml</code>).</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Without Jira</h4>
+          <ul>
+            <li><code>--to csv</code> or <code>--to xlsx</code> exports every task to a sheet the lead can open or import into Google Sheets.</li>
+            <li>The lead fills in the Owner column. <code>/relay publish --import sheet.csv</code> reads the owners back.</li>
+            <li>With a Google Drive connection, it updates the Google Sheet in place.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Task</th><th>Story</th><th>Title</th><th>Wave</th><th>Size</th><th>Needs</th><th>Owner</th><th>Status</th><th>PR</th></tr></thead>
+          <tbody>
+            <tr><td><code>T01</code></td><td>PAY-121</td><td>API contracts</td><td>0</td><td>S</td><td>none</td><td>Dev A</td><td><span class="tag ok">done</span></td><td>#398</td></tr>
+            <tr><td><code>T03</code></td><td>PAY-121</td><td>Refund API</td><td>1</td><td>M</td><td>T01</td><td>Dev A</td><td><span class="tag acc">in review</span></td><td>#412</td></tr>
+            <tr><td><code>T05</code></td><td>PAY-122</td><td>Refund form (UI)</td><td>1</td><td>M</td><td>T01</td><td>Dev C</td><td><span class="tag warn">in progress</span></td><td>none</td></tr>
+            <tr><td><code>T07</code></td><td>PAY-121</td><td>Wire up + e2e</td><td>2</td><td>M</td><td>T03 to T06</td><td>none</td><td>todo</td><td>none</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13.5px;color:var(--muted)">Example export. Columns match what a lead asks in stand-up: what, who, how far, and what is it waiting on.</p>
+    </section>
+
+    <!-- 17 -->
+    <section id="diagnose">
+      <h2><span class="num">17</span>Diagnose and fix bugs</h2>
+      <p><code>/relay diagnose PAY-310 --allow logs,k8s:staging,db:readonly</code> works the way a careful developer does. The skill teaches the method, not the tools, so it fits any stack:</p>
+      <ol>
+        <li><strong>Read the bug.</strong> Steps, expected vs actual result, environment, time it happened.</li>
+        <li><strong>Gather facts.</strong> Logs, recent deploys, the code on that path, the data involved. Read only.</li>
+        <li><strong>List guesses,</strong> most likely first, each with a cheap way to test it.</li>
+        <li><strong>Test one guess at a time</strong> and write down what each test showed.</li>
+        <li><strong>Reproduce</strong> with a failing unit test, or a small script if a unit test is not possible.</li>
+        <li><strong>Fix</strong> the smallest thing that makes that test pass.</li>
+        <li><strong>Check wider.</strong> Run the full test suite. Look for the same bug pattern elsewhere.</li>
+        <li><strong>Write it up</strong> in <code>bugs/PAY-310/rca.md</code>: root cause, fix, how to stop it happening again.</li>
+      </ol>
+
+      <h3>What it may and may not do</h3>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Area</th><th>Allowed</th><th>Asks first</th><th>Blocked</th></tr></thead>
+          <tbody>
+            <tr><td>Kubernetes</td><td><code>get</code>, <code>describe</code>, <code>logs</code>, <code>top</code>, events</td><td><code>port-forward</code>, <code>exec</code> with read-only commands</td><td><code>delete</code>, <code>apply</code>, <code>edit</code>, <code>patch</code>, <code>scale</code>, <code>rollout restart</code></td></tr>
+            <tr><td>Database</td><td><code>SELECT</code> with <code>LIMIT</code>, <code>EXPLAIN</code>, on a read replica</td><td>Queries on big tables with no index</td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>DROP</code>, <code>TRUNCATE</code>, <code>ALTER</code></td></tr>
+            <tr><td>Config and secrets</td><td>Config files, secret names</td><td>Reading a secret value (shown masked)</td><td>Changing config maps, env vars, feature flags</td></tr>
+            <tr><td>Git</td><td>Read, run tests, create a bug branch</td><td>Pushing the fix branch</td><td>Force push, pushing to develop or main</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Three layers of safety</h3>
+      <p>A written rule in a skill is the weakest guard, because a model can get it wrong. So Relay stacks three:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Layer</th><th>What it is</th><th>Strength</th></tr></thead>
+          <tbody>
+            <tr><td>Credentials</td><td>A read-only DB user. A view-only Kubernetes role. <code>init</code> asks for these and warns if the given access can write.</td><td><span class="tag ok">cannot be bypassed</span></td></tr>
+            <tr><td>Guard hook</td><td>A hook that runs before every shell command, checks it against <code>safety.yaml</code>, and blocks matches. Works even if the model is wrong.</td><td><span class="tag ok">strong</span></td></tr>
+            <tr><td>Skill rules</td><td>Prefer staging. Always <code>LIMIT</code>. Mask secrets. Name the production context out loud before touching it, every session.</td><td><span class="tag warn">helpful, not enough alone</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+<pre data-file="_relay/safety.yaml"><code><span class="c"># read by the guard hook before every shell command</span>
+block:
+  - 'kubectl\s+(delete|apply|edit|patch|scale|replace|drain|cordon)'
+  - 'kubectl\s+rollout\s+(restart|undo)'
+  - '\b(DROP|TRUNCATE|ALTER|GRANT)\b'
+  - '\bDELETE\s+FROM\b'
+  - '\bUPDATE\s+\w+\s+SET\b'
+  - 'git\s+push\s+.*(--force|-f)\b'
+ask:
+  - 'kubectl\s+(exec|port-forward)'
+  - '--context[= ]\S*prod'</code></pre>
+    </section>
+
+    <!-- 18 -->
+    <section id="style">
+      <h2><span class="num">18</span>One communication style</h2>
+      <p>You asked if it is even possible. <strong>Yes, mostly.</strong> Tone can be steered very well, but not guaranteed. Simple rules (banned words, no em-dashes, max sentence length) can be enforced.</p>
+      <ul>
+        <li>One file, <code>_relay/style.md</code>, holds the rules.</li>
+        <li>Every skill's first step is "read style.md". It is also imported from the repo's <code>CLAUDE.md</code>, so normal chat follows it too.</li>
+        <li>Templates (story, design, task, changelog) carry the structure, so documents look the same no matter who made them.</li>
+        <li>A small lint hook checks files written by Relay for the mechanical rules and asks the agent to fix them before it finishes.</li>
+      </ul>
+<pre data-file="_relay/style.md"><code># How we write
+
+- Simple English. Short sentences. One idea per sentence.
+- Lead with the answer, then the reason.
+- Use the BA's words for business things and the code's words for code things.
+  Same word every time.
+- Tables for comparisons. Diagrams for flows. Lists for steps.
+- No em-dashes. Avoid: leverage, robust, seamless, utilize.
+- In chat: what I did, what I found, what I need from you.
+- In design docs: every claim about the code points to a file path.</code></pre>
+    </section>
+
+    <!-- 19 -->
+    <section id="package">
+      <h2><span class="num">19</span>How we package it</h2>
+      <p>Relay ships as a <strong>Claude Code plugin</strong>: skills, helper agents, hooks and scripts in one versioned repo. Teams install it once. The skills are plain markdown, so other agents that read skill files can use them too.</p>
+<pre><code><span class="k">relay/</span>                           <span class="c">the plugin, its own repo</span>
+├── .claude-plugin/plugin.json
+├── skills/
+│   ├── intake/SKILL.md          <span class="c">+ templates/story.md</span>
+│   ├── design/SKILL.md          <span class="c">+ templates/design.md, review-page.html</span>
+│   ├── plan/  check/  build/  review/  ship/
+│   ├── freshen/  diagnose/  publish/  context/
+│   └── next/SKILL.md
+├── agents/                      <span class="c">focused helpers: planner, checker, reviewer</span>
+├── hooks/hooks.json             <span class="c">safety guard, style lint, auto sync</span>
+├── scripts/                     <span class="c">git + platform plumbing, no AI</span>
+│   ├── freshen.sh
+│   ├── platform/  github  bitbucket  gitlab  azure
+│   └── tracker/   jira  csv  xlsx
+└── ci/                          <span class="c">ready pipelines: freshen, mark-done</span></code></pre>
+      <p>A simple rule decides what goes where: <strong>if a step needs judgment, it is a skill. If it is always the same, it is a script.</strong> Scripts are cheaper, faster and give the same result every time.</p>
+    </section>
+
+    <!-- 20 -->
+    <section id="roadmap">
+      <h2><span class="num">20</span>Build order</h2>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Phase</th><th>What we build</th><th>Done when</th></tr></thead>
+          <tbody>
+            <tr><td><strong>1. One person, one repo</strong></td><td><code>init</code>, <code>learn</code>, <code>intake</code>, <code>design</code>, <code>plan</code>, <code>check</code>, <code>build</code>, <code>status</code>, <code>next</code></td><td>One real epic goes from stories to merged code on one laptop.</td></tr>
+            <tr><td><strong>2. A team</strong></td><td>Spec repo sync, claiming, <code>branch</code>, <code>review</code> (GitHub + Bitbucket), <code>publish</code> (Jira + CSV), <code>ship</code>, <code>drop</code></td><td>Three people build one feature in parallel with no status meetings.</td></tr>
+            <tr><td><strong>3. Polish and safety</strong></td><td>Review page + <code>feedback</code>, <code>context</code>, <code>freshen</code> + CI files, <code>diagnose</code> + guard hook, style lint, learnings loop, GitLab and Azure</td><td>A second team adopts it without our help.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>For the pilot, pick one medium epic (three to six stories) with two or three developers. Small enough to finish in a sprint, big enough to test parallel work.</p>
+    </section>
+
+    <!-- 21 -->
+    <section id="questions">
+      <h2><span class="num">21</span>Open questions</h2>
+      <p>These need a decision from us before Phase 1 starts. My suggestion is in brackets.</p>
+      <ol>
+        <li><strong>Name.</strong> Is "Relay" with a <code>_relay/</code> folder OK? (The baton idea fits: each task hands its changelog to the next.)</li>
+        <li><strong>Spec repo scope.</strong> One per team, or one per product? (One per team. Features list the code repos they touch.)</li>
+        <li><strong>Source of truth for status.</strong> Spec repo first with Jira mirrored, or Jira first? (Spec repo first. Agents need files; Jira is the window for people.)</li>
+        <li><strong>Who approves each gate?</strong> (BA for requirements, tech lead for design and tasks, tech lead plus one dev for ship.)</li>
+        <li><strong>Merge or rebase</strong> when freshening? (Merge, because the feature branch is shared.)</li>
+        <li><strong>Confluence.</strong> Should the approved design also be pushed to Confluence for the BA? (Yes, read-only, as a later adapter.)</li>
+        <li><strong>Tests in freshen.</strong> They cost CI minutes but catch breaks early. (Run them. It is once a day.)</li>
+        <li><strong>A story changes after build started.</strong> Create change tasks by itself, or stop and ask? (Stop and ask. Show the impact list first.)</li>
+      </ol>
+    </section>
+
+    <p class="footer">Relay design proposal v0.1 · 23 Sep 2026 · Written for discussion. Every name, command and file layout here can change.</p>
+  </main>
+</div>
+
+<!-- review UI -->
+<button id="sel-add" type="button" hidden>Comment</button>
+<div id="composer" class="panel" hidden role="dialog" aria-label="Add a comment">
+  <p class="where" id="cm-where"></p>
+  <blockquote id="cm-quote"></blockquote>
+  <label for="cm-text" class="where" style="display:block;margin-bottom:6px">Your comment</label>
+  <textarea id="cm-text" placeholder="What should change, or what is unclear?"></textarea>
+  <div class="row">
+    <span class="hint">Ctrl or Cmd + Enter to save</span>
+    <span style="display:flex;gap:8px"><button class="btn ghost" id="cm-cancel" type="button">Cancel</button><button class="btn primary" id="cm-save" type="button">Save comment</button></span>
+  </div>
+</div>
+<aside id="drawer" class="panel" hidden aria-label="Your comments">
+  <header><h3>Your comments</h3><button class="btn ghost" id="dr-close" type="button">Close</button></header>
+  <div class="list" id="dr-list"></div>
+  <div id="fallback" hidden>
+    <p>Your browser blocked the clipboard here. The text is selected below: press Ctrl+C or Cmd+C.</p>
+    <textarea id="fallback-text" readonly></textarea>
+  </div>
+  <footer>
+    <button class="btn primary" id="dr-copy" type="button">Copy feedback</button>
+    <button class="btn danger" id="dr-clear" type="button">Clear all</button>
+  </footer>
+</aside>
+<div class="dock" role="toolbar" aria-label="Review">
+  <button class="btn" id="dock-list" type="button">Comments<span class="count" id="dock-count">0</span></button>
+  <button class="btn primary" id="dock-copy" type="button">Copy feedback</button>
+</div>
+<div id="toast" hidden role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  var KEY = 'relay-design-v01-comments';
+  var doc = document.getElementById('doc');
+  var comments = [];
+  try { comments = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { comments = []; }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(comments)); } catch (e) {} }
+
+  var selBtn = document.getElementById('sel-add');
+  var composer = document.getElementById('composer');
+  var cmWhere = document.getElementById('cm-where');
+  var cmQuote = document.getElementById('cm-quote');
+  var cmText = document.getElementById('cm-text');
+  var drawer = document.getElementById('drawer');
+  var list = document.getElementById('dr-list');
+  var countEl = document.getElementById('dock-count');
+  var toastEl = document.getElementById('toast');
+  var fallback = document.getElementById('fallback');
+  var fallbackText = document.getElementById('fallback-text');
+  var pending = null, toastTimer = null, clearArmed = false;
+
+  function clean(s){ return (s || '').replace(/\s+/g, ' ').trim(); }
+  function cut(s, n){ s = clean(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  function locate(node){
+    var el = node.nodeType === 1 ? node : node.parentElement;
+    var sec = el.closest('section[id]');
+    var where = 'Top of page';
+    if (sec) {
+      var h2 = sec.querySelector('h2');
+      var num = h2 && h2.querySelector('.num') ? h2.querySelector('.num').textContent : '';
+      var title = h2 ? clean(h2.textContent).replace(num, '').trim() : sec.id;
+      where = '§' + num + ' ' + title;
+      var sub = null;
+      sec.querySelectorAll('h3').forEach(function(h){ if (h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) sub = h; });
+      if (sub) where += ' > ' + clean(sub.textContent);
+    }
+    var fig = el.closest('figure');
+    var block = el.closest('p,li,td,th,pre,figcaption,blockquote,h1,h2,h3,.layer') || el;
+    return { where: where, figure: fig ? cut(fig.querySelector('figcaption') ? fig.querySelector('figcaption').textContent : '', 90) : '', around: cut(block.textContent, 220), section: sec ? sec.id : '' };
+  }
+
+  function hideSel(){ selBtn.hidden = true; }
+  function onSelect(){
+    if (!composer.hidden) return;
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideSel(); return; }
+    var text = clean(sel.toString());
+    var range = sel.getRangeAt(0);
+    if (text.length < 2 || !doc.contains(range.commonAncestorContainer)) { hideSel(); return; }
+    var r = range.getBoundingClientRect();
+    pending = { range: range.cloneRange(), quote: text };
+    selBtn.hidden = false;
+    var top = r.top - 44; if (top < 8) top = r.bottom + 8;
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - 45), window.innerWidth - 110);
+    selBtn.style.top = top + 'px'; selBtn.style.left = left + 'px';
+  }
+  document.addEventListener('mouseup', function(e){ if (e.target === selBtn) return; setTimeout(onSelect, 0); });
+  document.addEventListener('keyup', function(e){ if (e.shiftKey) setTimeout(onSelect, 0); });
+  document.addEventListener('scroll', hideSel, { passive: true });
+  selBtn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+  selBtn.addEventListener('click', function(){
+    if (!pending) return;
+    var loc = locate(pending.range.commonAncestorContainer);
+    openComposer({ kind: 'text', quote: cut(pending.quote, 400), where: loc.where, figure: loc.figure, around: loc.around, section: loc.section }, pending.range);
+    hideSel();
+  });
+
+  // diagram buttons
+  doc.querySelectorAll('figure').forEach(function(fig, i){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'fig-cmt'; b.textContent = 'Comment on diagram';
+    b.addEventListener('click', function(){
+      var loc = locate(fig);
+      var cap = fig.querySelector('figcaption');
+      openComposer({ kind: 'diagram', quote: '', where: loc.where, figure: cap ? cut(cap.textContent, 140) : 'Diagram ' + (i + 1), around: '', section: loc.section }, null);
+    });
+    fig.appendChild(b);
+  });
+
+  function openComposer(data, range){
+    pending = { data: data, range: range };
+    cmWhere.textContent = 'On: ' + data.where + (data.kind === 'diagram' ? ' · diagram' : '');
+    cmQuote.textContent = data.kind === 'diagram' ? data.figure : '"' + data.quote + '"';
+    cmText.value = '';
+    composer.hidden = false;
+    cmText.focus();
+  }
+  function closeComposer(){ composer.hidden = true; pending = null; }
+  document.getElementById('cm-cancel').addEventListener('click', closeComposer);
+  document.getElementById('cm-save').addEventListener('click', saveComment);
+  cmText.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveComment(); }
+    if (e.key === 'Escape') closeComposer();
+  });
+  function saveComment(){
+    var text = cmText.value.trim();
+    if (!text) { cmText.focus(); return; }
+    var c = pending.data; c.comment = text; c.id = 'c' + Date.now().toString(36);
+    comments.push(c); save();
+    if (pending.range) wrap(pending.range, c.id);
+    closeComposer();
+    try { window.getSelection().removeAllRanges(); } catch (e) {}
+    render();
+    toast('Comment saved. ' + comments.length + ' so far.');
+  }
+
+  function wrap(range, id){
+    try {
+      var m = document.createElement('mark');
+      m.className = 'cmt'; m.dataset.cid = id; m.title = 'Has a comment';
+      range.surroundContents(m);
+      m.addEventListener('click', function(){ openDrawer(id); });
+    } catch (e) { /* selection spans elements; the comment is still saved */ }
+  }
+  function unwrap(id){
+    doc.querySelectorAll('mark.cmt[data-cid="' + id + '"]').forEach(function(m){
+      var p = m.parentNode; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); p.normalize();
+    });
+  }
+  function restore(){
+    comments.forEach(function(c){
+      if (c.kind !== 'text' || !c.quote || c.quote.slice(-1) === '…') return;
+      var root = c.section ? document.getElementById(c.section) : doc;
+      if (!root) return;
+      var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), n;
+      while ((n = w.nextNode())) {
+        var i = n.nodeValue.indexOf(c.quote);
+        if (i > -1) { var r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + c.quote.length); wrap(r, c.id); break; }
+      }
+    });
+  }
+
+  function render(){
+    countEl.textContent = comments.length;
+    list.innerHTML = '';
+    if (!comments.length) {
+      var e = document.createElement('p'); e.className = 'empty';
+      e.textContent = 'No comments yet. Select text on the page and press Comment, or use Comment on diagram.';
+      list.appendChild(e); return;
+    }
+    comments.forEach(function(c, i){
+      var d = document.createElement('div'); d.className = 'cm'; d.id = 'cm-' + c.id;
+      var w = document.createElement('div'); w.className = 'where'; w.textContent = '[' + (i + 1) + '] ' + c.where + (c.kind === 'diagram' ? ' · diagram' : ''); d.appendChild(w);
+      var q = document.createElement('div'); q.className = 'q'; q.textContent = c.kind === 'diagram' ? c.figure : '"' + c.quote + '"'; d.appendChild(q);
+      var t = document.createElement('div'); t.className = 't'; t.textContent = c.comment; d.appendChild(t);
+      var a = document.createElement('div'); a.className = 'acts';
+      var del = document.createElement('button'); del.type = 'button'; del.className = 'btn danger'; del.textContent = 'Delete';
+      del.addEventListener('click', function(){ comments = comments.filter(function(x){ return x.id !== c.id; }); unwrap(c.id); save(); render(); });
+      a.appendChild(del); d.appendChild(a);
+      list.appendChild(d);
+    });
+  }
+
+  function feedbackText(){
+    var out = ['RELAY DESIGN FEEDBACK', 'Doc: Relay harness design proposal v0.1 (23 Sep 2026)', 'Comments: ' + comments.length, ''];
+    comments.forEach(function(c, i){
+      if (c.kind === 'diagram') {
+        out.push('[' + (i + 1) + '] ' + c.where + ' · Diagram "' + c.figure + '"');
+      } else {
+        out.push('[' + (i + 1) + '] ' + c.where + (c.figure ? ' · in diagram "' + c.figure + '"' : ''));
+        out.push('Quote:   "' + c.quote + '"');
+        if (c.around && c.around !== c.quote) out.push('Around:  "' + c.around + '"');
+      }
+      out.push('Comment: ' + c.comment.replace(/\n/g, '\n         '));
+      out.push('');
+    });
+    return out.join('\n');
+  }
+  function copy(){
+    if (!comments.length) { toast('Add a comment first. Select any text on the page.'); return; }
+    var text = feedbackText();
+    var done = function(){ fallback.hidden = true; toast('Copied ' + comments.length + ' comment' + (comments.length > 1 ? 's' : '') + '. Paste it in chat.'); };
+    var fail = function(){
+      openDrawer(); fallback.hidden = false; fallbackText.value = text;
+      fallbackText.focus(); fallbackText.select();
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail);
+      else fail();
+    } catch (e) { fail(); }
+  }
+  function openDrawer(id){
+    drawer.hidden = false; render();
+    if (id) { var el = document.getElementById('cm-' + id); if (el) el.scrollIntoView({ block: 'nearest' }); }
+  }
+  document.getElementById('dock-list').addEventListener('click', function(){ drawer.hidden ? openDrawer() : (drawer.hidden = true); });
+  document.getElementById('dr-close').addEventListener('click', function(){ drawer.hidden = true; fallback.hidden = true; });
+  document.getElementById('dock-copy').addEventListener('click', copy);
+  document.getElementById('dr-copy').addEventListener('click', copy);
+  var clearBtn = document.getElementById('dr-clear');
+  clearBtn.addEventListener('click', function(){
+    if (!comments.length) return;
+    if (!clearArmed) { clearArmed = true; clearBtn.textContent = 'Click again to clear all'; setTimeout(function(){ clearArmed = false; clearBtn.textContent = 'Clear all'; }, 3000); return; }
+    comments.forEach(function(c){ unwrap(c.id); });
+    comments = []; save(); render(); clearArmed = false; clearBtn.textContent = 'Clear all'; toast('All comments cleared.');
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { if (!composer.hidden) closeComposer(); else if (!drawer.hidden) drawer.hidden = true; } });
+
+  function toast(msg){
+    toastEl.textContent = msg; toastEl.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ toastEl.hidden = true; }, 2600);
+  }
+
+  restore(); render();
+})();
+</script>

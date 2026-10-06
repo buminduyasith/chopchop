@@ -1,0 +1,5 @@
+{
+  "name": "relay",
+  "version": "0.1.0",
+  "description": "Relay: a stack-agnostic delivery harness that takes BA stories to reviewed, merged code with a small team of people and AI agents."
+}
