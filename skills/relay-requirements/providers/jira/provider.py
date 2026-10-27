@@ -40,7 +40,7 @@ class JiraProvider(Provider):
         self.cloud = deployment == "cloud"
         self.api = "/rest/api/3" if self.cloud else "/rest/api/2"
         self.page_size = int(opts.get("page_size") or 100)
-        self.include_comments = opts.get("include_comments", True) is not False
+        self.include_comments = opts.get("include_comments", False) is True
         self.max_comments = int(opts.get("max_comments") or 50)
         self.field_cfg = opts.get("fields") or {}
         self.extra_fields = list(opts.get("extra_fields") or [])

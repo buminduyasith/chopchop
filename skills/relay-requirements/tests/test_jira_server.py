@@ -81,17 +81,21 @@ class JiraServerTest(unittest.TestCase):
                 os.environ.pop("RELAY_TRACKER_EMAIL", None)
                 out = io.StringIO()
                 with contextlib.redirect_stdout(out):
-                    code = relay_req.main(["--workspace", str(ws), "pull", "--epic", "OPS-1", "--json"])
+                    code = relay_req.main(["--workspace", str(ws), "OPS-1", "--json"])
                 self.assertEqual(code, 0)
                 r = json.loads(out.getvalue())
-                self.assertEqual(sorted(r["new"]), CHILDREN)                # 3 pages of 2
+                self.assertEqual(r["stories"], len(CHILDREN))                 # 3 pages of 2
+                self.assertEqual(r["feature"], "001-OPS-1-ops-epic")
                 self.assertTrue(H.jql[0].startswith('"Epic Link" = OPS-1'))
                 self.assertIn("Bearer pat-123", H.auth)
-                story = (ws / "features" / "OPS-1-ops-epic" / "requirements" / "stories" / "OPS-2.md").read_text()
-                self.assertIn('parent: "OPS-1"', story)                     # from the Epic Link field
-                self.assertIn("##### Details", story)                       # wiki h2, demoted under Source
-                self.assertIn("```\nx = 1\n```", story)
-                self.assertIn("- Rule **one**", story)                      # wiki AC field converted
+                text = (ws / "001-OPS-1-ops-epic" / "requirements" / "requirement.md").read_text()
+                for key in CHILDREN:
+                    self.assertIn("## %s Story %s" % (key, key), text)
+                self.assertIn("### Goal", text)                              # wiki h1 under the epic heading
+                self.assertIn("Keep things *running*.", text)
+                self.assertIn("##### Details", text)                         # wiki h2, under ### Description
+                self.assertIn("```\nx = 1\n```", text)
+                self.assertIn("- Rule **one**", text)                        # wiki AC field converted
         finally:
             server.shutdown()
             server.server_close()

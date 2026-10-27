@@ -49,7 +49,7 @@ def load_config(workspace):
     path = Path(workspace) / CONFIG_FILE
     if not path.is_file():
         raise ConfigError(
-            "No %s found in %s. Run: relay_req.py init" % (CONFIG_FILE, workspace))
+            "No %s found in %s. Run the script with --init." % (CONFIG_FILE, workspace))
     data = parse_yaml(path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
         raise ConfigError("%s must be a map at the top level." % path)

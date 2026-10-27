@@ -1,6 +1,6 @@
 # Normalized issue
 
-Every provider returns issues in this shape. The sync, the story files and every later
+Every provider returns issues in this shape. The sync, requirement.md and every later
 Relay skill only ever see this shape, never the tracker's own format. All text fields are
 Markdown.
 
@@ -39,5 +39,5 @@ Missing keys are filled with defaults (`null`, `""`, `[]` or `{}`), so a minimal
 
 | Group | Fields | Effect on re-sync |
 | --- | --- | --- |
-| Content | title, type, description, acceptance_criteria, extra, attachment names, comments | story marked **changed**, analysis goes **stale** |
-| Meta | status, priority, assignee, labels, components, fix_versions, story_points, parent, subtasks, links | updated silently, listed under "status-only updates" |
+| Content | title, type, description, acceptance_criteria, extra, attachment names, comments | reported as **Changed**, naming the parts that changed |
+| Meta | status, priority, assignee, labels, components, fix_versions, story_points, subtasks, links | reported as **Status** (with old and new status) or **Details**, not a requirement change |

@@ -1,6 +1,6 @@
 # Providers
 
-A provider connects Relay to one tracker. Everything else (the sync, the story files,
+A provider connects Relay to one tracker. Everything else (the sync, requirement.md,
 the skill steps) stays the same no matter which tracker you use.
 
 | Provider | Status | Notes |
@@ -44,7 +44,7 @@ Put provider-specific options under `tracker.<name>:`. Helpers you can use:
 
 **2. MCP (instructions only).** Add `providers/<name>/MCP.md` that tells the agent which MCP
 tools to call and how to map the result to `SCHEMA.md`. The agent writes a JSON file and runs
-`relay_req.py ingest`. No Python needed.
+`relay_req.py --ingest <file> --format normalized`. No Python needed.
 
 A provider can have both files, like `jira/`.
 
@@ -58,7 +58,7 @@ A provider can have both files, like `jira/`.
 
 - [ ] `id` and `title` always set. Rich text converted to Markdown.
 - [ ] `get_epic_children` excludes sub-tasks and the epic itself.
-- [ ] Missing issue raises `ProviderError(status=404)` so the sync can report it as missing.
+- [ ] Missing issue raises `ProviderError(status=404)` with a clear message.
 - [ ] Friendly errors for 401 and 403 that name the env var to check.
-- [ ] `relay_req.py doctor` passes.
-- [ ] A test in `tests/` with a fake server or saved payloads (see `test_jira.py`).
+- [ ] `relay_req.py --doctor` passes.
+- [ ] A test in `tests/` with a fake server or saved payloads (see `tests/test_jira.py`).

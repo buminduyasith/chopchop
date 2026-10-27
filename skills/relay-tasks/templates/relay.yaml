@@ -1,0 +1,15 @@
+# Relay team config. Lives in _relay/. No secrets here.
+
+team: my-team
+
+# The branch you work from. Feature branches are cut from it, and only a person merges back into it.
+base_branch:
+
+# Code repos for this team. name: path (relative to the folder that holds _relay/, or absolute).
+repos:
+  my-app: .
+
+branches:
+  # {key} is the epic key (PAY-120), or the feature number (007) when there is no epic.
+  feature: "feature/{key}-{slug}"
+  task: "feature/{key}/{task}-{slug}"

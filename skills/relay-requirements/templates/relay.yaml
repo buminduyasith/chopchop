@@ -19,5 +19,5 @@ tracker:
       # acceptance_criteria: "Acceptance Criteria"
       # story_points: "Story Points"
     # extra_fields: ["Business Value", "Out of scope"]   # more fields to copy into each story
-    include_comments: true
+    include_comments: false   # true = copy story comments into requirement.md
     max_comments: 50
