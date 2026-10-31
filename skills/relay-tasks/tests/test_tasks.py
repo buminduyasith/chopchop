@@ -76,6 +76,13 @@ class ConfigTest(Base):
         self.cli("--init", "--base", "dev", "--repo", "api=../api")
         self.assertEqual(load_config(self.ws)["repos"], {"api": "../api"})
 
+    def test_long_form_repo(self):
+        self.cli("--init", "--base", "dev")
+        cfg = self.ws / "relay.yaml"
+        cfg.write_text(cfg.read_text().replace("repos:\n", "repos:\n  web:\n    path: ../web\n"))
+        self.assertEqual(relay_tasks.repos_of(load_config(self.ws), self.ws)[0]["web"], "../web")
+        self.assertIn("by hand", self.cli("--repo", "web=../x", code=2))
+
     def test_bad_repo_arg(self):
         self.cli("--init")
         self.assertIn("name=path", self.cli("--repo", "nopath", code=2))

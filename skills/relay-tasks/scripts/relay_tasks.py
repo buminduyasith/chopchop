@@ -55,10 +55,12 @@ def load_cfg(ws):
 
 
 def repos_of(cfg, ws):
-    """{name: path} from relay.yaml. Falls back to the repo that holds _relay/."""
+    """{name: path} from relay.yaml. Falls back to the repo that holds _relay/.
+
+    A repo is either `name: path` or a map with `path:`."""
     repos = cfg.get("repos")
     if isinstance(repos, dict) and repos:
-        return {str(k): str(v or ".") for k, v in repos.items()}, True
+        return {str(k): str((v.get("path") if isinstance(v, dict) else v) or ".") for k, v in repos.items()}, True
     top = git_toplevel(Path(ws).parent) or Path(ws).parent
     return {Path(top).name: "."}, False
 
@@ -97,6 +99,8 @@ def set_repo(cfg_path, name, path):
         hit = next((i for i in range(head + 1, end)
                     if re.match(r"^\s+%s\s*:" % re.escape(name), lines[i])), None)
         if hit is not None:
+            if not lines[hit].split(":", 1)[1].strip():
+                raise UsageError("repos.%s has more settings than a path. Edit it in relay.yaml by hand." % name)
             lines[hit] = entry
         else:
             lines.insert(end, entry)
