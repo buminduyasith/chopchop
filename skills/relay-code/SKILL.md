@@ -45,9 +45,17 @@ Read all of it. For a `Blocked:` line, stop and tell the user the fix in one lin
 
 ## 2. Learn the repo
 
-Read the profile at `_relay/repos/<repo>.md`: build, lint and test commands, how PRs are
-opened here, and the rules to follow. If the repo's own guides (CLAUDE.md, AGENTS.md)
-say something different, the guides win.
+How to code, in this order. The first one wins when they disagree:
+
+1. **The style file(s) from `relay.yaml`** (`repos.<name>.style`, shown as `Style:` in the
+   preview). This is the team's own code style. Read all of it and follow it every time,
+   for code and tests. If a file is missing, the preview is blocked: ask the user to fix
+   the path.
+2. **The repo's own guides:** CLAUDE.md, AGENTS.md, CONTRIBUTING.md.
+3. **The profile** at `_relay/repos/<repo>.md`: build, lint and test commands, how PRs are
+   opened, and rules learned from the code.
+4. **The code itself.** With no style file, copy how nearby code is written: structure,
+   naming, errors, logging, tests.
 
 If there is no profile, make one and keep going:
 
@@ -73,8 +81,9 @@ Use the draft for this task. At the end, ask the user once to check it (step 7).
 2. The files you will add or change.
 3. The unit tests you will write, one line each.
 4. The commands you will run to check it.
-5. How the PR will be opened.
-6. Risks or questions, if any.
+5. Which style you will follow (the style file, or "the existing code").
+6. How the PR will be opened.
+7. Risks or questions, if any.
 
 If the user then says go, carry on from step 4.
 
@@ -92,7 +101,7 @@ Then build:
 
 - Write the unit tests from `## Done when` first, then the code that makes them pass.
 - Unit tests only. Mock or fake anything outside this task. No end-to-end tests.
-- Stay inside `touches`. Follow the profile and the style of nearby code.
+- Stay inside `touches`. Follow the style file, then the guides and profile, then nearby code.
 - No new library unless the task says so.
 - Commit as you go. Use the repo's commit style (`git log`) with the task id in the subject,
   for example `T02 add refund endpoint`. Never commit secrets or unrelated changes.

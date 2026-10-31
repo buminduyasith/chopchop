@@ -6,6 +6,11 @@ team: my-team
 base_branch:
 
 # Code repos for this team. name: path (relative to the folder that holds _relay/, or absolute).
+# Long form adds the repo's own code style file(s). Relay always codes by them. Without one,
+# it follows the style of the existing code.
+#   payments-api:
+#     path: ../payments-api
+#     style: docs/code-style.md          # relative to the repo, or absolute; a list is fine too
 repos:
   my-app: .
 

@@ -97,6 +97,20 @@ def repo_of(ws, cfg, name):
     return relay_tasks.repo_dir(ws, paths[name]), (raw if isinstance(raw, dict) else {})
 
 
+def style_files(path, options):
+    """The repo's own code style files from relay.yaml (repos.<name>.style), in the order given.
+
+    A path is relative to the repo, or absolute. Returns [{"file", "path", "exists"}]."""
+    raw = options.get("style")
+    items = raw if isinstance(raw, list) else [raw] if raw else []
+    out = []
+    for item in items:
+        p = Path(str(item)).expanduser()
+        full = p if p.is_absolute() else Path(path) / p
+        out.append({"file": str(item), "path": str(full), "exists": full.is_file()})
+    return out
+
+
 def git(path, *args, check=False):
     code, out, err = gitops.git(path, *args)
     if check and code != 0:
@@ -143,7 +157,7 @@ def context(ws, cfg, feature, task):
     all_tasks = tasklib.load_tasks(feature.path / tasklib.TASKS_DIR)
     by_id = {t.id: t for t in all_tasks}
     name = str(task.get("repo") or "")
-    path, _ = repo_of(ws, cfg, name)
+    path, options = repo_of(ws, cfg, name)
     is_repo = gitops.is_repo(path)
     meta, _ = profile.load(ws, name)
     log = tasklib.read_changelog(feature.path / tasklib.TASKS_DIR / tasklib.CHANGELOG_FILE)
@@ -175,6 +189,7 @@ def context(ws, cfg, feature, task):
                     "commands": {k: (meta or {}).get(k) for k in profile.COMMANDS},
                     "pr": (meta or {}).get("pr")},
         "guides": profile.guides(path) if is_repo else [],
+        "style": style_files(path, options),
     }
     ctx["blockers"], ctx["warnings"] = check_start(ctx)
     return ctx
@@ -196,6 +211,10 @@ def check_start(ctx):
     if ctx["dirty"] and ctx["current_branch"] != ctx["task_branch"]:
         blockers.append("%s has uncommitted changes on %s: %s. Commit or stash them first."
                         % (ctx["repo"], ctx["current_branch"], ", ".join(ctx["dirty"][:5])))
+    missing = [s["file"] for s in ctx["style"] if not s["exists"]]
+    if missing:
+        blockers.append("Style file %s from relay.yaml (repos.%s.style) is not in the repo. Fix the path."
+                        % (", ".join(missing), ctx["repo"]))
     if not ctx["profile"]["exists"]:
         warnings.append("No profile for %s yet. Run --profile %s." % (ctx["repo"], ctx["repo"]))
     elif not ctx["profile"]["confirmed"]:
@@ -224,6 +243,8 @@ def context_lines(ws, ctx, preview=False):
              "Branch:   %s <- from %s" % (ctx["task_branch"], ctx["feature_branch"] or "(no feature branch yet)"),
              "Depends:  %s" % deps,
              "Profile:  %s" % prof] + ([prs] if prs else []) + [
+             "Style:    %s" % (", ".join(s["file"] for s in ctx["style"]) + " (from relay.yaml, always follow it)"
+                                 if ctx["style"] else "not set in relay.yaml. Follow the code and the profile rules."),
              "Guides:   %s" % (", ".join(ctx["guides"]) or "none found"),
              "Design:   %s%s" % (rel(ws, ctx["design_dir"]),
                                  " · story: %s" % rel(ws, ctx["requirement"]) if ctx["requirement"] else "")]

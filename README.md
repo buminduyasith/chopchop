@@ -80,6 +80,10 @@ CLAUDE.md, AGENTS.md, CONTRIBUTING.md, README, CI file, build files and tests: t
 lint and test commands, the coding rules, and how PRs are opened there. It uses the draft
 right away and asks you once, at the end, to confirm it.
 
+**Code style.** Give a repo its own style file in `relay.yaml` (`style:`, one file or a
+list). Relay always codes and writes tests by it, and it wins over everything else. Without
+one, Relay follows the repo's guides and the style of the existing code.
+
 **Relay holds no logins.** It pushes with your own git setup and opens the PR with what the
 team already has: the way the profile names, a connected tool (for example an Atlassian,
 Bitbucket or GitHub MCP server), or a CLI that is already logged in. If there is none, it
@@ -96,7 +100,9 @@ base_branch: dev
 # Code repos: name: path (relative to the folder that holds _relay/, or absolute).
 repos:
   payments-api: ../payments-api
-  payments-web: ../payments-web
+  payments-web:                       # long form
+    path: ../payments-web
+    style: docs/code-style.md         # the repo's own code style (relative to the repo, or absolute)
 
 branches:
   feature: "feature/{key}-{slug}"     # {key} = epic key, or the feature number

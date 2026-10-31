@@ -76,6 +76,8 @@ the user which files changed and ask what to do.
 - Every file in `design/`, and `requirements/requirement.md` if it is there.
 - The code in each repo (read only): folder layout, where similar features live, how tests
   are written and run. You need real file paths for `touches`, and real test names.
+- The repo's code style file, if `relay.yaml` sets `repos.<name>.style`. Name files and
+  tests the way it says.
 - If the design is unclear or two parts disagree, stop and ask. Do not guess.
 
 ## 4. Cut the tasks

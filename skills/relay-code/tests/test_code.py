@@ -206,6 +206,39 @@ class WorkTest(Base):
         self.assertEqual(self.meta("T01")["status"], "done")
 
 
+# --------------------------------------------------------------------------- style
+
+
+class StyleTest(Base):
+    def set_style(self, value):
+        (self.ws / "relay.yaml").write_text(
+            "team: t\nbase_branch: dev\nrepos:\n  app:\n    path: %s\n    style: %s\n" % (self.repo, value))
+
+    def test_no_style_follows_the_code(self):
+        self.assertIn("Style:    not set in relay.yaml. Follow the code", self.cli("T01", "-p"))
+
+    def test_style_file_is_shown_and_must_exist(self):
+        self.set_style("docs/code-style.md")
+        out = self.cli("T01", "-p")
+        self.assertIn("Blocked:  Style file docs/code-style.md from relay.yaml (repos.app.style) is not in the repo", out)
+        self.assertIn("Style file", self.cli("T01", "--start", code=2))
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs" / "code-style.md").write_text("# Style\n")
+        out = self.cli("T01", "-p")
+        self.assertIn("Style:    docs/code-style.md (from relay.yaml, always follow it)", out)
+        self.assertNotIn("Blocked:", out)
+
+    def test_style_list_with_absolute_path(self):
+        shared = self.root / "team-style.md"
+        shared.write_text("# Team\n")
+        (self.repo / "STYLE.md").write_text("# Repo\n")
+        self.set_style("[STYLE.md, %s]" % shared)
+        import json as _json
+        ctx = _json.loads(self.cli("T01", "-p", "--json"))
+        self.assertEqual([s["file"] for s in ctx["style"]], ["STYLE.md", str(shared)])
+        self.assertTrue(all(s["exists"] for s in ctx["style"]))
+
+
 # --------------------------------------------------------------------------- profile, setup, parsing
 
 
