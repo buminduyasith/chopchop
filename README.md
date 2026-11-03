@@ -5,7 +5,7 @@ end to end. A small team of people and AI agents can work on one feature in para
 every PR stays small enough for a person to review in one sitting.
 
 ```
-stories  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  a person merges
+stories  ->  check the design  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  a person merges
 ```
 
 chopchop holds no logins and talks to no tracker or git host by itself. It uses what your
@@ -31,10 +31,11 @@ who opens a repo.
 | --- | --- | --- | --- |
 | 1. Set up | `/chopchop:init` | one person | once per team |
 | 2. Stories | `/chopchop:stories PAY-120` | lead | per epic (optional) |
-| 3. Tasks | `/chopchop:tasks docs/design.md` | lead | per feature |
-| 4. Board | `/chopchop:tasks --status` | anyone | any time |
-| 5. Build | `/chopchop:code T02` | developer | per task |
-| 6. Done | `/chopchop:code --done T02` | developer | per task |
+| 3. Check | `/chopchop:check 1 --design docs/design.md` | lead | per design change |
+| 4. Tasks | `/chopchop:tasks docs/design.md` | lead | per feature |
+| 5. Board | `/chopchop:tasks --status` | anyone | any time |
+| 6. Build | `/chopchop:code T02` | developer | per task |
+| 7. Done | `/chopchop:code --done T02` | developer | per task |
 
 1. **`/chopchop:init`** looks at your repos and asks a few questions, with click options:
    - where to keep its files
@@ -47,13 +48,17 @@ who opens a repo.
 2. **`/chopchop:stories PAY-120`** copies an epic and its stories, as they are, into
    `requirement.md`, from whatever tracker tool you have. Run `-rs 1` later to see what
    changed.
-3. **`/chopchop:tasks <design files or folder>`** cuts the design into small tasks in
-   waves: contracts first, then slices that run in parallel. It checks them and suggests a
-   feature branch. Say yes, and it creates and pushes the branch.
-4. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
+3. **`/chopchop:check 1 --design docs/design.md`** compares the design with the
+   requirements and lists conflicts, gaps, extras and questions, with quotes from both sides
+   and a coverage table. `/chopchop:check --req <files> --design <files>` works on any
+   files, with no feature.
+4. **`/chopchop:tasks <design files or folder>`** copies the design in and cuts it into small
+   tasks in waves: contracts first, then slices that run in parallel. It checks them and
+   suggests a feature branch. Say yes, and it creates and pushes the branch.
+5. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
    unit tests and code in the repo's style, runs build, lint and tests, pushes, opens the PR
    your team's usual way, and sets it to in-review. `T02 -p` only previews the plan.
-5. **`/chopchop:code --done T02`**: a person marks it done after the merge.
+6. **`/chopchop:code --done T02`**: a person marks it done after the merge.
 
 ## Commands
 
@@ -85,6 +90,20 @@ Run it again any time. It keeps what you did not change and saves `chopchop.yaml
 
 Every task fits one repo and one PR, can be tested with unit tests alone, and depends only
 on an earlier wave. A script checks this every time.
+
+### `/chopchop:check`
+
+| You type | What it does |
+| --- | --- |
+| (nothing) or a feature (`1`, `PAY-120`) | Compares the feature's `requirement.md` with its `design/` and writes `check.md`. |
+| `1 --design new-spec.md` | The feature's requirements against another design file. |
+| `--req brief.md stories/ --design design.md` | Any requirement and design files, no feature needed. |
+
+Each finding is a **conflict** (both cannot be true), **missing** (a requirement with no
+design), **extra** (design nobody asked for) or **question** (unclear), with a severity,
+quotes from both sides, a fix and who to ask. Every story and acceptance criterion gets a
+stable id (`PAY-121.AC2`), and a re-check shows what was fixed and what is new.
+`/chopchop:tasks` warns you when the last check was not ready.
 
 ### `/chopchop:code`
 
@@ -118,6 +137,7 @@ _chopchop/
 └── 001-PAY-120-refunds/             one folder per feature
     ├── requirements/requirement.md  the epic and its stories
     ├── design/                      copies of the design files you gave
+    ├── check.md                     design vs requirements (from /chopchop:check)
     └── tasks/
         ├── plan.md                  waves, graph, branches
         ├── status.md  board.html    the board (generated)
@@ -155,7 +175,7 @@ branches:
 ## Without the plugin
 
 Copy the folders in `skills/` into a repo's `.claude/skills/`. `stories` and `tasks` work on
-their own. `code` and `init` need `tasks` next to them. Every script also runs without an
+their own. `check`, `code` and `init` need `tasks` next to them. Every script also runs without an
 agent, for example:
 
 ```sh
@@ -173,6 +193,7 @@ claude plugin validate . --strict
 (cd skills/tasks && python3 -m unittest discover -s tests)
 (cd skills/code && python3 -m unittest discover -s tests)
 (cd skills/init && python3 -m unittest discover -s tests)
+(cd skills/check && python3 -m unittest discover -s tests)
 ```
 
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.

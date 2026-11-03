@@ -68,6 +68,9 @@ the user which files changed and ask what to do.
   are written and run. You need real file paths for `touches`, and real test names.
 - The repo's code style file, if `chopchop.yaml` sets `repos.<name>.style`. Name files and
   tests the way it says.
+- `check.md` in the feature folder, if `/chopchop:check` was run. If its result is "not
+  ready", tell the user the open conflicts first and ask whether to cut tasks anyway. If
+  there is no check yet, suggest running `/chopchop:check` first.
 - If the design is unclear or two parts disagree, stop and ask. Do not guess.
 
 ## 4. Cut the tasks
