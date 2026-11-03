@@ -1,15 +1,18 @@
 {
-  "name": "relay",
-  "version": "0.2.0",
-  "description": "Relay: takes BA stories to reviewed PRs with a small team of people and AI agents. Set up a team, sync a Jira epic, cut a design into small one-repo tasks with a board, and build one task end to end.",
+  "name": "chopchop",
+  "version": "0.3.0",
+  "description": "chopchop: cut big features into small, one-repo tasks and build each one end to end, using the tools your team already has. Set up a team, bring in an epic's stories, cut a design into tasks with a board, and code one task to an open PR.",
   "author": {
     "name": "bumindu"
   },
+  "homepage": "https://github.com/buminduyasith/chopchop",
+  "repository": "https://github.com/buminduyasith/chopchop",
+  "license": "MIT",
   "keywords": [
     "workflow",
-    "jira",
     "tasks",
     "planning",
+    "parallel",
     "code-review",
     "team"
   ]

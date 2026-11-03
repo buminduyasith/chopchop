@@ -1,14 +1,14 @@
 {
-  "name": "relay-marketplace",
+  "name": "chopchop",
   "owner": {
     "name": "bumindu"
   },
-  "description": "The Relay plugin for Claude Code.",
+  "description": "The chopchop plugin for Claude Code.",
   "plugins": [
     {
-      "name": "relay",
+      "name": "chopchop",
       "source": "./",
-      "description": "Set up a team, sync a Jira epic, cut a design into small one-repo tasks with a board, and build one task end to end."
+      "description": "Cut big features into small one-repo tasks and build each one end to end, using the tools your team already has."
     }
   ]
 }
