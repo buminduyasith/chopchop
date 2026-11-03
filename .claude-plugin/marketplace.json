@@ -1,0 +1,14 @@
+{
+  "name": "relay-marketplace",
+  "owner": {
+    "name": "bumindu"
+  },
+  "description": "The Relay plugin for Claude Code.",
+  "plugins": [
+    {
+      "name": "relay",
+      "source": "./",
+      "description": "Set up a team, sync a Jira epic, cut a design into small one-repo tasks with a board, and build one task end to end."
+    }
+  ]
+}

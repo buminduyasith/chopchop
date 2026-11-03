@@ -1,5 +1,16 @@
 {
   "name": "relay",
-  "version": "0.1.0",
-  "description": "Relay: a stack-agnostic delivery harness that takes BA stories to reviewed, merged code with a small team of people and AI agents."
+  "version": "0.2.0",
+  "description": "Relay: takes BA stories to reviewed PRs with a small team of people and AI agents. Set up a team, sync a Jira epic, cut a design into small one-repo tasks with a board, and build one task end to end.",
+  "author": {
+    "name": "bumindu"
+  },
+  "keywords": [
+    "workflow",
+    "jira",
+    "tasks",
+    "planning",
+    "code-review",
+    "team"
+  ]
 }

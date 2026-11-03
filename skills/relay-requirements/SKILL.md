@@ -22,15 +22,15 @@ _relay/
 Later stages add their own subfolder to the same feature folder (`design/`, `tasks/`), so a
 number always means the same feature.
 
-All script paths below are relative to this skill's base directory. Run it with `python3`
-from the user's project folder (the script finds `_relay/` from there).
+The script is `${CLAUDE_SKILL_DIR}/scripts/relay_req.py`. Run it with `python3` from the
+user's project folder (it finds `_relay/` from there).
 
 ## 1. Run what the user asked
 
 Pass the user's arguments straight through, plus `--diff`:
 
 ```
-python3 scripts/relay_req.py $ARGUMENTS --diff
+python3 ${CLAUDE_SKILL_DIR}/scripts/relay_req.py $ARGUMENTS --diff
 ```
 
 `--diff` adds the before and after text under every change, so you can explain it in step 3.
@@ -51,9 +51,9 @@ Add `--dry-run` when the user only asks "what changed?" without wanting the file
 
 The script stops with a clear error. Fix it in this order:
 
-- **No relay.yaml:** ask which tracker they use (default Jira) and REST or MCP (see below).
-  Run `--init --provider <name>`. It creates `_relay/relay.yaml` and adds `_relay/` to the
-  code repo's `.gitignore`. Show the env vars it prints.
+- **No relay.yaml:** run the `relay-init` skill first. It asks for the repos, the base
+  branch, code styles and Jira in one go. (Without it, `--init --provider <name>` makes a
+  bare relay.yaml.)
 - **Env vars missing or auth fails:** run `--doctor` and explain the result in plain words.
   **Never ask for a token in chat and never write one to a file.** Suggest
   `! export RELAY_TRACKER_TOKEN=...` or their shell profile.
@@ -61,7 +61,7 @@ The script stops with a clear error. Fix it in this order:
 
 REST (`tracker.mode: rest`, the default) means the script calls the API with a token. MCP
 (`mode: mcp`) means you fetch with the tracker's MCP tools and the script only writes the
-file: follow `providers/<provider>/MCP.md`, which ends with `--ingest <file>`.
+file: follow `${CLAUDE_SKILL_DIR}/providers/<provider>/MCP.md`, which ends with `--ingest <file>`.
 
 ## 3. Reply
 
@@ -121,5 +121,5 @@ the copy of the tracker. Analysis and design come in later skills.
 - The tracker is the source of truth. This skill never writes back to it.
 - If the script fails, show the error and the fix. Do not work around it by writing the file
   yourself.
-- To support another tracker, see `providers/README.md`. These steps do not change.
+- To support another tracker, see `${CLAUDE_SKILL_DIR}/providers/README.md`. These steps do not change.
 - If `_relay/style.md` exists, follow it in your reply.

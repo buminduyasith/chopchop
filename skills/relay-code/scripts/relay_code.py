@@ -97,16 +97,20 @@ def repo_of(ws, cfg, name):
     return relay_tasks.repo_dir(ws, paths[name]), (raw if isinstance(raw, dict) else {})
 
 
-def style_files(path, options):
+def style_files(path, options, ws):
     """The repo's own code style files from relay.yaml (repos.<name>.style), in the order given.
 
-    A path is relative to the repo, or absolute. Returns [{"file", "path", "exists"}]."""
+    A path is absolute, relative to the repo, or relative to _relay/ (for example
+    styles/payments-api.md made by relay-init). Returns [{"file", "path", "exists"}]."""
     raw = options.get("style")
     items = raw if isinstance(raw, list) else [raw] if raw else []
     out = []
     for item in items:
         p = Path(str(item)).expanduser()
-        full = p if p.is_absolute() else Path(path) / p
+        if p.is_absolute():
+            full = p
+        else:
+            full = next((b / p for b in (Path(path), Path(ws)) if (b / p).is_file()), Path(path) / p)
         out.append({"file": str(item), "path": str(full), "exists": full.is_file()})
     return out
 
@@ -189,7 +193,7 @@ def context(ws, cfg, feature, task):
                     "commands": {k: (meta or {}).get(k) for k in profile.COMMANDS},
                     "pr": (meta or {}).get("pr")},
         "guides": profile.guides(path) if is_repo else [],
-        "style": style_files(path, options),
+        "style": style_files(path, options, ws),
     }
     ctx["blockers"], ctx["warnings"] = check_start(ctx)
     return ctx

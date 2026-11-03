@@ -27,41 +27,32 @@ _relay/
 
 A script does everything that must be the same every time: copying, checks, branches,
 status and the board. You do the thinking: reading the design and the code, and cutting the
-tasks. Script paths are relative to this skill's folder. Run them with `python3` from the
-user's project folder.
+tasks. The script is `${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py`. Run it with `python3`
+from the user's project folder.
 
 ## What the user typed
 
 | User typed | Do this |
 | --- | --- |
 | files or a folder | Steps 1 to 6 below. |
-| `--status [ref]` | `python3 scripts/relay_tasks.py --status <ref> --open`, then reply with one line per column. |
-| `--set T02 in-review` | `python3 scripts/relay_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
-| `--list` or nothing | `python3 scripts/relay_tasks.py --list`, then ask what they want. |
+| `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --status <ref> --open`, then reply with one line per column. |
+| `--set T02 in-review` | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
+| `--list` or nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --list`, then ask what they want. |
 
 `ref` is a feature number (1, 001), an epic key (PAY-120) or part of the folder name. With
 only one feature it can be left out.
 
 ## 1. Setup (first run only)
 
-If the script says there is no `relay.yaml` or no base branch:
-
-1. Ask: "Which branch do you work from? Feature branches are cut from it." (often `dev`).
-2. Ask which code repos this feature touches and where they are on disk. The repo that
-   holds `_relay/` is the default.
-3. Save both in one go. It remembers them, so you never ask again:
-
-   ```
-   python3 scripts/relay_tasks.py --init --base dev --repo payments-api=../payments-api --repo payments-web=../payments-web
-   ```
-
-   When relay.yaml already exists, `--base <branch>` and `--repo <name>=<path>` work on their own.
+If the script says there is no `relay.yaml` or no base branch, run the `relay-init` skill
+first. It asks for the repos, the base branch, code styles and Jira in one go. After that,
+you never ask again.
 
 ## 2. Copy the design in
 
 ```
-python3 scripts/relay_tasks.py --new <files or folders> --name <short-name>       # new feature
-python3 scripts/relay_tasks.py --new <files or folders> --feature <ref>           # existing feature
+python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --new <files or folders> --name <short-name>       # new feature
+python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --new <files or folders> --feature <ref>           # existing feature
 ```
 
 Use `--feature` when the work belongs to a feature that already exists (for example one made
@@ -83,7 +74,7 @@ the user which files changed and ask what to do.
 ## 4. Cut the tasks
 
 Write one file per task in `tasks/`, named `T01-short-name.md`, using
-`templates/task.md` as the shape. Number tasks in wave order.
+`${CLAUDE_SKILL_DIR}/templates/task.md` as the shape. Number tasks in wave order.
 
 **Rules for every task**
 
@@ -115,7 +106,7 @@ Leave `## Branch` as it is in the template. The script fills it in.
 ## 5. Check
 
 ```
-python3 scripts/relay_tasks.py --check <ref>
+python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --check <ref>
 ```
 
 Fix every error and run it again until the result is OK. Fix warnings too, unless you have
@@ -124,7 +115,7 @@ a reason. Then say the reason in the reply.
 ## 6. Show the plan and the branch
 
 ```
-python3 scripts/relay_tasks.py --branch <ref>
+python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --branch <ref>
 ```
 
 Reply with:
@@ -138,7 +129,7 @@ Reply with:
 Only when the user says yes:
 
 ```
-python3 scripts/relay_tasks.py --branch <ref> --create
+python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --branch <ref> --create
 ```
 
 That creates the branch in each repo, pushes it, and writes the exact branch commands into
