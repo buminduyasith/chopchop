@@ -184,7 +184,7 @@ class PluginTest(unittest.TestCase):
         self.assertEqual(market["plugins"][0]["name"], manifest["name"])
         self.assertEqual(market["plugins"][0]["source"], "./")
         names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
-        self.assertEqual(names, ["check", "code", "init", "stories", "tasks"])
+        self.assertEqual(names, ["check", "code", "init", "stories", "tasks", "update"])
         for name in names:
             text = (SKILLS / name / "SKILL.md").read_text()
             self.assertTrue(text.startswith("---\nname: %s\n" % name), name)

@@ -25,6 +25,20 @@ From a shell: `claude plugin marketplace add buminduyasith/chopchop`, then
 `claude plugin install chopchop@chopchop`. Add `--scope project` to share it with everyone
 who opens a repo.
 
+### Update
+
+No need to remove and install again:
+
+```
+/chopchop:update              get the latest version, then run /reload-plugins
+/chopchop:update --auto on    let Claude Code update chopchop by itself from now on
+```
+
+Auto-update is off by default for marketplaces that are not official. With it on, Claude
+Code checks in the background and tells you when a new version is ready. Without the
+plugin's own command: `claude plugin marketplace update chopchop`, then
+`claude plugin update chopchop@chopchop`.
+
 ## Quick start
 
 | Step | Command | Who | How often |
@@ -36,6 +50,7 @@ who opens a repo.
 | 5. Board | `/chopchop:tasks --status` | anyone | any time |
 | 6. Build | `/chopchop:code T02` | developer | per task |
 | 7. Done | `/chopchop:code --done T02` | developer | per task |
+| Update | `/chopchop:update` | everyone | when a new version is out |
 
 1. **`/chopchop:init`** looks at your repos and asks a few questions, with click options:
    - where to keep its files
@@ -117,6 +132,14 @@ stable id (`PAY-121.AC2`), and a re-check shows what was fixed and what is new.
 It stops to ask only when a task is blocked or unclear, a check keeps failing, or it finds
 no way to open the PR.
 
+### `/chopchop:update`
+
+| You type | What it does |
+| --- | --- |
+| (nothing) | Refreshes the chopchop marketplace and updates chopchop in every scope it is installed in. Then run `/reload-plugins`. |
+| `--check` | Shows the installed version and whether auto-update is on. |
+| `--auto on` / `--auto off` | Turns Claude Code's auto-update for chopchop on or off (asks first, since it changes your Claude settings). |
+
 ## How it codes
 
 In this order, the first one wins:
@@ -174,7 +197,8 @@ branches:
 
 ## Without the plugin
 
-Copy the folders in `skills/` into a repo's `.claude/skills/`. `stories` and `tasks` work on
+Copy the folders in `skills/` into a repo's `.claude/skills/` (`update` is only for the
+plugin). `stories` and `tasks` work on
 their own. `check`, `code` and `init` need `tasks` next to them. Every script also runs without an
 agent, for example:
 
@@ -194,6 +218,7 @@ claude plugin validate . --strict
 (cd skills/code && python3 -m unittest discover -s tests)
 (cd skills/init && python3 -m unittest discover -s tests)
 (cd skills/check && python3 -m unittest discover -s tests)
+(cd skills/update && python3 -m unittest discover -s tests)
 ```
 
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.
