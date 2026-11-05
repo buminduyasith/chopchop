@@ -59,14 +59,27 @@ formatter and linter configs, and four or five real files from different layers,
 tests. Write short rules that you actually saw, each with a file to look at. Do not invent
 rules. Mark anything unsure with "(check)". Use `styles/<repo>.md` as that repo's style.
 
-## 4. Write
+## 4. Helpers
+
+Ask these three in one go. If `existing_config.agents` has values, make them the recommended
+answers.
+
+1. **How many helpers can chopchop run at the same time?** 3 (Recommended), 5, 1, "0, no helpers".
+2. **Which model should helpers use?** "Same as my chat (Recommended)", Sonnet, Opus, Haiku.
+3. **How hard should helpers think?** "Default (Recommended)", medium, high, xhigh.
+
+"Same as my chat" and "Default" are `inherit`. Helpers are the subagents chopchop starts to read
+repos and review designs. The number is a ceiling: a small job uses fewer.
+
+## 5. Write
 
 Put the answers in a temp file:
 
 ```json
 {"workspace": "/work/_chopchop", "team": "payments", "base_branch": "dev",
  "repos": [{"name": "payments-api", "path": "/work/payments-api", "style": ["docs/code-style.md"]},
-           {"name": "payments-web", "path": "/work/payments-web", "style": []}]}
+           {"name": "payments-web", "path": "/work/payments-web", "style": []}],
+ "agents": {"max": 3, "model": "inherit", "effort": "inherit"}}
 ```
 
 ```
@@ -75,14 +88,15 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_init.py --write <answers.json>
 
 If it fails, fix the answer it names (often a style path) and run it again.
 
-## 5. Learn the repos (one more question)
+## 6. Learn the repos (one more question)
 
-Ask: **"Learn each repo's build, test and PR steps now?"**
+Ask: **"Learn the repos now? chopchop maps the system and each repo's build, test and PR steps."**
 
 - "Yes, now (Recommended)"
-- "Later, on the first task"
+- "Later: design and code do it when they first need it"
 
-On yes, for each repo run:
+On yes, first build the system map: follow the learn skill (`${CLAUDE_SKILL_DIR}/../learn/SKILL.md`).
+Then, for each repo, run:
 
 ```
 python3 ${CLAUDE_SKILL_DIR}/../code/scripts/chopchop_code.py --profile <repo>
@@ -92,7 +106,7 @@ Check and fill in each profile the way `/chopchop:code` step 2 says: the command
 and how PRs are opened. Show them together and ask once whether they are right. On yes,
 run `--profile <repo> --confirm` for each.
 
-## 6. Reply
+## 7. Reply
 
 Keep it short:
 
@@ -101,8 +115,8 @@ Keep it short:
 3. The base branch.
 4. For style files you wrote: ask the team to read them once. Suggest moving a good one into
    its repo later and pointing `style:` at it.
-5. Next step: `/chopchop:stories PAY-120` to bring in an epic's stories, or
-   `/chopchop:tasks <design files>` to cut tasks.
+5. Next step: `/chopchop:stories PAY-120` to bring in an epic's stories, then
+   `/chopchop:design <your idea>`. Or `/chopchop:tasks <design files>` when a design exists.
 
 ## Rules
 

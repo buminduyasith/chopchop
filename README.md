@@ -5,7 +5,7 @@ end to end. A small team of people and AI agents can work on one feature in para
 every PR stays small enough for a person to review in one sitting.
 
 ```
-stories  ->  check the design  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  a person merges
+learn the system  ->  stories  ->  design (a lead approves)  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  a person merges
 ```
 
 chopchop holds no logins and talks to no tracker or git host by itself. It uses what your
@@ -44,12 +44,15 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
 | Step | Command | Who | How often |
 | --- | --- | --- | --- |
 | 1. Set up | `/chopchop:init` | one person | once per team |
-| 2. Stories | `/chopchop:stories PAY-120` | lead | per epic (optional) |
-| 3. Check | `/chopchop:check 1 --design docs/design.md` | lead | per design change |
-| 4. Tasks | `/chopchop:tasks docs/design.md` | lead | per feature |
-| 5. Board | `/chopchop:tasks --status` | anyone | any time |
-| 6. Build | `/chopchop:code T02` | developer | per task |
-| 7. Done | `/chopchop:code --done T02` | developer | per task |
+| 2. Learn | `/chopchop:learn` | one person | once, then it refreshes itself |
+| 3. Stories | `/chopchop:stories PAY-120` | lead | per epic (optional) |
+| 4. Design | `/chopchop:design refunds for card payments` | developer | per feature |
+| 5. Approve | `/chopchop:design --approve "Asha"` | developer, after the review | per feature |
+| 6. Check | `/chopchop:check 1` | lead | per design change |
+| 7. Tasks | `/chopchop:tasks 1` | lead | per feature |
+| 8. Board | `/chopchop:tasks --status` | anyone | any time |
+| 9. Build | `/chopchop:code T02` | developer | per task |
+| 10. Done | `/chopchop:code --done T02` | developer | per task |
 | Update | `/chopchop:update` | everyone | when a new version is out |
 
 1. **`/chopchop:init`** looks at your repos and asks a few questions, with click options:
@@ -58,22 +61,32 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
    - which repos the team works in
    - each repo's code style: use the style file it found, write one from the code, or none
 
-   It writes `_chopchop/chopchop.yaml` and can also learn each repo's build, test and PR
-   steps.
-2. **`/chopchop:stories PAY-120`** copies an epic and its stories, as they are, into
+   - how many helpers (subagents) chopchop may run at once, with which model and effort
+
+   It writes `_chopchop/chopchop.yaml` and can also map the system and learn each repo's
+   build, test and PR steps.
+2. **`/chopchop:learn`** maps every repo: APIs, events, tables, outside systems, owners from
+   CODEOWNERS, the patterns each repo follows, and how they connect. Later runs read only
+   what git diff says changed.
+3. **`/chopchop:stories PAY-120`** copies an epic and its stories, as they are, into
    `requirement.md`, from whatever tracker tool you have. Run `-rs 1` later to see what
    changed.
-3. **`/chopchop:check 1 --design docs/design.md`** compares the design with the
+4. **`/chopchop:design <idea>`** asks at most 2 short rounds of questions, with answers to
+   pick, and writes a short design a lead can approve: one feature map of the whole feature,
+   the real choices kept in `options.md`, failure answers for every arrow, and a citation of
+   the code for every claim. It also writes `feature.html`: the design, the choices, slides
+   with speaker notes, and a review message to paste into chat. `--auto` asks nothing.
+5. **`/chopchop:check 1`** compares the design with the
    requirements and lists conflicts, gaps, extras and questions, with quotes from both sides
    and a coverage table. `/chopchop:check --req <files> --design <files>` works on any
    files, with no feature.
-4. **`/chopchop:tasks <design files or folder>`** copies the design in and cuts it into small
+6. **`/chopchop:tasks <design files or folder>`** copies the design in and cuts it into small
    tasks in waves: contracts first, then slices that run in parallel. It checks them and
    suggests a feature branch. Say yes, and it creates and pushes the branch.
-5. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
+7. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
    unit tests and code in the repo's style, runs build, lint and tests, pushes, opens the PR
    your team's usual way, and sets it to in-review. `T02 -p` only previews the plan.
-6. **`/chopchop:code --done T02`**: a person marks it done after the merge.
+8. **`/chopchop:code --done T02`**: a person marks it done after the merge.
 
 ## Commands
 
@@ -81,9 +94,37 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
 
 | You type | What it does |
 | --- | --- |
-| (nothing) | Asks where to keep the files, the base branch, the repos, and each repo's code style. Writes `chopchop.yaml`. Offers to learn each repo's build, test and PR steps. |
+| (nothing) | Asks where to keep the files, the base branch, the repos, each repo's code style, and the helper settings. Writes `chopchop.yaml`. Offers to map the system and learn each repo's build, test and PR steps. |
 
 Run it again any time. It keeps what you did not change and saves `chopchop.yaml.bak`.
+
+### `/chopchop:learn`
+
+| You type | What it does |
+| --- | --- |
+| (nothing) | Maps every new or changed repo with one explorer each, and writes `_chopchop/system/system-map.json` and `system-map.md`. |
+| `payments-api web-app` | Only those repos. |
+
+People can fix an entry in the JSON and mark it `"source": "person"`. chopchop never
+overwrites it. `/chopchop:design` refreshes the map by itself before it designs.
+
+### `/chopchop:design`
+
+| You type | What it does |
+| --- | --- |
+| an idea, a file, or a pasted image | Learns the area, asks round 1 (intent), reads the code with helpers, writes `options.md`, asks round 2 (your picks), then writes `design.md`, `feature-map.json` and `feature.html`. |
+| the same, with `--auto` | No questions. Every pick it makes is listed as an assumption for the lead. |
+| (nothing) | Goes on from where it stopped. |
+| `"the lead's notes"` | When a design exists: changes it from the feedback and says what changed. |
+| `--pick 2=B` | Changes one choice in `options.md` and rewrites the design. No new research. |
+| `--approve "Asha"` | Records approved, approved with conditions, or changes needed. A person decides. |
+| `--open` | Opens `feature.html`. |
+
+`design.md` has 12 fixed sections, always in the same order, for a 10 minute read. A build
+step checks it: every story is in scope or out of scope, every arrow on the feature map
+answers what happens when it fails, is slow, runs twice or gets the wrong caller, every
+citation still matches the code, and the English stays plain. Missing helper settings are
+asked once, the first time, so there is no need to run init again.
 
 ### `/chopchop:stories`
 
@@ -155,11 +196,15 @@ In this order, the first one wins:
 ```
 _chopchop/
 ├── chopchop.yaml                    team settings (no secrets), written by /chopchop:init
+├── team-decisions.md                decisions every feature follows (optional)
+├── system/system-map.json  .md      the whole system, from /chopchop:learn
 ├── styles/payments-web.md           a code style written from the code (optional)
 ├── repos/payments-api.md            how to build, test and open PRs in that repo
 └── 001-PAY-120-refunds/             one folder per feature
     ├── requirements/requirement.md  the epic and its stories
-    ├── design/                      copies of the design files you gave
+    ├── design/                      design.md, options.md, feature-map.json (or design files you gave)
+    ├── work/                        answers, helper reports, approved copies
+    ├── feature.html                 the page: design, choices, slides, review message
     ├── check.md                     design vs requirements (from /chopchop:check)
     └── tasks/
         ├── plan.md                  waves, graph, branches
@@ -183,6 +228,11 @@ repos:                                # path is relative to the folder that hold
 branches:
   feature: "feature/{key}-{slug}"     # {key} = epic key, or the feature number
   task: "feature/{key}/{task}-{slug}"
+
+agents:                               # helpers (subagents); asked once
+  max: 3                              # most at the same time; 0 = none. A small job uses fewer
+  model: inherit                      # inherit, sonnet, opus, haiku or fable
+  effort: inherit                     # inherit, low, medium, high, xhigh or max
 ```
 
 ## Safety rules
@@ -197,16 +247,28 @@ branches:
 
 ## Without the plugin
 
-Copy the folders in `skills/` into a repo's `.claude/skills/` (`update` is only for the
-plugin). `stories` and `tasks` work on
-their own. `check`, `code` and `init` need `tasks` next to them. Every script also runs without an
-agent, for example:
+Copy the folders in `skills/` into a repo's `.claude/skills/`, and `agents/` into
+`.claude/agents/` (`update` is only for the plugin). `stories` and `tasks` work on their own.
+`check`, `code`, `init`, `learn` and `design` need `tasks` next to them. Every script also runs
+without an agent, for example:
 
 ```sh
 python3 skills/init/scripts/chopchop_init.py --detect
 python3 skills/tasks/scripts/chopchop_tasks.py --status 1
 python3 skills/code/scripts/chopchop_code.py T02 --preview
+python3 skills/design/scripts/chopchop_design.py --build 1
 ```
+
+## Try it on the sample
+
+```sh
+python3 evals/sample-project/setup.py --to /tmp/refunds
+cd /tmp/refunds && claude
+```
+
+Then run `/chopchop:learn` and `/chopchop:design refunds for card payments`. The sample has 4
+small repos and a few traps: two error styles, a ledger service nobody mentions, and code that
+changed after it was cited.
 
 ## Develop
 
@@ -219,6 +281,9 @@ claude plugin validate . --strict
 (cd skills/init && python3 -m unittest discover -s tests)
 (cd skills/check && python3 -m unittest discover -s tests)
 (cd skills/update && python3 -m unittest discover -s tests)
+(cd skills/learn && python3 -m unittest discover -s tests)
+(cd skills/design && python3 -m unittest discover -s tests)
+claude plugin eval . --scaffold       # agent evals on the sample project (slow: real runs)
 ```
 
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.

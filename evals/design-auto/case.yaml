@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: design-auto
+description: design --auto on the refunds sample finds the ledger trap, writes every file and asks nothing.
+tags: [design, slow]
+context:
+  scaffold_script: scaffold.sh

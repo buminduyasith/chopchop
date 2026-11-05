@@ -30,6 +30,7 @@ if not (TASKS_SCRIPTS / "chopchoplib" / "config.py").is_file():
     sys.exit("Error: init needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
+from chopchoplib import helpers  # noqa: E402
 from chopchoplib.config import CONFIG_FILE, WORKSPACE_DIR, git_toplevel, parse_yaml  # noqa: E402
 
 BASE_CANDIDATES = ["dev", "develop", "development", "main", "master"]
@@ -242,7 +243,11 @@ def render(answers, ws, existing):
               "  # {key} is the epic key (PAY-120), or the feature number (007) when there is no epic.",
               "  feature: %s" % scalar(branches.get("feature") or "feature/{key}-{slug}"),
               "  task: %s" % scalar(branches.get("task") or "feature/{key}/{task}-{slug}"), ""]
-    known = {"team", "base_branch", "repos", "branches"}
+    agents = answers.get("agents") or ((existing or {}).get("agents") if isinstance((existing or {}).get("agents"), dict) else None)
+    if agents:
+        s = helpers.settings({"agents": agents})
+        lines += helpers.render_block(s["max"], s["model"], s["effort"], s["roles"]).rstrip("\n").split("\n") + [""]
+    known = {"team", "base_branch", "repos", "branches", "agents"}
     extra = {k: v for k, v in (existing or {}).items() if k not in known and not k.startswith("_")}
     if extra:
         lines += ["# Kept from the old chopchop.yaml."] + dump(extra) + [""]
@@ -270,6 +275,15 @@ def validate(answers):
             raise UsageError("%s (%s) is not a git repo" % (r["name"], r.get("path")))
         if isinstance(r.get("style"), str):
             r["style"] = [r["style"]]
+    agents = answers.get("agents")
+    if agents is not None:
+        if not isinstance(agents, dict):
+            raise UsageError("answers.agents must be an object: {max, model, effort}")
+        try:
+            helpers.check_values(agents.get("max", helpers.DEFAULT_MAX), agents.get("model", "inherit"),
+                                 agents.get("effort", "inherit"), agents.get("roles"))
+        except ValueError as e:
+            raise UsageError("answers.agents: %s" % e)
     return answers
 
 

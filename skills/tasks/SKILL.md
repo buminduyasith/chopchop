@@ -35,6 +35,7 @@ from the user's project folder.
 | User typed | Do this |
 | --- | --- |
 | files or a folder | Steps 1 to 6 below. |
+| a feature (`1`, `PAY-120`) that has a `design/` folder, such as one `/chopchop:design` wrote | Steps 1 to 6, with `--new <feature folder>/design --feature <ref>`. If `design.md` says the design is not approved yet, say so first and ask whether to go on. |
 | `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --status <ref> --open`, then reply with one line per column. |
 | `--set T02 in-review` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
 | `--list` or nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --list`, then ask what they want. |

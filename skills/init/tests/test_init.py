@@ -138,6 +138,16 @@ class WriteTest(Base):
         self.assertEqual(cfg["branches"], {"feature": "feat/{key}", "task": "feat/{key}/{task}"})
         self.assertEqual(cfg["freshen"], {"run_tests": True, "token": "${SOME_TOKEN}"})
 
+    def test_helper_settings_written_and_kept(self):
+        self.cli("--write", self.answers(agents={"max": 2, "model": "sonnet", "effort": "high"}))
+        cfg = load_config(self.root / "_chopchop")
+        self.assertEqual(cfg["agents"], {"max": 2, "model": "sonnet", "effort": "high"})
+        self.cli("--write", self.answers())  # a rerun without the question keeps them
+        cfg = load_config(self.root / "_chopchop")
+        self.assertEqual(cfg["agents"]["max"], 2)
+        self.assertEqual((self.root / "_chopchop" / "chopchop.yaml").read_text().count("agents:"), 1)
+        self.assertIn("model must be one of", self.cli("--write", self.answers(agents={"model": "gpt-9"}), code=2))
+
     def test_bad_answers(self):
         bad_style = self.answers(repos=[{"name": "payments-web", "path": str(self.web), "style": ["nope.md"]}])
         self.assertIn("Style file(s) not found: payments-web: nope.md", self.cli("--write", bad_style, code=2))
@@ -184,12 +194,19 @@ class PluginTest(unittest.TestCase):
         self.assertEqual(market["plugins"][0]["name"], manifest["name"])
         self.assertEqual(market["plugins"][0]["source"], "./")
         names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
-        self.assertEqual(names, ["check", "code", "init", "stories", "tasks", "update"])
+        self.assertEqual(names, ["check", "code", "design", "init", "learn", "stories", "tasks", "update"])
         for name in names:
             text = (SKILLS / name / "SKILL.md").read_text()
             self.assertTrue(text.startswith("---\nname: %s\n" % name), name)
             self.assertNotIn("python3 scripts/", text, name)  # paths go through ${CLAUDE_SKILL_DIR}
             self.assertNotIn("\u2014", text, name)  # no em-dashes
+        agents = sorted(p.stem for p in (root / "agents").glob("*.md"))
+        self.assertEqual(agents, ["architect", "explorer", "reviewer"])
+        for name in agents:
+            text = (root / "agents" / (name + ".md")).read_text()
+            self.assertTrue(text.startswith("---\nname: %s\ndescription: " % name), name)
+            self.assertNotIn("Agent", text.split("---")[1], name)  # helpers never start helpers
+            self.assertNotIn("\u2014", text, name)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: learn-system
+description: learn maps all 4 sample repos, with owners from CODEOWNERS and the ledger listener.
+tags: [learn]
+context:
+  scaffold_script: scaffold.sh
