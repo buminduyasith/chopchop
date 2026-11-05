@@ -11,8 +11,8 @@ HERE = Path(__file__).resolve().parent
 SKILLS = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
-import relay_check  # noqa: E402
-from relaylib.features import parse_front_matter  # noqa: E402
+import chopchop_check  # noqa: E402
+from chopchoplib.features import parse_front_matter  # noqa: E402
 
 DESIGN = """# Refund design
 
@@ -46,7 +46,7 @@ class Base(unittest.TestCase):
                                 "acceptance_criteria": "Cancel works while pending.\n\nA cancelled refund sends an email."}]}
         path = self.root / "stories.json"
         path.write_text(json.dumps(stories))
-        out = subprocess.run([sys.executable, str(SKILLS / "stories" / "scripts" / "relay_req.py"), "--ingest", str(path),
+        out = subprocess.run([sys.executable, str(SKILLS / "stories" / "scripts" / "chopchop_stories.py"), "--ingest", str(path),
                               "--workspace", str(self.ws)], capture_output=True, text=True)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.feature = self.ws / "001-PAY-120-refunds"
@@ -60,7 +60,7 @@ class Base(unittest.TestCase):
     def cli(self, *argv, code=0):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            got = relay_check.main(list(argv) + ["--workspace", str(self.ws)])
+            got = chopchop_check.main(list(argv) + ["--workspace", str(self.ws)])
         self.assertEqual(got, code, "exit %s\nstdout:\n%s\nstderr:\n%s" % (got, out.getvalue(), err.getvalue()))
         return out.getvalue() + err.getvalue()
 
@@ -178,8 +178,8 @@ class AnyFilesTest(Base):
 
 class SplitTest(unittest.TestCase):
     def test_split_items(self):
-        self.assertEqual(relay_check.split_items("- a\n  more\n- [ ] b\n1. c"), ["a more", "b", "c"])
-        self.assertEqual(relay_check.split_items("First rule.\n\nSecond\nrule."), ["First rule.", "Second rule."])
+        self.assertEqual(chopchop_check.split_items("- a\n  more\n- [ ] b\n1. c"), ["a more", "b", "c"])
+        self.assertEqual(chopchop_check.split_items("First rule.\n\nSecond\nrule."), ["First rule.", "Second rule."])
 
 
 if __name__ == "__main__":

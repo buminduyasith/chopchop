@@ -14,8 +14,8 @@ Take one task file from `_chopchop/<feature>/tasks/` and turn it into an open PR
 | --- | --- |
 | `T02` | The whole job, in one go: start, code, unit tests, checks, push, PR. |
 | `T02 -p` | Preview: explain what you will do, change nothing, wait. |
-| `--done T02` | Mark it done: `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py --done T02`. |
-| nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py --ready`, then ask which task. |
+| `--done T02` | Mark it done: `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py --done T02`. |
+| nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py --ready`, then ask which task. |
 
 That is all the user needs. Everything below is steps you run yourself.
 
@@ -25,7 +25,7 @@ For `T02`, do not stop between steps. Stop and ask only when:
 - the same check still fails after three tries
 - there is no way to open the PR (step 7)
 
-The script is `${CLAUDE_SKILL_DIR}/scripts/relay_code.py`. Run it with `python3` from the
+The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py`. Run it with `python3` from the
 user's project folder. This skill needs the `tasks` skill folder next to it. If there is
 no `chopchop.yaml` yet, run `/chopchop:init` first. Add `--feature <ref>` when the script
 says the task id is in more than one feature.
@@ -33,7 +33,7 @@ says the task id is in more than one feature.
 ## 1. Look
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py T02 --preview
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py T02 --preview
 ```
 
 Read all of it. For a `Blocked:` line, stop and tell the user the fix in one line:
@@ -60,7 +60,7 @@ How to code, in this order. The first one wins when they disagree:
 
 If there is no profile, make one and keep going:
 
-1. `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py --profile <repo>` drafts it from the repo.
+1. `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py --profile <repo>` drafts it from the repo.
 2. Read the guides it lists, the CI commands, two or three tests and a similar feature.
    CI shows how the team really tests, so trust it over guesses.
 3. Fix the commands in the front matter if needed. Fill in `## Rules` with short, real
@@ -91,7 +91,7 @@ If the user then says go, carry on from step 4.
 ## 4. Start and build
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py T02 --start
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py T02 --start
 ```
 
 This sets the task to in-progress and creates the task branch from the feature branch (or
@@ -110,7 +110,7 @@ Then build:
 ## 5. Check
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py T02 --verify
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py T02 --verify
 ```
 
 It runs the profile's build, lint and test commands. Fix every failure and run it again.
@@ -121,7 +121,7 @@ If you differed from the task or design, touched files outside `touches`, change
 others use, or the user told you to do something another way:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_code.py T02 --log --change "amounts are cents, not decimals" --why "ledger needs exact values"
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py T02 --log --change "amounts are cents, not decimals" --why "ledger needs exact values"
 ```
 
 It finds the affected tasks and adds a heads-up to the todo ones. Mention the rest in your
@@ -153,7 +153,7 @@ the link."
 When the PR exists:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/../tasks/scripts/relay_tasks.py --set T02 in-review --pr <url> --feature <ref>
+python3 ${CLAUDE_SKILL_DIR}/../tasks/scripts/chopchop_tasks.py --set T02 in-review --pr <url> --feature <ref>
 ```
 
 Reply with:

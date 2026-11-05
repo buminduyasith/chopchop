@@ -203,9 +203,9 @@ their own. `check`, `code` and `init` need `tasks` next to them. Every script al
 agent, for example:
 
 ```sh
-python3 skills/init/scripts/relay_init.py --detect
-python3 skills/tasks/scripts/relay_tasks.py --status 1
-python3 skills/code/scripts/relay_code.py T02 --preview
+python3 skills/init/scripts/chopchop_init.py --detect
+python3 skills/tasks/scripts/chopchop_tasks.py --status 1
+python3 skills/code/scripts/chopchop_code.py T02 --preview
 ```
 
 ## Develop

@@ -10,7 +10,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from relaylib import tasks as tasklib  # tasks' copy
+from chopchoplib import tasks as tasklib  # tasks' copy
 
 HEADS_UP = "Heads-up"
 

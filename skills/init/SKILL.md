@@ -9,13 +9,13 @@ argument-hint: "(no arguments)"
 Set chopchop up in a few questions, then write `_chopchop/chopchop.yaml`. Keep chat short: ask with
 the question tool, not in long text. Never ask for tokens or passwords.
 
-The script is `${CLAUDE_SKILL_DIR}/scripts/relay_init.py`. Run it with `python3` from the
+The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_init.py`. Run it with `python3` from the
 user's project folder.
 
 ## 1. Look
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_init.py --detect --json
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_init.py --detect --json
 ```
 
 It finds the git repos here and next to this one, their branches, style files and guides,
@@ -51,7 +51,7 @@ The user can pick Other and type a path. It can be relative to the repo, relativ
 **For "Write one from the code"**, do this for each such repo:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_init.py --style-skeleton <repo> --repo-path <path> --workspace <_chopchop path>
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_init.py --style-skeleton <repo> --repo-path <path> --workspace <_chopchop path>
 ```
 
 Then fill in every section of `_chopchop/styles/<repo>.md`. Read the repo's guides, its
@@ -70,7 +70,7 @@ Put the answers in a temp file:
 ```
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_init.py --write <answers.json>
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_init.py --write <answers.json>
 ```
 
 If it fails, fix the answer it names (often a style path) and run it again.
@@ -85,7 +85,7 @@ Ask: **"Learn each repo's build, test and PR steps now?"**
 On yes, for each repo run:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/../code/scripts/relay_code.py --profile <repo>
+python3 ${CLAUDE_SKILL_DIR}/../code/scripts/chopchop_code.py --profile <repo>
 ```
 
 Check and fill in each profile the way `/chopchop:code` step 2 says: the commands, the rules,

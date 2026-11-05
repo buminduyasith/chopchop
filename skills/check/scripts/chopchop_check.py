@@ -2,8 +2,8 @@
 """Check: find where a design or spec disagrees with the requirements.
 
 Usage
-  relay_check.py --prepare [REF] [--req PATH ...] [--design PATH ...]   what to compare, as JSON
-  relay_check.py --write findings.json [REF] [--out FILE]               write the report
+  chopchop_check.py --prepare [REF] [--req PATH ...] [--design PATH ...]   what to compare, as JSON
+  chopchop_check.py --write findings.json [REF] [--out FILE]               write the report
 
 REF is a feature (number, epic key or part of the name). With a feature, requirements default
 to requirements/requirement.md and design to design/, and the report goes to
@@ -29,13 +29,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TASKS_SCRIPTS = HERE.parents[1] / "tasks" / "scripts"
-if not (TASKS_SCRIPTS / "relaylib" / "features.py").is_file():
+if not (TASKS_SCRIPTS / "chopchoplib" / "features.py").is_file():
     sys.exit("Error: check needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from relaylib import features  # noqa: E402
-from relaylib.config import ConfigError, find_workspace  # noqa: E402
-from relaylib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
+from chopchoplib import features  # noqa: E402
+from chopchoplib.config import ConfigError, find_workspace  # noqa: E402
+from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 
 REPORT = "check.md"
 KINDS = {"conflict": "Conflicts", "missing": "Missing in the design", "extra": "Extra in the design",
@@ -380,7 +380,7 @@ def cmd_write(args, ws):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="relay_check.py", description=__doc__.split("\n")[0],
+    p = argparse.ArgumentParser(prog="chopchop_check.py", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("ref", nargs="?", help="feature: number, epic key or part of the name")

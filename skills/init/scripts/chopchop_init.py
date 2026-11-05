@@ -2,9 +2,9 @@
 """chopchop init: set up _chopchop/chopchop.yaml for a team.
 
 Usage
-  relay_init.py --detect                         what is here: repos, branches, style files, existing config
-  relay_init.py --write answers.json             write chopchop.yaml from the user's answers
-  relay_init.py --style-skeleton NAME --repo-path PATH   start _chopchop/styles/NAME.md from what the code uses
+  chopchop_init.py --detect                         what is here: repos, branches, style files, existing config
+  chopchop_init.py --write answers.json             write chopchop.yaml from the user's answers
+  chopchop_init.py --style-skeleton NAME --repo-path PATH   start _chopchop/styles/NAME.md from what the code uses
 
 answers.json:
   {"workspace": "/work/_chopchop", "team": "payments", "base_branch": "dev",
@@ -26,11 +26,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TASKS_SCRIPTS = HERE.parents[1] / "tasks" / "scripts"
-if not (TASKS_SCRIPTS / "relaylib" / "config.py").is_file():
+if not (TASKS_SCRIPTS / "chopchoplib" / "config.py").is_file():
     sys.exit("Error: init needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from relaylib.config import CONFIG_FILE, WORKSPACE_DIR, git_toplevel, parse_yaml  # noqa: E402
+from chopchoplib.config import CONFIG_FILE, WORKSPACE_DIR, git_toplevel, parse_yaml  # noqa: E402
 
 BASE_CANDIDATES = ["dev", "develop", "development", "main", "master"]
 STYLE_NAMES = re.compile(r"(style|convention|coding|guideline|standards?)[\w.-]*\.md$", re.I)
@@ -155,7 +155,7 @@ def style_facts(path, limit=4000):
 def style_skeleton(name, facts):
     return "\n".join([
         "# Code style · %s" % name, "",
-        "_Relay follows this file for every task in %s. Started by init from the code; "
+        "_chopchop follows this file for every task in %s. Started by init from the code; "
         "keep it short, real and checked by the team._" % name, "",
         "- **Languages:** %s" % (", ".join(facts["languages"]) or "?"),
         "- **Formatters and linters:** %s (their config wins on formatting)" % (", ".join(facts["tools"]) or "none found"),
@@ -323,7 +323,7 @@ def write(answers):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="relay_init.py", description=__doc__.split("\n")[0],
+    p = argparse.ArgumentParser(prog="chopchop_init.py", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("--detect", action="store_true", help="show repos, branches, style files and any existing config")

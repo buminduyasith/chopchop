@@ -6,10 +6,10 @@ export, or text the user pastes), writes them as JSON in the shape of SCHEMA.md,
 script writes the file and says what changed. It never talks to a tracker itself.
 
 Usage
-  relay_req.py --ingest stories.json [--name refunds]   create the feature, or update it if the epic exists
-  relay_req.py -rs [<number|epic|name>|all]             which epic(s) to fetch again, as JSON
-  relay_req.py --resolve <ref>                          one feature as JSON
-  relay_req.py --list                                   all features
+  chopchop_stories.py --ingest stories.json [--name refunds]   create the feature, or update it if the epic exists
+  chopchop_stories.py -rs [<number|epic|name>|all]             which epic(s) to fetch again, as JSON
+  chopchop_stories.py --resolve <ref>                          one feature as JSON
+  chopchop_stories.py --list                                   all features
 
 stories.json: {"epic": {"id": "PAY-120", "title": "..."}, "stories": [{"id": "PAY-121", ...}, ...]}
 
@@ -26,9 +26,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from relaylib import features, reqdoc, schema  # noqa: E402
-from relaylib.config import ConfigError, find_workspace  # noqa: E402
-from relaylib.features import FeatureError  # noqa: E402
+from chopchoplib import features, reqdoc, schema  # noqa: E402
+from chopchoplib.config import ConfigError, find_workspace  # noqa: E402
+from chopchoplib.features import FeatureError  # noqa: E402
 
 
 class UsageError(Exception):
@@ -226,7 +226,7 @@ def cmd_resolve(args, ws):
 
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="relay_req.py", description=__doc__.split("\n")[0],
+    p = argparse.ArgumentParser(prog="chopchop_stories.py", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("--ingest", metavar="FILE", help="write requirement.md from a stories JSON file")

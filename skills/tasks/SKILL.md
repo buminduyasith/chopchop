@@ -27,7 +27,7 @@ _chopchop/
 
 A script does everything that must be the same every time: copying, checks, branches,
 status and the board. You do the thinking: reading the design and the code, and cutting the
-tasks. The script is `${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py`. Run it with `python3`
+tasks. The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py`. Run it with `python3`
 from the user's project folder.
 
 ## What the user typed
@@ -35,9 +35,9 @@ from the user's project folder.
 | User typed | Do this |
 | --- | --- |
 | files or a folder | Steps 1 to 6 below. |
-| `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --status <ref> --open`, then reply with one line per column. |
-| `--set T02 in-review` | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
-| `--list` or nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --list`, then ask what they want. |
+| `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --status <ref> --open`, then reply with one line per column. |
+| `--set T02 in-review` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
+| `--list` or nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --list`, then ask what they want. |
 
 `ref` is a feature number (1, 001), an epic key (PAY-120) or part of the folder name. With
 only one feature it can be left out.
@@ -50,8 +50,8 @@ you never ask again.
 ## 2. Copy the design in
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --new <files or folders> --name <short-name>       # new feature
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --new <files or folders> --feature <ref>           # existing feature
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --new <files or folders> --name <short-name>       # new feature
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --new <files or folders> --feature <ref>           # existing feature
 ```
 
 Use `--feature` when the work belongs to a feature that already exists (for example one made
@@ -108,7 +108,7 @@ Leave `## Branch` as it is in the template. The script fills it in.
 ## 5. Check
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --check <ref>
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --check <ref>
 ```
 
 Fix every error and run it again until the result is OK. Fix warnings too, unless you have
@@ -117,7 +117,7 @@ a reason. Then say the reason in the reply.
 ## 6. Show the plan and the branch
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --branch <ref>
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --branch <ref>
 ```
 
 Reply with:
@@ -131,7 +131,7 @@ Reply with:
 Only when the user says yes:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_tasks.py --branch <ref> --create
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --branch <ref> --create
 ```
 
 That creates the branch in each repo, pushes it, and writes the exact branch commands into

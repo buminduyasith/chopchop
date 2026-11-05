@@ -12,8 +12,8 @@ HERE = Path(__file__).resolve().parent
 SKILLS = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
-import relay_init  # noqa: E402  (puts tasks' scripts on the path too)
-from relaylib.config import load_config, parse_yaml  # noqa: E402
+import chopchop_init  # noqa: E402  (puts tasks' scripts on the path too)
+from chopchoplib.config import load_config, parse_yaml  # noqa: E402
 
 sys.path.insert(0, str(SKILLS / "code" / "scripts"))
 
@@ -61,7 +61,7 @@ class Base(unittest.TestCase):
     def cli(self, *argv, code=0):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            got = relay_init.main(list(argv))
+            got = chopchop_init.main(list(argv))
         self.assertEqual(got, code, "exit %s\nstdout:\n%s\nstderr:\n%s" % (got, out.getvalue(), err.getvalue()))
         return out.getvalue() + err.getvalue()
 
@@ -110,10 +110,10 @@ class WriteTest(Base):
         self.assertEqual(cfg["branches"]["feature"], "feature/{key}-{slug}")
         self.assertFalse((self.api / ".gitignore").exists())  # _chopchop is not inside a repo
 
-        import relay_tasks
-        import relay_code
-        self.assertEqual(relay_tasks.repos_of(cfg, ws)[0], {"payments-api": "payments-api", "payments-web": "payments-web"})
-        styles = relay_code.style_files(self.api, cfg["repos"]["payments-api"], ws)
+        import chopchop_tasks
+        import chopchop_code
+        self.assertEqual(chopchop_tasks.repos_of(cfg, ws)[0], {"payments-api": "payments-api", "payments-web": "payments-web"})
+        styles = chopchop_code.style_files(self.api, cfg["repos"]["payments-api"], ws)
         self.assertTrue(styles[0]["exists"])
 
     def test_write_inside_repo_ignores_it(self):
@@ -171,8 +171,8 @@ class StyleTest(Base):
                                                  "style": "styles/payments-web.md"}]))
         cfg = load_config(ws)
         self.assertEqual(cfg["repos"]["payments-web"]["style"], "styles/payments-web.md")
-        import relay_code
-        self.assertTrue(relay_code.style_files(self.web, cfg["repos"]["payments-web"], ws)[0]["exists"])
+        import chopchop_code
+        self.assertTrue(chopchop_code.style_files(self.web, cfg["repos"]["payments-web"], ws)[0]["exists"])
 
 
 class PluginTest(unittest.TestCase):

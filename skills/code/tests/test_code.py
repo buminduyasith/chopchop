@@ -10,10 +10,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
-import relay_code  # noqa: E402  (puts tasks' scripts on the path too)
-import relay_tasks  # noqa: E402
+import chopchop_code  # noqa: E402  (puts tasks' scripts on the path too)
+import chopchop_tasks  # noqa: E402
 from codelib import changes, profile  # noqa: E402
-from relaylib import features  # noqa: E402
+from chopchoplib import features  # noqa: E402
 
 def git(path, *args):
     out = subprocess.run(["git"] + list(args), cwd=str(path), capture_output=True, text=True)
@@ -65,13 +65,13 @@ class Base(unittest.TestCase):
 
     def tasks_cli(self, *argv):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
-            code = relay_tasks.main(list(argv) + ["--workspace", str(self.ws)])
+            code = chopchop_tasks.main(list(argv) + ["--workspace", str(self.ws)])
         self.assertEqual(code, 0, err.getvalue())
 
     def cli(self, *argv, code=0):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            got = relay_code.main(list(argv) + ["--workspace", str(self.ws)])
+            got = chopchop_code.main(list(argv) + ["--workspace", str(self.ws)])
         self.assertEqual(got, code, "exit %s\nstdout:\n%s\nstderr:\n%s" % (got, out.getvalue(), err.getvalue()))
         return out.getvalue() + err.getvalue()
 

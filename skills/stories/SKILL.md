@@ -22,7 +22,7 @@ _chopchop/
 Later stages add their own subfolder to the same feature folder (`design/`, `tasks/`), so a
 number always means the same feature.
 
-The script is `${CLAUDE_SKILL_DIR}/scripts/relay_req.py`. Run it with `python3` from the
+The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_stories.py`. Run it with `python3` from the
 user's project folder (it finds `_chopchop/` from there). If there is no `chopchop.yaml` yet,
 run `/chopchop:init` first.
 
@@ -58,7 +58,7 @@ Write the JSON to a temp file in the shape of `SCHEMA.md` (set `provider` to the
 way you used), then run:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_req.py --ingest <file> --diff [--name <folder>]
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_stories.py --ingest <file> --diff [--name <folder>]
 ```
 
 It creates the feature, or updates the one this epic already has. `--diff` adds the before

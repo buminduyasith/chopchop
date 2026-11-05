@@ -38,7 +38,7 @@ def path_for(ws, repo):
 
 def load(ws, repo):
     """(meta, body) or (None, None) when there is no profile yet."""
-    from relaylib.features import parse_front_matter  # tasks' copy
+    from chopchoplib.features import parse_front_matter  # tasks' copy
     p = path_for(ws, repo)
     if not p.is_file():
         return None, None
@@ -201,7 +201,7 @@ def example_tests(root, limit=5):
 
 
 def render_draft(repo, found):
-    from relaylib.features import render_front_matter
+    from chopchoplib.features import render_front_matter
     meta = {"repo": repo, "confirmed": False}
     for kind in COMMANDS:
         meta[kind] = found["commands"].get(kind)
@@ -235,7 +235,7 @@ def render_draft(repo, found):
 
 
 def confirm(ws, repo):
-    from relaylib.features import parse_front_matter, render_front_matter
+    from chopchoplib.features import parse_front_matter, render_front_matter
     p = path_for(ws, repo)
     meta, body = parse_front_matter(p.read_text(encoding="utf-8"))
     meta["confirmed"] = True

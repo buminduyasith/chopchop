@@ -10,9 +10,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
-import relay_tasks  # noqa: E402
-from relaylib import features, tasks  # noqa: E402
-from relaylib.config import load_config  # noqa: E402
+import chopchop_tasks  # noqa: E402
+from chopchoplib import features, tasks  # noqa: E402
+from chopchoplib.config import load_config  # noqa: E402
 
 
 def task_text(tid, slug, repo="api", wave=1, deps=(), touches=("src/x/**",), size="M", status="todo",
@@ -44,7 +44,7 @@ class Base(unittest.TestCase):
     def cli(self, *argv, code=0):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            got = relay_tasks.main(list(argv) + ["--workspace", str(self.ws)])
+            got = chopchop_tasks.main(list(argv) + ["--workspace", str(self.ws)])
         self.assertEqual(got, code, "exit %s\nstdout:\n%s\nstderr:\n%s" % (got, out.getvalue(), err.getvalue()))
         return out.getvalue() + err.getvalue()
 
@@ -80,7 +80,7 @@ class ConfigTest(Base):
         self.cli("--init", "--base", "dev")
         cfg = self.ws / "chopchop.yaml"
         cfg.write_text(cfg.read_text().replace("repos:\n", "repos:\n  web:\n    path: ../web\n"))
-        self.assertEqual(relay_tasks.repos_of(load_config(self.ws), self.ws)[0]["web"], "../web")
+        self.assertEqual(chopchop_tasks.repos_of(load_config(self.ws), self.ws)[0]["web"], "../web")
         self.assertIn("by hand", self.cli("--repo", "web=../x", code=2))
 
     def test_bad_repo_arg(self):
@@ -266,8 +266,8 @@ class StatusTest(Base):
 
     def board_data(self):
         html = (self.tdir / "board.html").read_text()
-        start = html.index('<script id="relay-data" type="application/json">') + len(
-            '<script id="relay-data" type="application/json">')
+        start = html.index('<script id="chopchop-data" type="application/json">') + len(
+            '<script id="chopchop-data" type="application/json">')
         return json.loads(html[start:html.index("</script>", start)])
 
     def test_status_writes_board_and_markdown(self):
@@ -319,11 +319,11 @@ class SectionTest(unittest.TestCase):
 
 class SharedCopyTest(unittest.TestCase):
     def test_shared_modules_match_chopchop_requirements(self):
-        other = HERE.parents[1] / "stories" / "scripts" / "relaylib"
+        other = HERE.parents[1] / "stories" / "scripts" / "chopchoplib"
         if not other.is_dir():
             self.skipTest("stories is not next to this skill")
         for name in ("config.py", "features.py"):
-            mine = (HERE.parent / "scripts" / "relaylib" / name).read_text()
+            mine = (HERE.parent / "scripts" / "chopchoplib" / name).read_text()
             self.assertEqual(mine, (other / name).read_text(), "%s differs from stories" % name)
 
 

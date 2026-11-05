@@ -2,16 +2,16 @@
 """chopchop code: build one task, from claiming it to ready for a PR.
 
 Usage
-  relay_code.py                          tasks you can start now (same as --ready)
-  relay_code.py T02 -p                   preview: everything about T02, changes nothing (also: T02 alone)
-  relay_code.py T02 --start              claim T02 (in-progress) and create or resume its branch
-  relay_code.py T02 --verify             run the repo's build, lint and test commands
-  relay_code.py T02 --log --change "amounts are cents" [--why "..."] [--affects T03,T05]
-  relay_code.py --done T02               mark T02 done (only a person decides this)
-  relay_code.py --profile payments-api [--refresh | --confirm]   show, draft or confirm how a repo works
+  chopchop_code.py                          tasks you can start now (same as --ready)
+  chopchop_code.py T02 -p                   preview: everything about T02, changes nothing (also: T02 alone)
+  chopchop_code.py T02 --start              claim T02 (in-progress) and create or resume its branch
+  chopchop_code.py T02 --verify             run the repo's build, lint and test commands
+  chopchop_code.py T02 --log --change "amounts are cents" [--why "..."] [--affects T03,T05]
+  chopchop_code.py --done T02               mark T02 done (only a person decides this)
+  chopchop_code.py --profile payments-api [--refresh | --confirm]   show, draft or confirm how a repo works
 
 Pushing and opening the PR are done with what the team already uses. When the PR is open,
-record it with tasks: relay_tasks.py --set T02 in-review --pr <url>.
+record it with tasks: chopchop_tasks.py --set T02 in-review --pr <url>.
 
 Options: --feature REF (when the task id is in more than one feature), --force (start although
 dependencies are not done), --take (take over a task someone else owns), --json, --workspace PATH.
@@ -29,17 +29,17 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TASKS_SCRIPTS = HERE.parents[1] / "tasks" / "scripts"
-if not (TASKS_SCRIPTS / "relay_tasks.py").is_file():
+if not (TASKS_SCRIPTS / "chopchop_tasks.py").is_file():
     sys.exit("Error: code needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-import relay_tasks  # noqa: E402
+import chopchop_tasks  # noqa: E402
 from codelib import changes, profile  # noqa: E402
-from relaylib import features, gitops  # noqa: E402
-from relaylib import tasks as tasklib  # noqa: E402
-from relaylib.config import ConfigError, find_workspace, load_config  # noqa: E402
-from relaylib.features import FeatureError  # noqa: E402
+from chopchoplib import features, gitops  # noqa: E402
+from chopchoplib import tasks as tasklib  # noqa: E402
+from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
+from chopchoplib.features import FeatureError  # noqa: E402
 
 COMMAND_TIMEOUT = 1800
 KEEP = object()
@@ -90,11 +90,11 @@ def reload(feature, task_id):
 
 
 def repo_of(ws, cfg, name):
-    paths, _ = relay_tasks.repos_of(cfg, ws)
+    paths, _ = chopchop_tasks.repos_of(cfg, ws)
     if name not in paths:
         raise UsageError("Repo '%s' is not in chopchop.yaml. Add it with: /chopchop:tasks --repo %s=<path>" % (name, name))
     raw = (cfg.get("repos") or {}).get(name)
-    return relay_tasks.repo_dir(ws, paths[name]), (raw if isinstance(raw, dict) else {})
+    return chopchop_tasks.repo_dir(ws, paths[name]), (raw if isinstance(raw, dict) else {})
 
 
 def style_files(path, options, ws):
@@ -147,7 +147,7 @@ def set_status(ws, cfg, feature, task_id, status=KEEP, owner=KEEP, pr=KEEP):
     if pr is not KEEP:
         t.meta["pr"] = pr
     t.save()
-    relay_tasks.refresh(ws, feature, cfg)
+    chopchop_tasks.refresh(ws, feature, cfg)
     return old
 
 
@@ -156,7 +156,7 @@ def set_status(ws, cfg, feature, task_id, status=KEEP, owner=KEEP, pr=KEEP):
 
 def context(ws, cfg, feature, task):
     """Everything about one task that the agent (or a person) needs before building it."""
-    plan, _ = relay_tasks.read_plan(feature, cfg)
+    plan, _ = chopchop_tasks.read_plan(feature, cfg)
     patterns = cfg.get("branches") if isinstance(cfg.get("branches"), dict) else None
     all_tasks = tasklib.load_tasks(feature.path / tasklib.TASKS_DIR)
     by_id = {t.id: t for t in all_tasks}
@@ -422,7 +422,7 @@ def cmd_log(args, ws):
         report = changes.log_change(feature.path / tasklib.TASKS_DIR, mine, all_tasks, args.change, args.why, affects)
     except ValueError as e:
         raise UsageError(str(e))
-    relay_tasks.refresh(ws, feature, cfg)
+    chopchop_tasks.refresh(ws, feature, cfg)
     lines = ["Logged:   %s in %s" % (report["id"], rel(ws, feature.path / tasklib.TASKS_DIR / tasklib.CHANGELOG_FILE))]
     if report["updated"]:
         lines.append("Updated:  %s (todo: a heads-up was added to the task file)" % ", ".join(report["updated"]))
@@ -496,7 +496,7 @@ VALUE_ACTIONS = {"profile"}
 
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="relay_code.py", description=__doc__.split("\n")[0],
+    p = argparse.ArgumentParser(prog="chopchop_code.py", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("task", nargs="?", help="task id, e.g. T02")

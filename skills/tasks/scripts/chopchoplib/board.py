@@ -11,7 +11,7 @@ from pathlib import Path
 from .features import render_front_matter
 from .tasks import STATUS_TITLES, STATUSES, as_list, find_section, waiting_on
 
-DATA_MARK = "/*__RELAY_DATA__*/null"
+DATA_MARK = "/*__CHOPCHOP_DATA__*/null"
 NOTES_HINT = "_Your notes. chopchop keeps this section as it is._"
 
 

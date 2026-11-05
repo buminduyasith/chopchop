@@ -2,16 +2,16 @@
 """chopchop tasks: cut a design into small tasks and track them in _chopchop/<NNN-feature>/tasks/.
 
 Usage (the same words you type after /chopchop:tasks)
-  relay_tasks.py --new design.md specs/ --name refunds   new feature 00N-refunds, design copied in
-  relay_tasks.py --new design.md --feature 1             add or refresh the design of feature 001
-  relay_tasks.py --check 1                               check the task files, refresh plan and board
-  relay_tasks.py --branch 1                              show the feature branch chopchop suggests
-  relay_tasks.py --branch 1 --create                     create it in every repo the tasks use, and push
-  relay_tasks.py --status 1 [--open]                     write status.md and board.html (and open it)
-  relay_tasks.py --set T02 in-review --feature 1 [--owner dev-b] [--pr URL]
-  relay_tasks.py --list                                  list features and their tasks
-  relay_tasks.py --init --base dev [--repo api=../api]   create _chopchop/chopchop.yaml
-  relay_tasks.py --base dev | --repo api=../api          save the base branch or a repo in chopchop.yaml
+  chopchop_tasks.py --new design.md specs/ --name refunds   new feature 00N-refunds, design copied in
+  chopchop_tasks.py --new design.md --feature 1             add or refresh the design of feature 001
+  chopchop_tasks.py --check 1                               check the task files, refresh plan and board
+  chopchop_tasks.py --branch 1                              show the feature branch chopchop suggests
+  chopchop_tasks.py --branch 1 --create                     create it in every repo the tasks use, and push
+  chopchop_tasks.py --status 1 [--open]                     write status.md and board.html (and open it)
+  chopchop_tasks.py --set T02 in-review --feature 1 [--owner dev-b] [--pr URL]
+  chopchop_tasks.py --list                                  list features and their tasks
+  chopchop_tasks.py --init --base dev [--repo api=../api]   create _chopchop/chopchop.yaml
+  chopchop_tasks.py --base dev | --repo api=../api          save the base branch or a repo in chopchop.yaml
 
 A feature is a number (1, 001), an epic key (PAY-120) or part of the folder name. With only one
 feature you can leave it out. Options: --json (machine-readable), --workspace PATH (the _chopchop folder).
@@ -30,9 +30,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from relaylib import board, features, gitops, tasks  # noqa: E402
-from relaylib.config import ConfigError, find_workspace, git_toplevel, load_config  # noqa: E402
-from relaylib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
+from chopchoplib import board, features, gitops, tasks  # noqa: E402
+from chopchoplib.config import ConfigError, find_workspace, git_toplevel, load_config  # noqa: E402
+from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SOURCES_FILE = "SOURCES.md"
@@ -537,7 +537,7 @@ def ignore_workspace(ws):
 
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="relay_tasks.py", description=__doc__.split("\n")[0],
+    p = argparse.ArgumentParser(prog="chopchop_tasks.py", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("--new", nargs="+", metavar="PATH", help="design or spec files or folders to copy in")

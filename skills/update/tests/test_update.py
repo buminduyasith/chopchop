@@ -13,7 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
-import relay_update  # noqa: E402
+import chopchop_update  # noqa: E402
 
 FAKE = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -77,7 +77,7 @@ class UpdateTest(unittest.TestCase):
     def cli(self, *argv, code=0):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            got = relay_update.main(list(argv))
+            got = chopchop_update.main(list(argv))
         self.assertEqual(got, code, "exit %s\nstdout:\n%s\nstderr:\n%s" % (got, out.getvalue(), err.getvalue()))
         return out.getvalue() + err.getvalue()
 

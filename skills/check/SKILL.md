@@ -10,7 +10,7 @@ Compare a design or spec with the requirements, and write down every place where
 agree. You do the reading and judging. A script finds the inputs, gives every requirement a
 stable id, checks your findings and writes the report the same way every time.
 
-The script is `${CLAUDE_SKILL_DIR}/scripts/relay_check.py`. Run it with `python3` from the
+The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_check.py`. Run it with `python3` from the
 user's project folder. It needs the `tasks` skill folder next to it.
 
 | User types | Compares |
@@ -26,7 +26,7 @@ or several files.
 ## 1. Look
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_check.py --prepare [feature] [--req ...] [--design ...] --json
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_check.py --prepare [feature] [--req ...] [--design ...] --json
 ```
 
 It lists:
@@ -97,7 +97,7 @@ For requirement files that are not a requirement.md, also add
 `"requirements": [{"id": "R1", "text": "...", "source": "brief.md:12"}]`.
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/relay_check.py --write <findings.json> [feature] [--req ...] [--design ...]
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_check.py --write <findings.json> [feature] [--req ...] [--design ...]
 ```
 
 With a feature, the report goes to `_chopchop/<feature>/check.md`. Without one, pass

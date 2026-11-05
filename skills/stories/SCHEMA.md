@@ -2,7 +2,7 @@
 
 Get the epic and its stories with whatever the team already uses (a connected tool, a CLI,
 an export or text the user pastes), then write them in this shape and run
-`relay_req.py --ingest <file>`. The script and every later skill only ever see this shape,
+`chopchop_stories.py --ingest <file>`. The script and every later skill only ever see this shape,
 never a tracker's own format. All text fields are Markdown.
 
 ```json

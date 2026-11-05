@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chopchop board</title>
 <!--
-  chopchop task board. This file is a fixed template: relay_tasks.py --status copies it and puts
+  chopchop task board. This file is a fixed template: chopchop_tasks.py --status copies it and puts
   the task data in place of the marker below. Do not edit the generated board.html by hand.
 -->
 <style>
@@ -150,14 +150,14 @@ footer { color: var(--muted); font-size: 12px; padding: 0 24px 24px; }
 
 <dialog id="dlg" aria-labelledby="dlgTitle"></dialog>
 
-<script id="relay-data" type="application/json">/*__RELAY_DATA__*/null</script>
+<script id="chopchop-data" type="application/json">/*__CHOPCHOP_DATA__*/null</script>
 <script>
 (function () {
   "use strict";
-  var raw = document.getElementById("relay-data").textContent.trim();
-  var DATA = raw && raw !== "/*__RELAY_DATA__*/null" ? JSON.parse(raw) : null;
+  var raw = document.getElementById("chopchop-data").textContent.trim();
+  var DATA = raw && raw !== "/*__CHOPCHOP_DATA__*/null" ? JSON.parse(raw) : null;
   if (!DATA) {
-    document.getElementById("board").innerHTML = '<p class="empty">No data. Run relay_tasks.py --status.</p>';
+    document.getElementById("board").innerHTML = '<p class="empty">No data. Run chopchop_tasks.py --status.</p>';
     return;
   }
 

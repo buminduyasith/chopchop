@@ -7,12 +7,12 @@ argument-hint: "[--check | --auto on | --auto off]"
 # Update
 
 Bring chopchop up to date where it is installed. The script is
-`${CLAUDE_SKILL_DIR}/scripts/relay_update.py`. Run it with `python3`.
+`${CLAUDE_SKILL_DIR}/scripts/chopchop_update.py`. Run it with `python3`.
 
 | User types | Do this |
 | --- | --- |
-| nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_update.py` |
-| `--check` | `python3 ${CLAUDE_SKILL_DIR}/scripts/relay_update.py --check` |
+| nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_update.py` |
+| `--check` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_update.py --check` |
 | `--auto on` / `--auto off` | Ask first (step 3), then run it with that flag. |
 
 ## 1. Update

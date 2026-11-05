@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from relaylib.config import expand_env, mini_yaml  # noqa: E402
+from chopchoplib.config import expand_env, mini_yaml  # noqa: E402
 
 TEMPLATE = Path(__file__).resolve().parents[2] / "tasks" / "templates" / "chopchop.yaml"
 
@@ -45,12 +45,12 @@ empty:
             "url": "https://tracker.example.com/path", "empty": None})
 
     def test_env_expansion(self):
-        os.environ["RELAY_TEST_X"] = "hello"
-        os.environ.pop("RELAY_TEST_MISSING", None)
+        os.environ["CHOPCHOP_TEST_X"] = "hello"
+        os.environ.pop("CHOPCHOP_TEST_MISSING", None)
         missing = []
-        out = expand_env({"a": "${RELAY_TEST_X}/p", "b": ["${RELAY_TEST_MISSING}"], "c": "${RELAY_TEST_MISSING:-dflt}"}, missing)
+        out = expand_env({"a": "${CHOPCHOP_TEST_X}/p", "b": ["${CHOPCHOP_TEST_MISSING}"], "c": "${CHOPCHOP_TEST_MISSING:-dflt}"}, missing)
         self.assertEqual(out, {"a": "hello/p", "b": [""], "c": "dflt"})
-        self.assertEqual(missing, ["RELAY_TEST_MISSING"])
+        self.assertEqual(missing, ["CHOPCHOP_TEST_MISSING"])
 
 
 if __name__ == "__main__":

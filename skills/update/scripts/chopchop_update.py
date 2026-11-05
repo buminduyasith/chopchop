@@ -2,10 +2,10 @@
 """Update the chopchop plugin in place, without removing and installing it again.
 
 Usage
-  relay_update.py              refresh the marketplace, then update every chopchop install
-  relay_update.py --check      only show the installed version(s) and whether auto-update is on
-  relay_update.py --auto on    let Claude Code update chopchop by itself (--auto off to stop)
-  relay_update.py --json       machine-readable output
+  chopchop_update.py              refresh the marketplace, then update every chopchop install
+  chopchop_update.py --check      only show the installed version(s) and whether auto-update is on
+  chopchop_update.py --auto on    let Claude Code update chopchop by itself (--auto off to stop)
+  chopchop_update.py --json       machine-readable output
 
 It runs the Claude Code CLI: `claude plugin marketplace update <marketplace>` and then
 `claude plugin update <plugin>@<marketplace> --scope <scope>` for each scope it is
@@ -174,7 +174,7 @@ def set_auto(on):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="relay_update.py", description=__doc__.split("\n")[0],
+    p = argparse.ArgumentParser(prog="chopchop_update.py", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("--check", action="store_true", help="only show what is installed")

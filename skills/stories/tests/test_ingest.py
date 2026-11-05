@@ -10,8 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import relay_req  # noqa: E402
-from relaylib.features import parse_front_matter  # noqa: E402
+import chopchop_stories  # noqa: E402
+from chopchoplib.features import parse_front_matter  # noqa: E402
 
 
 def story(sid, title, desc, status="To Do", ac=None, points=None, **kw):
@@ -30,7 +30,7 @@ def story(sid, title, desc, status="To Do", ac=None, points=None, **kw):
 def run(*argv):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = relay_req.main(list(argv))
+        code = chopchop_stories.main(list(argv))
     return code, out.getvalue(), err.getvalue()
 
 

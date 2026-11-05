@@ -5,8 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from relaylib import features, reqdoc  # noqa: E402
-from relaylib.schema import normalize  # noqa: E402
+from chopchoplib import features, reqdoc  # noqa: E402
+from chopchoplib.schema import normalize  # noqa: E402
 
 
 def story(sid, **kw):
