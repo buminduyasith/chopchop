@@ -34,10 +34,10 @@ cut: detail belongs in the spec.
 | # | Section | What goes in |
 | --- | --- | --- |
 | 1 | Summary and the ask | 3 to 5 lines, then `**The ask:**` (the one decision the lead makes) and `**Size:**` (repos, about how many tasks, waves). |
-| 2 | Feature map | Generated from feature-map.json. Write nothing else here. |
+| 2 | High-level design | Generated from architecture.json (the diagram skill). Write nothing else here. |
 | 3 | Why | 3 to 6 bullets. Facts only, each fact about today's code with a citation. |
 | 4 | Scope | In scope with story ids. Out of scope with the parked ideas. Every story id is in one of the two. |
-| 5 | Main flow and errors | One `sequenceDiagram` with the main story and the most important error paths. The failure table is generated under it. |
+| 5 | Main flow and errors | One or two sentences. The sequence and the failure table are generated from flow.json (the diagram skill). |
 | 6 | Data changes | One table: table, change, columns, migration. Or "None." |
 | 7 | Contract changes | One table: API or event, between which repos, new or changed, breaking or not. Or "None." |
 | 8 | Key decisions | Generated from options.json. |

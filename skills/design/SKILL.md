@@ -1,6 +1,6 @@
 ---
 name: design
-description: Turn an idea and the feature's stories into a short design a lead can approve, plus a page to present it. Learns the existing system, asks at most 2 short rounds of questions with answers to pick, keeps every real choice in options.md, draws one feature map of the whole feature, checks every claim against the code, and writes design.md and feature.html (design, choices, slides with speaker notes, and a review message to send). Use when the user runs design, wants a design, a technical design or a solution for a feature or an idea, wants to change a choice, has feedback from a lead, or wants to record an approval. --auto does it with no design questions.
+description: Turn an idea and the feature's stories into a short design a lead can approve, plus a page to present it. Learns the existing system, asks at most 2 short rounds of questions with answers to pick, keeps every real choice in options.md, draws a high-level design and a main flow with the diagram skill, checks every claim against the code, and writes design.md and feature.html (design, choices, slides with speaker notes, and a review message to send). Use when the user runs design, wants a design, a technical design or a solution for a feature or an idea, wants to change a choice, has feedback from a lead, or wants to record an approval. --auto does it with no design questions.
 argument-hint: "<idea, file or image> [--auto] | \"lead's notes\" | --pick 2=B | --approve \"Name\" | --open"
 ---
 
@@ -14,7 +14,8 @@ code, lints the text and builds the page.
 The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py`. Run it with `python3` from the
 user's project folder. It needs the `tasks` skill folder next to it. The file shapes are in
 `${CLAUDE_SKILL_DIR}/SCHEMA.md`. Read the three references before you write:
-`references/questions.md`, `references/writing.md` and `references/diagrams.md`.
+`references/questions.md`, `references/writing.md` and `references/diagrams.md`. The two
+diagrams follow the diagram skill (`${CLAUDE_SKILL_DIR}/../diagram/SKILL.md`).
 
 | User types | Do this |
 | --- | --- |
@@ -135,11 +136,14 @@ Write the picks into `work/options.json` (`picked`, `picked_by`).
 python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --scaffold --size <size>
 ```
 
-Then write `design/feature-map.json` and the prose of `design/design.md`, following
-`references/diagrams.md` and `references/writing.md`. Do not edit the four generated blocks:
+Then follow the diagram skill (`${CLAUDE_SKILL_DIR}/../diagram/SKILL.md`) to write
+`design/architecture.json` (the high-level design: parts and repos, no steps) and
+`design/flow.json` (the main flow: numbered messages and failure answers), and run its
+`--draw` until it is clean. Then write the prose of `design/design.md`, following
+`references/writing.md`. Do not edit the four generated blocks:
 the script fills them. Put speaker notes in each section as `<!-- talk: ... -->`.
 
-Answer the failure questions for every arrow:
+Answer the failure questions for every message:
 
 ```
 python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --failures
@@ -164,7 +168,7 @@ sentence and the citation. `moved` citations are fixed by the script.
 ## 11. Mock lead review
 
 Start one `chopchop:reviewer` with lens `mock-lead` (for large features, also `risk`). Give it
-the paths of design.md, options.md, feature-map.json and the system map. It returns the
+the paths of design.md, options.md, architecture.json, flow.json and the system map. It returns the
 hardest questions a lead would ask, each with a short answer and where the design should say
 it. Fix real gaps in the design. Write the questions and answers under
 `## Likely questions`, one `###` heading each. Then build again.

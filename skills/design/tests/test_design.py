@@ -63,8 +63,21 @@ def options_json(first):
     }
 
 
-def feature_map(answer_all=True):
-    steps = [
+def architecture():
+    return {"version": 2, "title": "Refunds for card payments",
+            "nodes": [{"id": "agent", "name": "Support agent", "kind": "person", "row": 0, "col": 0},
+                      {"id": "customer", "name": "Customer", "kind": "person", "row": 1, "col": 0},
+                      {"id": "page", "name": "Order page", "kind": "ui", "repo": "web-app", "status": "changed", "row": 1, "col": 1},
+                      {"id": "api", "name": "Refund API", "kind": "api", "repo": "payments-api", "status": "new", "row": 1, "col": 2},
+                      {"id": "db", "name": "refunds table", "kind": "table", "repo": "payments-api", "status": "new", "row": 2, "col": 2}],
+            "links": [{"from": "customer", "to": "page", "label": "asks for refund"},
+                      {"from": "page", "to": "api", "label": "POST refunds"},
+                      {"from": "api", "to": "db", "label": "saves pending", "kind": "data"},
+                      {"from": "agent", "to": "api", "label": "cancels refund"}]}
+
+
+def flow(answer_all=True):
+    messages = [
         {"n": 1, "from": "customer", "to": "page", "kind": "person", "say": "clicks Refund",
          "line": "The customer clicks Refund on the order page.", "stories": ["PAY-121"],
          "failure": {"twice": "The button turns off after one click.", "caller": "Only the order's owner sees it."}},
@@ -81,13 +94,9 @@ def feature_map(answer_all=True):
                      "caller": {"risk": "Any support agent can cancel.", "accepted_by": "Asha"}}},
     ]
     if not answer_all:
-        steps[2]["failure"].pop("twice")
-    return {"version": 1, "title": "Refunds for card payments",
-            "actors": [{"id": "customer", "name": "Customer"}, {"id": "agent", "name": "Support agent"}],
-            "boxes": [{"id": "page", "name": "Order page", "repo": "web-app", "status": "changed", "kind": "ui"},
-                      {"id": "api", "name": "Refund API", "repo": "payments-api", "status": "new", "kind": "api"},
-                      {"id": "db", "name": "refunds table", "repo": "payments-api", "status": "new", "kind": "table"}],
-            "steps": steps}
+        messages[2]["failure"].pop("twice")
+    return {"version": 2, "title": "Request a refund", "participants": ["customer", "agent", "page", "api", "db"],
+            "messages": messages}
 
 
 DESIGN_BODY = """# Design · Refunds for card payments
@@ -101,10 +110,10 @@ Customers can ask for a refund of a card payment from the order page. A support 
 
 <!-- talk: Start with the ask. Two repos change. -->
 
-## 2. Feature map
+## 2. High-level design
 
-<!-- chopchop:map -->
-<!-- /chopchop:map -->
+<!-- chopchop:architecture -->
+<!-- /chopchop:architecture -->
 
 ## 3. Why
 
@@ -120,15 +129,10 @@ Out of scope: partial refunds.
 
 ## 5. Main flow and errors
 
-```mermaid
-sequenceDiagram
-  Customer->>WebApp: Ask for refund
-  WebApp->>PaymentsApi: POST refunds
-  PaymentsApi-->>WebApp: 201 pending
-```
+The customer asks, the API saves the refund as pending, and an agent can cancel it.
 
-<!-- chopchop:failures -->
-<!-- /chopchop:failures -->
+<!-- chopchop:flow -->
+<!-- /chopchop:flow -->
 
 ## 6. Data changes
 
@@ -191,11 +195,12 @@ class Base(unittest.TestCase):
     def design(self, *argv, code=0):
         return run(chopchop_design.main, *argv, code=code, ws=self.ws)
 
-    def write_inputs(self, opts=None, fm=None, body=None):
+    def write_inputs(self, opts=None, fl=None, body=None):
         self.design("--scaffold", "--size", "medium")
         self.paths.work.mkdir(parents=True, exist_ok=True)
         self.paths.options.write_text(json.dumps(opts or options_json(self.first)))
-        self.paths.map.write_text(json.dumps(fm or feature_map()))
+        self.paths.arch.write_text(json.dumps(architecture()))
+        self.paths.flow.write_text(json.dumps(fl or flow()))
         meta, _ = chopchop_design.read_design(self.paths)
         chopchop_design.write_design(self.paths, meta, (body or DESIGN_BODY).replace("{first}", self.first[:7]))
 
@@ -259,6 +264,7 @@ class BuildTest(Base):
         self.assertIn("PayoutJob.java:11-16@", self.paths.options.read_text())
         # generated blocks
         self.assertIn("flowchart LR", body)
+        self.assertIn("sequenceDiagram", body)
         self.assertIn("subgraph g_payments_api[payments-api]", body)
         self.assertIn("1. The customer clicks Refund on the order page. _(PAY-121)_", body)
         self.assertIn("| 4 | cancels while pending _(call between parts)_ |", body)
@@ -284,21 +290,37 @@ class BuildTest(Base):
         self.assertTrue(data["report"]["ready"])
         titles = [s["title"] for s in data["slides"]]
         self.assertEqual(titles[0], "Refunds for card payments")
-        self.assertIn("Why not A status column on payments?", titles)
-        self.assertIn("Why not a status column on payments?", titles)  # from Likely questions
+        self.assertEqual(len(titles), 12)  # 11 slides and 1 backup, never one slide per option or question
+        why_not = data["slides"][titles.index("Options we did not pick")]["qa"]
+        self.assertIn(["Why not A status column on payments?", "We picked A new refunds table. payments has no status columns today"],
+                      why_not)
+        backup = data["slides"][-1]
+        self.assertEqual((backup["title"], backup["backup"]), ("Backup: likely questions", True))
+        self.assertEqual(backup["qa"][0][0], "Why not a status column on payments?")
+        flow = data["slides"][titles.index("Main flow and errors")]
+        self.assertTrue(flow["svg"].startswith("<svg"))
+        self.assertEqual(flow["bullets"], [])  # a diagram slide shows only the diagram
+        self.assertIn("1. The customer clicks Refund on the order page.", flow["say"])  # what to say: every message
+        hld = data["slides"][1]
+        self.assertEqual(hld["title"], "High-level design")
+        self.assertIn('class="cc-arch"', hld["svg"])
+        self.assertIn("Refund API is new (payments-api).", hld["say"])
+        self.assertTrue(all(s["say"] for s in data["slides"]))
+        self.assertEqual(data["design"]["html"].count('class="diagram drawn"'), 2)  # the page shows its own drawings
+        self.assertNotIn("subgraph g_payments_api", data["design"]["html"])
+        self.assertNotIn("map", data)
         self.assertEqual(data["slides"][0]["ask"], "approve refunds that start as pending and use a new refunds table.")
         self.assertIn("The ask: approve refunds", data["message"])
         self.assertIn("For @ledger-team: Should the ledger hear refund.done", data["message"])
-        self.assertIn("<pre class=\"mermaid\">", data["design"]["html"])
         self.assertIn('class="cite"', data["design"]["html"])
         self.assertEqual(data["stages"][0]["text"], "2 stories, 5 ACs")
 
     def test_missing_failure_answer_blocks(self):
-        self.write_inputs(fm=feature_map(answer_all=False))
+        self.write_inputs(fl=flow(answer_all=False))
         self.paths.design.write_text(self.paths.design.read_text().replace("LegacyRefundNote", "OrderCancelService"))
         out = self.design("--build", code=1)
-        self.assertIn("step 3 (saves as pending) has no answer for: Runs twice", out)
-        self.assertIn("3 saves as pending ⚠", self.paths.design.read_text())
+        self.assertIn("message 3 (saves as pending) has no answer for: Runs twice", out)
+        self.assertIn("⚠ **No answer yet.**", self.paths.design.read_text())
         failures = self.design("--failures")
         self.assertIn("MISSING", failures)
 
@@ -310,11 +332,11 @@ class BuildTest(Base):
         self.assertIn("needs 2 or 3 options", self.design("--build", code=2))
         self.paths.options.write_text("{not json")
         self.assertIn("is not valid JSON", self.design("--build", code=2))
-        fm = feature_map()
-        fm["steps"][0]["to"] = "nowhere"
+        fl = flow()
+        fl["messages"][0]["to"] = "nowhere"
         self.paths.options.write_text(json.dumps(options_json(self.first)))
-        self.paths.map.write_text(json.dumps(fm))
-        self.assertIn("'nowhere' is not an actor or a box", self.design("--build", code=2))
+        self.paths.flow.write_text(json.dumps(fl))
+        self.assertIn("message 1: to 'nowhere' is not a participant", self.design("--build", code=2))
 
     def test_lint_catches_missing_story_dash_and_headings(self):
         body = DESIGN_BODY.replace("In scope: PAY-121, PAY-122.", "In scope: PAY-121.").replace(

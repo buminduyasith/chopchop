@@ -11,7 +11,7 @@ design/options.md in 7 fixed sections. Picks change with --pick 2=B and are neve
                 "options": [{"key": "A", "title": "A new refunds table", "fit": "follows|bends|breaks",
                              "fit_note": "Follows order_cancellations",
                              "rows": {"Touches": "1 migration, 3 new files", "Undo": "Drop the table"},
-                             "sketch": {feature map with boxes and steps, optional}}],
+                             "sketch": {a small high-level design: nodes and links, optional}}],
                 "recommended": "A", "reason": "...",
                 "picked": "A", "picked_by": "you|chopchop|lead", "concern": "..."}],
    "for_lead": [{"text": "...", "owner": "ledger team"}],
@@ -23,7 +23,7 @@ picked_by "chopchop" means nobody picked it (--auto, or "you decide"): it is an 
 
 import re
 
-from . import featuremap
+from . import diagrams
 from .cite import CITE_RE
 
 KINDS = ["conflict", "decision"]
@@ -92,10 +92,9 @@ def validate(data):
             elif o["fit"] != "follows" and not o.get("fit_note"):
                 errors.append("choice %d option %s %s a pattern: fit_note must say which and why" % (n, o.get("key"), o["fit"]))
             if o.get("sketch"):
-                errs, _ = featuremap.validate(dict(o["sketch"], title=o["sketch"].get("title") or o.get("title")))
+                errs, _ = diagrams.validate_architecture(dict(o["sketch"], title=o["sketch"].get("title") or o.get("title")))
                 for e in errs:
-                    if "failure" not in e and "line" not in e and "story" not in e:
-                        errors.append("choice %d option %s sketch: %s" % (n, o.get("key"), e))
+                    errors.append("choice %d option %s sketch: %s" % (n, o.get("key"), e))
         if c.get("recommended") not in keys:
             errors.append("choice %d: recommended must be one of its option keys" % n)
         if not c.get("reason"):
@@ -206,7 +205,7 @@ def _choice_md(c):
         if o.get("sketch"):
             sk = dict(o["sketch"])
             sk.setdefault("title", o["title"])
-            lines += ["", "Sketch of %s:" % o["key"], "", "```mermaid", featuremap.sketch(sk), "```"]
+            lines += ["", "Sketch of %s:" % o["key"], "", "```mermaid", diagrams.architecture_mermaid(sk), "```"]
     return lines + [""]
 
 

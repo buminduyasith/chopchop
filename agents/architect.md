@@ -27,7 +27,7 @@ skill's SCHEMA.md. Read it first.
 - One full question that ends with `?`, and one line on why it matters.
 - 2 or 3 structurally different options, never two flavours of one.
 - The same row names on each option, such as Touches, Risk, Undo, Later.
-- A `sketch` (a small feature map) when the options change the shape.
+- A `sketch` (a small high-level design: nodes and links, placed on the grid) when the options change the shape.
 - Your pick in `recommended`, with a one or two line `reason`. Leave `picked` empty.
 
 At most 4 choices. If there are more, the feature is too big: say so in your reply, and

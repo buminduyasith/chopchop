@@ -1,4 +1,4 @@
-"""The shared helpers design uses: citations, secrets, helpers, the feature map, options, Markdown, lint."""
+"""The shared helpers design uses: citations, secrets, helpers, the diagrams, options, Markdown, lint."""
 
 import sys
 import tempfile
@@ -8,7 +8,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "tasks" / "scripts"))
 
-from chopchoplib import cite, designdoc, featuremap, helpers, mdhtml, options  # noqa: E402
+from chopchoplib import cite, designdoc, diagrams, helpers, mdhtml, options  # noqa: E402
 
 
 class CiteTest(unittest.TestCase):
@@ -66,34 +66,66 @@ class HelpersTest(unittest.TestCase):
                 helpers.write_block(cfg, 4, "gpt", "high")
 
 
-class FeatureMapTest(unittest.TestCase):
-    def fm(self):
-        return {"title": "T", "actors": [{"id": "u", "name": "User"}],
-                "boxes": [{"id": "a", "name": "API (v2) /x", "repo": "r1", "status": "new", "kind": "api"},
-                          {"id": "e", "name": "Provider", "status": "external", "kind": "external"}],
-                "steps": [{"n": 1, "from": "u", "to": "a", "kind": "person", "say": "POST /refunds [x]", "line": "One.",
-                           "stories": ["S-1"], "failure": {"twice": "ok", "caller": "ok"}},
-                          {"n": 2, "from": "a", "to": "e", "kind": "external", "say": "send", "line": "Two.",
-                           "stories": ["S-1"], "failure": {"fails": "retry"}}]}
+class DiagramsTest(unittest.TestCase):
+    def arch(self):
+        return {"title": "T", "nodes": [
+            {"id": "u", "name": "User", "kind": "person", "row": 0, "col": 0},
+            {"id": "a", "name": "API (v2) /x", "kind": "api", "repo": "r1", "status": "new", "row": 0, "col": 1},
+            {"id": "d", "name": "table", "kind": "table", "repo": "r1", "status": "new", "row": 1, "col": 1},
+            {"id": "e", "name": "Provider", "kind": "external", "status": "external", "row": 0, "col": 2}],
+            "links": [{"from": "u", "to": "a", "label": "POST refunds"}, {"from": "a", "to": "d", "label": "saves", "kind": "data"},
+                      {"from": "a", "to": "e", "label": "sends", "kind": "external"}]}
 
-    def test_mermaid_is_safe_and_marks_gaps(self):
-        text = featuremap.mermaid(self.fm())
-        self.assertIn("n_a[API v2 x NEW]", text)
-        self.assertIn("|1 POST refunds x|", text)
-        self.assertIn("|2 send ⚠|", text)
-        self.assertIn("class n_e ext", text)
-        self.assertEqual([r["question"] for r in featuremap.missing(self.fm())], ["slow", "twice", "caller"])
+    def flow(self):
+        return {"title": "F", "participants": ["u", "a", "e"], "messages": [
+            {"n": 1, "from": "u", "to": "a", "kind": "person", "say": "POST /refunds [x]", "line": "One.",
+             "stories": ["S-1"], "failure": {"twice": "ok", "caller": "ok"}},
+            {"n": 2, "from": "a", "to": "e", "kind": "external", "say": "send", "line": "Two.",
+             "stories": ["S-1"], "failure": {"fails": "retry"}},
+            {"n": 3, "from": "a", "to": "u", "kind": "reply", "say": "422 too late", "line": "Three.", "if": "too late"}]}
 
-    def test_validate(self):
-        fm = self.fm()
-        fm["boxes"] += [{"id": "b%d" % i, "name": "x", "repo": "r1", "status": "same", "kind": "service"} for i in range(10)]
-        fm["steps"][1]["n"] = 5
-        errors, warnings = featuremap.validate(fm, {"r1"}, ["S-1", "S-2"], {"S-1", "S-2"})
+    def test_architecture_draws_and_mermaid_is_safe(self):
+        a = self.arch()
+        self.assertEqual(diagrams.validate_architecture(a, {"r1"}), ([], []))
+        self.assertEqual(diagrams.layout_problems(a), ([], []))
+        svg = diagrams.architecture_svg(a)
+        self.assertTrue(svg.startswith("<svg") and "r1" in svg and "OUTSIDE" in svg)
+        text = diagrams.architecture_mermaid(a)
+        self.assertIn("subgraph g_r1[r1]", text)
+        self.assertIn("API v2 x", text)
+        self.assertNotIn("(v2)", text)
+
+    def test_architecture_is_not_a_sequence(self):
+        a = self.arch()
+        a["links"][0]["label"] = "1. asks"
+        a["nodes"][3]["row"], a["nodes"][3]["col"] = 1, 1
+        errors, _ = diagrams.validate_architecture(a)
         joined = "\n".join(errors)
-        self.assertIn("At most 12", joined)
+        self.assertIn("is a step number", joined)
+        self.assertIn("same cell", joined)
+
+    def test_part_inside_another_repo(self):
+        a = self.arch()
+        a["nodes"][2].update(row=0, col=3)
+        a["nodes"].append({"id": "o", "name": "Other", "kind": "service", "repo": "r2", "status": "new", "row": 0, "col": 2})
+        a["nodes"][3].update(row=1, col=3)
+        a["links"].append({"from": "a", "to": "o", "label": "asks"})
+        errors, _ = diagrams.validate_architecture(a)
+        self.assertTrue(any("inside the r1 group" in e for e in errors), errors)
+
+    def test_flow(self):
+        f, a = self.flow(), self.arch()
+        self.assertEqual([r["question"] for r in diagrams.missing(f)], ["slow", "twice", "caller"])
+        svg = diagrams.flow_svg(f, a)
+        self.assertIn("too late", svg)
+        self.assertIn("opt too late", diagrams.flow_mermaid(f, a))
+        f["messages"][1]["n"] = 5
+        f["participants"].append("zz")
+        errors, _ = diagrams.validate_flow(f, a, ["S-1", "S-2"], {"S-1", "S-2"})
+        joined = "\n".join(errors)
         self.assertIn("numbered 1, 2, 3", joined)
-        self.assertIn("story S-2 has no step", joined)
-        self.assertTrue(any("is on no step" in w for w in warnings))
+        self.assertIn("zz is not a part", joined)
+        self.assertIn("story S-2 has no message", joined)
 
 
 class OptionsTest(unittest.TestCase):

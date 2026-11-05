@@ -19,7 +19,8 @@ REF is a feature (number, epic key or part of the name). With one feature it can
 Files, in _chopchop/<feature>/:
   design/design.md          for leads: 12 fixed sections (chopchop writes it, the script fills 4 blocks)
   design/options.md         the choices (the script writes it from work/options.json)
-  design/feature-map.json   the feature map (chopchop writes it)
+  design/architecture.json  the high-level design (written with the diagram skill)
+  design/flow.json          the main flow, with failure answers (written with the diagram skill)
   work/options.json         the choices as data (the architect helper writes it)
   work/answers.json         the questions asked and the answers
   feature.html              the page: design, choices and slides
@@ -44,7 +45,7 @@ if not (TASKS / "scripts" / "chopchoplib" / "designdoc.py").is_file():
     sys.exit("Error: design needs the tasks skill next to it (%s not found)." % TASKS)
 sys.path.insert(0, str(TASKS / "scripts"))
 
-from chopchoplib import cite, designdoc, featuremap, features, helpers, options, page, systemmap  # noqa: E402
+from chopchoplib import cite, designdoc, diagrams, features, helpers, options, page, systemmap  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 from chopchoplib.requirements import requirement_items, story_ids  # noqa: E402
@@ -73,7 +74,8 @@ class Paths:
         self.work = feature.path / "work"
         self.design = self.design_dir / "design.md"
         self.options_md = self.design_dir / "options.md"
-        self.map = self.design_dir / "feature-map.json"
+        self.arch = self.design_dir / "architecture.json"
+        self.flow = self.design_dir / "flow.json"
         self.options = self.work / "options.json"
         self.answers = self.work / "answers.json"
         self.reports = self.work / "reports"
@@ -157,7 +159,7 @@ def prepare(ws, cfg, ref):
         "design": {"exists": meta is not None, "status": (meta or {}).get("status"), "size": (meta or {}).get("size"),
                    "version": (meta or {}).get("version"), "changed_since_approval": (meta or {}).get("changed_since_approval")},
         "options": {"exists": opts is not None, "unpicked": options.unpicked(opts) if opts else []},
-        "map": {"exists": paths.map.is_file()},
+        "diagrams": {"architecture": paths.arch.is_file(), "flow": paths.flow.is_file()},
         "answers": {"exists": paths.answers.is_file()},
         "files": paths.as_dict(),
         "templates": {"design": str(DESIGN_TEMPLATE)},
@@ -243,7 +245,7 @@ def approval_block(meta, who, lead, assumed):
     if meta.get("changed_since_approval"):
         lines[0] += " Changed since the last approval: approve it again."
     lines += ["", "**Who must approve:**", ""]
-    lines += ["- %s (%s)" % (a["who"], a["why"]) for a in who] or ["- Not known yet: the feature map has no new or changed repo."]
+    lines += ["- %s (%s)" % (a["who"], a["why"]) for a in who] or ["- Not known yet: the high-level design has no new or changed repo."]
     lines += ["", "**For the lead:**", ""]
     lines += ["- %s%s" % (i["text"], " Owner: %s." % i["owner"] if i.get("owner") else "") for i in lead] or ["- None."]
     lines += ["", "**Assumptions to confirm:**", ""]
@@ -257,8 +259,17 @@ def approval_block(meta, who, lead, assumed):
     return "\n".join(lines)
 
 
-def map_block(fm):
-    return "```mermaid\n%s\n```\n\n_%s_\n\n%s" % (featuremap.mermaid(fm), featuremap.LEGEND, "\n".join(featuremap.caption(fm)))
+ARCH_LEGEND = ("Green is new. Amber is changed. White is the same, shown for context. Dashed is outside the system. "
+               "Each box with a name on top is one repo.")
+
+
+def arch_block(arch):
+    return "```mermaid\n%s\n```\n\n_%s_" % (diagrams.architecture_mermaid(arch), ARCH_LEGEND)
+
+
+def flow_block(flow, arch):
+    return "```mermaid\n%s\n```\n\n%s\n\nFailure answers for every message:\n\n%s" % (
+        diagrams.flow_mermaid(flow, arch), "\n".join(diagrams.caption(flow)), diagrams.failure_table(flow))
 
 
 def collect_cites(*texts):
@@ -291,14 +302,22 @@ def build(ws, cfg, ref):
         unpicked = options.unpicked(opts)
         if unpicked:
             errors.append("choice %s not picked yet. Ask, or pick with --pick." % ", ".join(str(n) for n in unpicked))
-    fm = load_json(paths.map, "design/feature-map.json")
-    if fm is not None:
-        e, w = featuremap.validate(fm, set(repos), stories, known)
+    arch = load_json(paths.arch, "design/architecture.json")
+    flow = load_json(paths.flow, "design/flow.json")
+    if arch is not None:
+        e, w = diagrams.validate_architecture(arch, set(repos))
         if e:
-            raise Inputs("design/feature-map.json has problems:\n  - " + "\n  - ".join(e))
-        warnings += ["map: %s" % x for x in w]
+            raise Inputs("design/architecture.json has problems:\n  - " + "\n  - ".join(e))
+        warnings += ["high-level design: %s" % x for x in w + diagrams.layout_problems(arch)[1]]
     else:
-        errors.append("no design/feature-map.json yet")
+        errors.append("no design/architecture.json yet: draw it with the diagram skill")
+    if flow is not None:
+        e, w = diagrams.validate_flow(flow, arch, stories, known)
+        if e:
+            raise Inputs("design/flow.json has problems:\n  - " + "\n  - ".join(e))
+        warnings += ["flow: %s" % x for x in w]
+    else:
+        errors.append("no design/flow.json yet: draw it with the diagram skill")
     answers = load_json(paths.answers, "work/answers.json")
     smap = systemmap.load(ws)
 
@@ -326,22 +345,23 @@ def build(ws, cfg, ref):
             continue
 
     lead, assumed = lead_and_assumptions(opts, answers)
-    who = page.approvers(fm, smap, lead, repos)
+    who = page.approvers(arch, smap, lead, repos)
     if opts is not None:
         paths.options_md.write_text(options.render(opts, feature.name), encoding="utf-8")
     missing_blocks = []
     blocks = {"decisions": options.decisions_table(opts) if opts else "None. No choices file yet.",
               "approval": approval_block(meta, who, lead, assumed)}
-    if fm is not None:
-        blocks["map"] = map_block(fm)
-        blocks["failures"] = "Failure answers for every arrow on the feature map:\n\n" + featuremap.failure_table(fm)
+    if arch is not None:
+        blocks["architecture"] = arch_block(arch)
+    if flow is not None:
+        blocks["flow"] = flow_block(flow, arch)
     for name, content in blocks.items():
         body, found = designdoc.fill(body, name, content)
         if not found:
             missing_blocks.append(name)
-    gaps = featuremap.missing(fm) if fm else []
+    gaps = diagrams.missing(flow) if flow else []
     for g in gaps:
-        errors.append("step %s (%s) has no answer for: %s" % (g["n"], g["say"], g["ask"]))
+        errors.append("message %s (%s) has no answer for: %s" % (g["n"], g["say"], g["ask"]))
     lint_e, lint_w = designdoc.lint(body, meta.get("size"), stories)
     errors += lint_e
     warnings += lint_w
@@ -350,7 +370,7 @@ def build(ws, cfg, ref):
     report = {"ready": not errors, "errors": errors, "warnings": warnings,
               "citations": {"found": len(results), "first_check": first, "fixed": fixed_design + fixed_opts,
                             "now": cite.summary(results)},
-              "failures": {"answered": len(featuremap.failures(fm)) - len(gaps) if fm else 0, "missing": len(gaps)},
+              "failures": {"answered": len(diagrams.failures(flow)) - len(gaps) if flow else 0, "missing": len(gaps)},
               "words": designdoc.words(body.split("\n## " + designdoc.APPENDIX)[0]),
               "budget": designdoc.BUDGETS.get(meta.get("size") or "medium"),
               "status": meta.get("status"), "page": str(paths.page), "design": str(paths.design),
@@ -359,8 +379,8 @@ def build(ws, cfg, ref):
     paths.build.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     options_md = paths.options_md.read_text(encoding="utf-8") if paths.options_md.is_file() else ""
     counts = (len(stories), len([r for r in items if r["kind"] == "ac"])) if items else None
-    data = page.build(feature, meta, body, options_md, opts, fm, smap, results,
-                      featuremap.failures(fm) if fm else [], report, counts, who, lead, assumed)
+    data = page.build(feature, meta, body, options_md, opts, arch, flow, results,
+                      diagrams.failures(flow) if flow else [], report, counts, who, lead, assumed)
     paths.page.write_text(page.render(PAGE_TEMPLATE.read_text(encoding="utf-8"), data), encoding="utf-8")
     return report
 
@@ -524,14 +544,14 @@ def main(argv=None):
                 return 0
         elif args.failures:
             feature = features.resolve(ws, args.ref)
-            fm = load_json(Paths(feature).map, "design/feature-map.json")
-            if fm is None:
-                raise UsageError("No design/feature-map.json yet.")
-            out = featuremap.failures(fm)
+            flow = load_json(Paths(feature).flow, "design/flow.json")
+            if flow is None:
+                raise UsageError("No design/flow.json yet.")
+            out = diagrams.failures(flow)
             if not args.json:
                 for r in out:
                     mark = {"missing": "MISSING", "suggested": "suggested", "risk": "risk", "answered": "ok"}[r["state"]]
-                    print("%-3s %-28s %-8s %-9s %s" % (r["n"], featuremap.label(r["say"])[:28], r["question"], mark,
+                    print("%-3s %-28s %-8s %-9s %s" % (r["n"], diagrams.mlabel(r["say"])[:28], r["question"], mark,
                                                        r["answer"] or r["ask"]))
                 return 0
         elif args.build:

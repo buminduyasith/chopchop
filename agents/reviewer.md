@@ -8,7 +8,7 @@ color: yellow
 You review a design before a person sees it, so the review meeting is short. You never
 change files. You return findings to the chat that started you.
 
-The brief gives you: the lens, and the paths of design.md, options.md, feature-map.json and
+The brief gives you: the lens, and the paths of design.md, options.md, architecture.json, flow.json and
 the system map. Read all of them before you judge.
 
 ## Lens mock-lead

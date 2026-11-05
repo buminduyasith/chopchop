@@ -2,8 +2,8 @@
 
 chopchop writes the prose. The script owns four blocks and fills them on every build:
 
-  <!-- chopchop:map --> ... <!-- /chopchop:map -->              section 2, from feature-map.json
-  <!-- chopchop:failures --> ... <!-- /chopchop:failures -->    section 5, failure answers
+  <!-- chopchop:architecture --> ... <!-- /chopchop:architecture -->  section 2, from architecture.json
+  <!-- chopchop:flow --> ... <!-- /chopchop:flow -->                  section 5, from flow.json
   <!-- chopchop:decisions --> ... <!-- /chopchop:decisions -->  section 8, from options.json
   <!-- chopchop:approval --> ... <!-- /chopchop:approval -->    section 12, approvers and status
 
@@ -13,12 +13,12 @@ Speaker notes for the slides go in a section as <!-- talk: ... -->.
 import re
 
 HEADINGS = [
-    "Summary and the ask", "Feature map", "Why", "Scope", "Main flow and errors", "Data changes",
+    "Summary and the ask", "High-level design", "Why", "Scope", "Main flow and errors", "Data changes",
     "Contract changes", "Key decisions", "Impact and rollout", "Risks", "How we prove it",
     "Questions, assumptions, approval",
 ]
 APPENDIX = "Likely questions"
-BLOCKS = {"map": 2, "failures": 5, "decisions": 8, "approval": 12}
+BLOCKS = {"architecture": 2, "flow": 5, "decisions": 8, "approval": 12}
 BUDGETS = {"small": 500, "medium": 1300, "large": 1800}
 STATUSES = ["draft", "approved", "approved-with-conditions", "changes-needed"]
 STATUS_TEXT = {"draft": "Draft. Not approved yet.", "approved": "Approved.",
@@ -136,9 +136,17 @@ def lint(body, size, story_ids=()):
                           "<!-- chopchop:%s -->\n<!-- /chopchop:%s -->" % (name, BLOCKS[name], name, name))
     if not ask_line(section_text(body, 1)):
         errors.append('section 1 needs a line "**The ask:** ...": the one decision the lead makes')
-    for i, line in enumerate(body.split("\n"), 1):
-        if PLACEHOLDER.search(re.sub(r"(?s)<!--.*?-->", "", line)):
+    def blank(m):
+        return "\n" * m.group(0).count("\n")
+    plain = body
+    for name in BLOCKS:
+        plain = block_re(name).sub(blank, plain)
+    plain = re.sub(r"(?ms)^```.*?^```", blank, plain)
+    plain = re.sub(r"(?s)<!--.*?-->", blank, plain)
+    for i, line in enumerate(plain.split("\n"), 1):
+        if PLACEHOLDER.search(line):
             errors.append("line %d still has placeholder text: %s" % (i, line.strip()[:60]))
+    for i, line in enumerate(body.split("\n"), 1):
         if DASHES.search(line):
             errors.append("line %d has a long dash. Use a comma, a full stop or a colon." % i)
     prose_low = _prose(body).lower()
@@ -153,9 +161,11 @@ def lint(body, size, story_ids=()):
     if n_words > budget:
         warnings.append("%d words. The budget for a %s feature is %d. Cut, or move detail to the spec."
                         % (n_words, size or "medium", budget))
-    diagrams = len(re.findall(r"(?m)^```mermaid", without_blocks(body))) + 1
-    if diagrams > MAX_DIAGRAMS:
-        warnings.append("%d diagrams. At most %d in design.md." % (diagrams, MAX_DIAGRAMS))
+    own = len(re.findall(r"(?m)^```mermaid", without_blocks(body)))
+    if own:
+        warnings.append("%d Mermaid diagram(s) written by hand. Draw diagrams with the diagram skill, so the page and design.md agree." % own)
+    if own + 2 > MAX_DIAGRAMS:
+        warnings.append("%d diagrams. At most %d in design.md." % (own + 2, MAX_DIAGRAMS))
     for m in re.finditer(r"(?ms)^```mermaid\n(flowchart|graph).*?^```", without_blocks(body)):
         for lab in re.findall(r"\[([^\]]*)\]", m.group(0)):
             if re.search(r"[()/\"]", lab.strip("()")):
@@ -167,6 +177,10 @@ def lint(body, size, story_ids=()):
     for sid in story_ids:
         if not re.search(r"(?<![\w-])%s(?!\d)" % re.escape(sid), scope):
             errors.append("story %s is not in section 4 (Scope). Put it in scope or out of scope." % sid)
+    no_talk = [str(n) for n, _, text in sections(body) if n and n not in (2, 8) and not talk(text)]
+    if no_talk:
+        warnings.append("no speaker notes (a talk comment) in section %s. The slides then use only the section's own points."
+                        % ", ".join(no_talk))
     if not appendix(body).strip():
         warnings.append('no "## Likely questions" yet. The mock lead review fills it.')
     return errors, warnings

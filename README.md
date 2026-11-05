@@ -72,7 +72,8 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
    `requirement.md`, from whatever tracker tool you have. Run `-rs 1` later to see what
    changed.
 4. **`/chopchop:design <idea>`** asks at most 2 short rounds of questions, with answers to
-   pick, and writes a short design a lead can approve: one feature map of the whole feature,
+   pick, and writes a short design a lead can approve: a high-level design of the parts and a
+   main flow of the steps,
    the real choices kept in `options.md`, failure answers for every arrow, and a citation of
    the code for every claim. It also writes `feature.html`: the design, the choices, slides
    with speaker notes, and a review message to paste into chat. `--auto` asks nothing.
@@ -112,7 +113,7 @@ overwrites it. `/chopchop:design` refreshes the map by itself before it designs.
 
 | You type | What it does |
 | --- | --- |
-| an idea, a file, or a pasted image | Learns the area, asks round 1 (intent), reads the code with helpers, writes `options.md`, asks round 2 (your picks), then writes `design.md`, `feature-map.json` and `feature.html`. |
+| an idea, a file, or a pasted image | Learns the area, asks round 1 (intent), reads the code with helpers, writes `options.md`, asks round 2 (your picks), then draws the high-level design and the main flow (the diagram skill) and writes `design.md` and `feature.html`. |
 | the same, with `--auto` | No questions. Every pick it makes is listed as an assumption for the lead. |
 | (nothing) | Goes on from where it stopped. |
 | `"the lead's notes"` | When a design exists: changes it from the feedback and says what changed. |
@@ -121,10 +122,23 @@ overwrites it. `/chopchop:design` refreshes the map by itself before it designs.
 | `--open` | Opens `feature.html`. |
 
 `design.md` has 12 fixed sections, always in the same order, for a 10 minute read. A build
-step checks it: every story is in scope or out of scope, every arrow on the feature map
+step checks it: every story is in scope or out of scope, every message on the main flow
 answers what happens when it fails, is slow, runs twice or gets the wrong caller, every
 citation still matches the code, and the English stays plain. Missing helper settings are
 asked once, the first time, so there is no need to run init again.
+
+### `/chopchop:diagram`
+
+Design uses it for its two pictures, and you can run it on its own to draw or fix one.
+
+| Picture | Shows | Looks like |
+| --- | --- | --- |
+| High-level design (`architecture.json`) | the parts, the repo each lives in, what talks to what | boxes grouped by repo, labeled lines, no numbers |
+| Main flow (`flow.json`) | the steps in time order, the error paths, a failure answer per step | a sequence: lanes, numbered arrows, dashed replies |
+
+You (or Claude) place each part on a grid. A script checks it (no line through a box, no part
+inside another repo's group, no step numbers on the structure), draws a clean picture for
+`feature.html` and writes the Mermaid copy for `design.md`.
 
 ### `/chopchop:stories`
 
@@ -202,7 +216,7 @@ _chopchop/
 ├── repos/payments-api.md            how to build, test and open PRs in that repo
 └── 001-PAY-120-refunds/             one folder per feature
     ├── requirements/requirement.md  the epic and its stories
-    ├── design/                      design.md, options.md, feature-map.json (or design files you gave)
+    ├── design/                      design.md, options.md, architecture.json, flow.json
     ├── work/                        answers, helper reports, approved copies
     ├── feature.html                 the page: design, choices, slides, review message
     ├── check.md                     design vs requirements (from /chopchop:check)
@@ -249,7 +263,7 @@ agents:                               # helpers (subagents); asked once
 
 Copy the folders in `skills/` into a repo's `.claude/skills/`, and `agents/` into
 `.claude/agents/` (`update` is only for the plugin). `stories` and `tasks` work on their own.
-`check`, `code`, `init`, `learn` and `design` need `tasks` next to them. Every script also runs
+`check`, `code`, `init`, `learn`, `diagram` and `design` need `tasks` next to them. `design` also needs `diagram`. Every script also runs
 without an agent, for example:
 
 ```sh
@@ -283,6 +297,7 @@ claude plugin validate . --strict
 (cd skills/update && python3 -m unittest discover -s tests)
 (cd skills/learn && python3 -m unittest discover -s tests)
 (cd skills/design && python3 -m unittest discover -s tests)
+(cd skills/diagram && python3 -m unittest discover -s tests)
 claude plugin eval . --scaffold       # agent evals on the sample project (slow: real runs)
 ```
 

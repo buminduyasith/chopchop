@@ -16,10 +16,13 @@ speaker notes for a slide as a talk comment inside the section. -->
 
 <!-- talk: Start with the ask. Then the size. -->
 
-## 2. Feature map
+## 2. High-level design
 
-<!-- chopchop:map -->
-<!-- /chopchop:map -->
+<!-- One picture of the parts, not the steps. chopchop draws it from design/architecture.json,
+which you write with the diagram skill. Do not draw it by hand here. -->
+
+<!-- chopchop:architecture -->
+<!-- /chopchop:architecture -->
 
 ## 3. Why
 
@@ -33,11 +36,11 @@ Every story id appears in one of the two lists. -->
 
 ## 5. Main flow and errors
 
-<!-- One sequence diagram: the main story, plus the most important error paths. The error
-paths come from the failure answers below. -->
+<!-- One or two sentences on the main path. chopchop draws the sequence and the failure table
+from design/flow.json, which you write with the diagram skill. -->
 
-<!-- chopchop:failures -->
-<!-- /chopchop:failures -->
+<!-- chopchop:flow -->
+<!-- /chopchop:flow -->
 
 ## 6. Data changes
 

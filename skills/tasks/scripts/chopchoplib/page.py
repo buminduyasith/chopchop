@@ -4,10 +4,11 @@ Release 1 fills the design, choices and slides tabs. The page is a fixed templat
 (templates/feature.html) with the data put in as JSON, like board.html.
 """
 
+import html
 import json
 from datetime import datetime
 
-from . import designdoc, featuremap, mdhtml, options, systemmap
+from . import designdoc, diagrams, mdhtml, options, systemmap
 from .cite import short
 
 DATA_MARK = "/*__CHOPCHOP_FEATURE__*/null"
@@ -18,12 +19,12 @@ def now():
     return datetime.now().astimezone().replace(microsecond=0).isoformat()
 
 
-def approvers(fm, smap, lead, repo_dirs=None):
+def approvers(arch, smap, lead, repo_dirs=None):
     """Who must say yes: the owners of each repo the feature changes, and the owners named for the lead.
 
     Owners come from the system map, or straight from the repo's CODEOWNERS when the map has none."""
     out = []
-    for repo in featuremap.repos_touched(fm or {}):
+    for repo in diagrams.repos_touched(arch or {}):
         owners = systemmap.owners_of(smap, repo)
         if not owners and repo_dirs and repo in repo_dirs:
             owners = systemmap.owners(repo_dirs[repo])["repo"]
@@ -46,62 +47,103 @@ def _choice_lines(opts):
     return lines
 
 
-def slides(body, fm, opts, meta, who, lead, assumed):
-    """About 10 slides from the 12 sections, plus a Why not slide per option not picked and the likely questions."""
+def _say_choices(opts):
+    """What to say for each choice: the pick and why, then what we did not pick and why."""
+    out = []
+    for c in options.ordered(opts or {}):
+        key = c.get("picked") or c.get("recommended")
+        o = options.option(c, key) or {}
+        line = "%s We picked %s. %s" % (c["question"], o.get("title", key), c.get("reason") or "")
+        if c.get("picked") and c["picked"] != c.get("recommended"):
+            line = "%s We picked %s. chopchop suggested %s: %s" % (
+                c["question"], o.get("title", key), c.get("recommended"), c.get("concern") or "")
+        out.append(line.strip())
+        for x in c.get("options") or []:
+            if x.get("key") != key:
+                out.append("Not %s: %s" % (x["title"], x.get("fit_note") or "it costs more for the same result."))
+    return out
+
+
+def slides(body, arch, flow, opts, meta, who, lead, assumed):
+    """About 11 slides from the 12 sections, then backup slides with the likely questions.
+
+    Every slide has "say": what the presenter says, as short lines. It starts with the
+    section's <!-- talk: --> note, then points taken from the section itself."""
     sec = {n: t for n, _, t in designdoc.sections(body) if n}
-    title = meta.get("title") or (fm or {}).get("title") or "Design"
-    steps = (fm or {}).get("steps") or []
-    gaps = featuremap.missing(fm or {})
+    title = meta.get("title") or (arch or {}).get("title") or "Design"
+    msgs = (flow or {}).get("messages") or []
+    gaps = diagrams.missing(flow or {})
     out = []
 
-    def add(t, bullets, notes="", ask="", diagram=""):
-        out.append({"title": t, "bullets": [b for b in bullets if b][:6], "notes": notes, "ask": ask, "diagram": diagram})
+    def add(t, bullets, say, ask="", svg="", qa=None, backup=False):
+        say = [s for s in say if s]
+        out.append({"title": t, "bullets": [b for b in bullets if b][:6], "say": say, "notes": " ".join(say),
+                    "ask": ask, "svg": svg, "qa": qa or [], "backup": backup})
 
-    first = [designdoc.size_line(sec.get(1, ""))]
+    def talk(n):
+        return [designdoc.talk(sec.get(n, ""))]
+
+    ask = designdoc.ask_line(sec.get(1, ""))
+    size = designdoc.size_line(sec.get(1, ""))
+    first = [size]
     if who:
         first.append("Who must approve: " + "; ".join(a["who"] for a in who))
     if assumed:
         first.append("%d choice%s picked by chopchop, to confirm today." % (len(assumed), "" if len(assumed) == 1 else "s"))
     add(title, first + designdoc.bullets(sec.get(1, ""), 2),
-        designdoc.talk(sec.get(1, "")) or "Start with the ask, so the lead knows what to decide. Then give the size.",
-        designdoc.ask_line(sec.get(1, "")))
-    add("The whole feature in one picture",
-        ["Follow the numbers 1 to %d." % len(steps) if steps else "",
-         "Green is new, amber is changed. Each group is one repo and one team."],
-        designdoc.talk(sec.get(2, "")) or "Walk the numbers out loud. Stop where a decision or a risk lives.",
-        diagram=featuremap.mermaid(fm) if fm else "")
-    add("Why", designdoc.bullets(sec.get(3, "")), designdoc.talk(sec.get(3, "")))
-    add("Scope", designdoc.bullets(sec.get(4, "")), designdoc.talk(sec.get(4, "")))
-    answered = len(featuremap.failures(fm or {})) - len(gaps)
-    add("Main flow and errors",
-        ["%d failure answers in place%s." % (answered, ", %d missing" % len(gaps) if gaps else "")] +
-        designdoc.bullets(sec.get(5, ""), 3),
-        designdoc.talk(sec.get(5, "")) or "Show the main path, then the error paths. Every arrow has an answer for fails, slow, runs twice and wrong caller.",
-        diagram=designdoc.first_diagram(sec.get(5, "")))
-    add("Data and contracts", designdoc.bullets(sec.get(6, ""), 3) + designdoc.bullets(sec.get(7, ""), 3),
-        designdoc.talk(sec.get(6, "")) or designdoc.talk(sec.get(7, "")))
+        talk(1) + ["Start with the ask, so everyone knows what to decide today: %s" % ask if ask else "",
+                   "Size: %s" % size if size else "",
+                   "Who must approve: %s." % "; ".join(a["who"] for a in who) if who else ""],
+        ask)
+    parts = []
+    for n in (arch or {}).get("nodes") or []:
+        if n.get("status") in ("new", "changed"):
+            parts.append("%s is %s%s." % (n["name"], n["status"], " (%s)" % n["repo"] if n.get("repo") else ""))
+    add("High-level design", [],
+        talk(2) + ["Start from the left: who uses it, then each repo's part, then what it talks to outside."] + parts +
+        ["Green is new, amber is changed. Each named box is one repo and one team."],
+        svg=diagrams.architecture_svg(arch) if arch else "")
+    add("Why", designdoc.bullets(sec.get(3, "")), talk(3) + ["Why now: " + b for b in designdoc.bullets(sec.get(3, ""), 3)])
+    add("Scope", designdoc.bullets(sec.get(4, "")), talk(4) + designdoc.bullets(sec.get(4, ""), 4))
+    answered = len(diagrams.failures(flow or {})) - len(gaps)
+    walk = ["%s. %s%s" % (m.get("n"), m.get("line") or m.get("say"), " (only if %s)" % m["if"] if m.get("if") else "")
+            for m in msgs]
+    add("Main flow and errors", [] if flow else designdoc.bullets(sec.get(5, ""), 4),
+        talk(5) + ["Read the numbers from top to bottom. Amber messages happen only when their condition is true."] + walk +
+        ["Every message says what happens when it fails, is slow, runs twice or gets the wrong caller: "
+         "%d answers%s." % (answered, ", %d still missing" % len(gaps) if gaps else "")],
+        svg=diagrams.flow_svg(flow, arch) if flow else "")
+    data_points = designdoc.bullets(sec.get(6, ""), 3) + designdoc.bullets(sec.get(7, ""), 3)
+    add("Data and contracts", data_points, talk(6) + talk(7) + data_points)
     add("Key decisions", _choice_lines(opts),
-        designdoc.talk(sec.get(8, "")) or "For each decision, say the option not picked and why, in one line. Ask if anyone sees a reason to switch.")
+        talk(8) + _say_choices(opts) + ["Ask: does anyone see a reason to switch?"])
+    why_not = []
     for c in options.ordered(opts or {}):
         key = c.get("picked") or c.get("recommended")
+        picked = (options.option(c, key) or {}).get("title", key)
         for o in c.get("options") or []:
-            if o.get("key") == key:
-                continue
-            rows = ["%s: %s" % (k, v) for k, v in (o.get("rows") or {}).items()]
-            fit = "%s%s" % (options.FITS.get(o.get("fit"), ""), ": " + o["fit_note"] if o.get("fit_note") else "")
-            add("Why not %s?" % o["title"].rstrip("?"), [fit] + rows[:3] + ["We picked %s. %s" % (key, c.get("reason") or "")],
-                "From options.md, choice %d. Answer in one line. If the lead prefers it, run /chopchop:design --pick %d=%s."
-                % (c["_n"], c["_n"], o["key"]))
-    add("Impact, rollout and risks", designdoc.bullets(sec.get(9, ""), 3) + designdoc.bullets(sec.get(10, ""), 3),
-        designdoc.talk(sec.get(9, "")) or designdoc.talk(sec.get(10, "")))
-    add("How we prove it", designdoc.bullets(sec.get(11, "")), designdoc.talk(sec.get(11, "")))
+            if o.get("key") != key:
+                note = o.get("fit_note") or c.get("reason") or ""
+                why_not.append(("Why not %s?" % o["title"].rstrip("?"), "We picked %s. %s" % (picked, note)))
+    if why_not:
+        add("Options we did not pick", [],
+            ["Each option was weighed in options.md. Read the one-line answer for each.",
+             "If the lead prefers one, run /chopchop:design --pick N=X after the meeting."],
+            qa=why_not[:6])
+    risk_points = designdoc.bullets(sec.get(9, ""), 3) + designdoc.bullets(sec.get(10, ""), 3)
+    add("Impact, rollout and risks", risk_points, talk(9) + talk(10) + risk_points)
+    add("How we prove it", designdoc.bullets(sec.get(11, "")), talk(11) + designdoc.bullets(sec.get(11, ""), 4))
     closing = ["For %s: %s" % (i.get("owner") or "the lead", i["text"]) for i in lead or []][:3]
     closing += ["Assumed: " + a for a in assumed][:2]
     add("Questions and approval", closing + designdoc.bullets(sec.get(12, ""), 2),
-        designdoc.talk(sec.get(12, "")) or "Read the questions and assumptions. Ask for a decision now. If changes are needed, write them down and run /chopchop:design with the notes.",
+        talk(12) + closing + ["Ask for the decision now: approved, approved with conditions, or changes needed.",
+                              "Write down any condition. Record it with /chopchop:design --approve \"Name\"."],
         "Decision: approved, approved with conditions, or changes needed.")
-    for q, a in designdoc.questions(body):
-        add(q, [a], "A likely lead question, answered before the meeting.")
+    qs = designdoc.questions(body)
+    pages = [qs[i:i + 3] for i in range(0, len(qs), 3)]
+    for i, group in enumerate(pages, 1):
+        add("Backup: likely questions%s" % (" (%d of %d)" % (i, len(pages)) if len(pages) > 1 else ""), [],
+            ["Show only if someone asks."] + ["%s %s" % (q, a) for q, a in group], qa=group, backup=True)
     return out
 
 
@@ -142,6 +184,26 @@ def stages(req_counts, meta, tasks_count=None):
     ]
 
 
+def _swap(doc_html, mermaid_src, svg):
+    src = '<div class="diagram"><pre class="mermaid">%s</pre></div>' % html.escape(mermaid_src, quote=False)
+    return doc_html.replace(src, '<div class="diagram drawn">%s</div>' % svg, 1)
+
+
+def with_drawings(doc_html, arch, flow, opts=None):
+    """The page shows chopchop's own drawings. design.md keeps the Mermaid copies for GitHub and editors."""
+    if arch:
+        doc_html = _swap(doc_html, diagrams.architecture_mermaid(arch), diagrams.architecture_svg(arch))
+    if flow:
+        doc_html = _swap(doc_html, diagrams.flow_mermaid(flow, arch), diagrams.flow_svg(flow, arch))
+    for c in options.ordered(opts or {}):
+        for o in c.get("options") or []:
+            if o.get("sketch"):
+                sk = dict(o["sketch"])
+                sk.setdefault("title", o["title"])
+                doc_html = _swap(doc_html, diagrams.architecture_mermaid(sk), diagrams.architecture_svg(sk))
+    return doc_html
+
+
 def cite_data(results):
     from .cite import snippet
     out = {}
@@ -152,7 +214,7 @@ def cite_data(results):
     return out
 
 
-def build(feature, meta, body, options_md, opts, fm, smap, cite_results, failure_rows, report,
+def build(feature, meta, body, options_md, opts, arch, flow, cite_results, failure_rows, report,
           req_counts, who, lead, assumed, tasks_count=None):
     return {
         "generated": now(),
@@ -162,12 +224,10 @@ def build(feature, meta, body, options_md, opts, fm, smap, cite_results, failure
         "design": {"status": meta.get("status") or "draft", "status_text": designdoc.STATUS_TEXT.get(meta.get("status") or "draft"),
                    "approved_by": meta.get("approved_by"), "approved_on": meta.get("approved_on"),
                    "conditions": meta.get("conditions") or [], "version": meta.get("version"),
-                   "size": meta.get("size"), "html": mdhtml.convert(body)},
-        "options_html": mdhtml.convert(options_md) if options_md else "",
-        "map": {"mermaid": featuremap.mermaid(fm) if fm else "", "caption": featuremap.caption(fm) if fm else [],
-                "legend": featuremap.LEGEND},
+                   "size": meta.get("size"), "html": with_drawings(mdhtml.convert(body), arch, flow)},
+        "options_html": with_drawings(mdhtml.convert(options_md), None, None, opts) if options_md else "",
         "failures": failure_rows,
-        "slides": slides(body, fm, opts, dict(meta, epic=feature.epic), who, lead, assumed),
+        "slides": slides(body, arch, flow, opts, dict(meta, epic=feature.epic), who, lead, assumed),
         "message": review_message(dict(meta, epic=feature.epic), body, opts, who, lead, assumed),
         "approvers": who,
         "assumptions": assumed,
