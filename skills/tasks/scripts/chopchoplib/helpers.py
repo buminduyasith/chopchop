@@ -74,6 +74,25 @@ def for_role(s, role):
     return {"model": None if model == "inherit" else model, "effort": None if effort == "inherit" else effort}
 
 
+def describe(s):
+    """One sentence: which model and effort the helpers run on."""
+    model = "the same model as this chat" if s["model"] == "inherit" else s["model"]
+    effort = "the default effort" if s["effort"] == "inherit" else "effort " + s["effort"]
+    text = "They run on %s, %s." % (model, effort)
+    extra = []
+    for role in ROLES:
+        conf = s["roles"].get(role) or {}
+        parts = [conf["model"]] if conf.get("model") else []
+        parts += ["effort " + conf["effort"]] if conf.get("effort") else []
+        if parts:
+            extra.append("%s on %s" % (role, ", ".join(parts)))
+    if extra:
+        text += " Except: %s." % "; ".join(extra)
+    if not s["set"]:
+        text += " Helper settings are not saved yet: ask the 3 helper questions before starting any helper."
+    return text
+
+
 def plan(size, repos, s, choices=True):
     """How many helpers of each role a job gets. max is a ceiling, not a target.
 
@@ -102,6 +121,7 @@ def plan(size, repos, s, choices=True):
     line = "Using %d helper%s: %s." % (total, "" if total == 1 else "s", ", ".join(parts))
     if explore > at_once:
         line += " At most %d at once, so the explorers run in %d turns." % (at_once, rounds)
+    line += " " + describe(s)
     return {"explorer": explore, "architect": architect, "reviewer": review, "at_once": at_once,
             "rounds": rounds, "line": line}
 

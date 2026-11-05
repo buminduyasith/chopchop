@@ -1,6 +1,6 @@
 {
   "name": "chopchop",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "chopchop: cut big features into small, one-repo tasks and build each one end to end, using the tools your team already has. Learn the system, bring in an epic's stories, write a design a lead can approve (with a feature map, choices, slides and a review message), check it, cut it into tasks with a board, and code one task to an open PR.",
   "author": {
     "name": "bumindu"

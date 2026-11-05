@@ -1,6 +1,6 @@
 ---
 name: design
-description: Turn an idea and the feature's stories into a short design a lead can approve, plus a page to present it. Learns the existing system, asks at most 2 short rounds of questions with answers to pick, keeps every real choice in options.md, draws one feature map of the whole feature, checks every claim against the code, and writes design.md and feature.html (design, choices, slides with speaker notes, and a review message to send). Use when the user runs design, wants a design, a technical design or a solution for a feature or an idea, wants to change a choice, has feedback from a lead, or wants to record an approval. --auto does it with no questions.
+description: Turn an idea and the feature's stories into a short design a lead can approve, plus a page to present it. Learns the existing system, asks at most 2 short rounds of questions with answers to pick, keeps every real choice in options.md, draws one feature map of the whole feature, checks every claim against the code, and writes design.md and feature.html (design, choices, slides with speaker notes, and a review message to send). Use when the user runs design, wants a design, a technical design or a solution for a feature or an idea, wants to change a choice, has feedback from a lead, or wants to record an approval. --auto does it with no design questions.
 argument-hint: "<idea, file or image> [--auto] | \"lead's notes\" | --pick 2=B | --approve \"Name\" | --open"
 ---
 
@@ -19,7 +19,7 @@ user's project folder. It needs the `tasks` skill folder next to it. The file sh
 | User types | Do this |
 | --- | --- |
 | an idea, a file, or a pasted image | Steps 1 to 11. |
-| the same, with `--auto` | Steps 1 to 11 with no questions: see "--auto" below. |
+| the same, with `--auto` | Steps 1 to 11 with no design questions: see "--auto" below. The one-time helper setup (step 2) is still asked. |
 | nothing | Go on from where the last run stopped (`--prepare` shows it). |
 | text, when the feature already has a design | It is feedback, such as a lead's notes: see "Feedback". Say in your first line how you read it. |
 | `--pick 2=B` | `chopchop_design.py --pick 2=B`, then fix the prose the pick touches and build again. |
@@ -40,22 +40,27 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --prepare --json
 - **More than one feature**: the script asks which one. Pick the one that matches the idea,
   or ask.
 
-## 2. Helper settings (first time only)
+## 2. Helper settings (first time only, even with --auto)
 
 If `helpers.ask` is true, this team has never set them (an older `chopchop.yaml` has no
 `agents:` block). Never tell the user to run init again. Ask these three once, in one
-question call, and save the answers:
+question call, before any helper starts, and save the answers. Ask them even with `--auto`:
+this is one-time setup that decides what helpers cost, not a design question. A helper
+started with no settings runs on the chat's own model, which can be the most expensive one.
 
 1. "How many helpers can chopchop run at the same time?" 3 (Recommended), 5, 1, "0, no helpers".
-2. "Which model should helpers use?" "Same as my chat (Recommended)", Sonnet, Opus, Haiku.
+2. "Which model should helpers use?" "Same as this chat (<name the model you run on>)
+   (Recommended)", Sonnet, Opus, Haiku. Say in the description that explorers mostly read
+   code, so a smaller model costs less and works well for them.
 3. "How hard should helpers think?" "Default (Recommended)", medium, high, xhigh.
 
 ```
 python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --helpers --max 3 --model inherit --effort inherit
 ```
 
-"Same as my chat" and "Default" are `inherit`. It adds only the `agents:` block and keeps a
-`.bak`. With `--auto`, do not ask: use the defaults, say so in one line, and save nothing.
+"Same as this chat" and "Default" are `inherit`. It adds only the `agents:` block and keeps a
+`.bak`. Then say the saved settings in one line, and how to change them later: run init
+again, or edit `agents:` in `chopchop.yaml`.
 
 ## 3. The system map
 
@@ -92,7 +97,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --plan <size> --repos <re
 ```
 
 Say its line to the user, such as "Using 4 helpers: 2 explorers (payments-api, web-app),
-1 architect, 1 reviewer." Then start one `chopchop:explorer` per repo, at most `agents.max` at
+1 architect, 1 reviewer. They run on sonnet, effort high." Then start one `chopchop:explorer` per repo, at most `agents.max` at
 the same time, with `model` and `effort` from `--prepare` (`helpers.calls`). Leave a value out
 when it is null. For a small feature, read the code yourself.
 
@@ -178,10 +183,11 @@ and next steps:
 
 ## --auto
 
-No questions at all. Skip steps 5 and 8: take your guesses and your recommended picks, with
+No design questions. Skip steps 5 and 8: take your guesses and your recommended picks, with
 `picked_by: "chopchop"` and `"assumed": true` in answers.json. Everything else runs the same,
 including the mock lead review. The approval block, slide 1 and the review message list
-every assumption for the lead to confirm.
+every assumption for the lead to confirm. The one-time helper setup in step 2 is the only
+question `--auto` can ask, and only when the team has never answered it.
 
 ## Feedback
 

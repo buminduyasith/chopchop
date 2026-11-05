@@ -65,10 +65,12 @@ Ask these three in one go. If `existing_config.agents` has values, make them the
 answers.
 
 1. **How many helpers can chopchop run at the same time?** 3 (Recommended), 5, 1, "0, no helpers".
-2. **Which model should helpers use?** "Same as my chat (Recommended)", Sonnet, Opus, Haiku.
+2. **Which model should helpers use?** "Same as this chat (<name the model you run on>)
+   (Recommended)", Sonnet, Opus, Haiku. Say that explorers mostly read code, so a smaller
+   model costs less and works well for them.
 3. **How hard should helpers think?** "Default (Recommended)", medium, high, xhigh.
 
-"Same as my chat" and "Default" are `inherit`. Helpers are the subagents chopchop starts to read
+"Same as this chat" and "Default" are `inherit`. Helpers are the subagents chopchop starts to read
 repos and review designs. The number is a ceiling: a small job uses fewer.
 
 ## 5. Write

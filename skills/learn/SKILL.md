@@ -37,8 +37,9 @@ repo is fresh, say "The system map is up to date." and stop.
 
 ## 2. Helper settings (first time only)
 
-If `chopchop.yaml` has no `agents:` block, ask the 3 helper questions once, as the design
-skill does in its step 2, and save them with its script:
+If `chopchop.yaml` has no `agents:` block, ask the 3 helper questions once, before any
+helper starts, as the design skill does in its step 2 (also when design runs with `--auto`),
+and save them with its script:
 `python3 ${CLAUDE_SKILL_DIR}/../design/scripts/chopchop_design.py --helpers --max N --model M --effort E`.
 
 ## 3. Read the repos

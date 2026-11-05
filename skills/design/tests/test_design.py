@@ -234,6 +234,14 @@ class PrepareTest(Base):
         self.assertIn("Using 6 helpers: 3 explorers (payments-api, web-app, notify-service), 1 architect, 2 reviewers.", line)
         self.assertIn("At most 2 at once, so the explorers run in 2 turns.", line)
         self.assertIn("Using 1 helper: 1 reviewer.", self.design("--plan", "small", "--repos", "web-app"))
+        self.assertIn("They run on the same model as this chat, the default effort.", line)
+        self.assertNotIn("not saved yet", line)
+        self.design("--helpers", "--model", "sonnet", "--effort", "high")
+        self.assertIn("They run on sonnet, effort high.", self.design("--plan", "small", "--repos", "web-app"))
+
+    def test_plan_warns_when_settings_were_never_saved(self):
+        line = self.design("--plan", "medium", "--repos", "web-app")
+        self.assertIn("Helper settings are not saved yet: ask the 3 helper questions before starting any helper.", line)
 
 
 class BuildTest(Base):
