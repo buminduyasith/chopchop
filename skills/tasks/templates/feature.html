@@ -56,6 +56,13 @@ code, pre, kbd { font-family: var(--mono); }
 .stage.now { border-color: #f1c98b; background: var(--warn-soft); }
 .stage.now .k { color: var(--warn); }
 .stage.todo b { color: var(--muted); font-weight: 500; }
+.specsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 18px; }
+.specsum .chip { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; background: var(--card); }
+.specsum .chip b { font: 700 22px/1.1 var(--head); color: var(--navy); }
+.specsum .chip span { font-size: 13px; color: var(--muted); }
+.specsum .chip.ok { border-color: #a9d8bf; background: var(--ok-soft); }
+.specsum .chip.ok b { color: var(--ok); }
+.specsum .chip.now { border-color: #f1c98b; background: var(--warn-soft); }
 
 /* tabs */
 nav.tabs { display: flex; flex-wrap: wrap; gap: 4px 22px; border-bottom: 1px solid var(--line2); padding: 0 4px; }
@@ -208,11 +215,13 @@ svg.focus .edge.on path.line { stroke: var(--blue); stroke-width: 3; }
   <nav class="tabs" role="tablist" aria-label="Views">
     <button role="tab" id="t-design" aria-controls="p-design" aria-selected="true">Design</button>
     <button role="tab" id="t-choices" aria-controls="p-choices" aria-selected="false">Choices</button>
+    <button role="tab" id="t-spec" aria-controls="p-spec" aria-selected="false" hidden>Spec</button>
     <button role="tab" id="t-slides" aria-controls="p-slides" aria-selected="false">Present</button>
     <button role="tab" id="t-send" aria-controls="p-send" aria-selected="false">Send for review</button>
   </nav>
   <section class="panel doc" id="p-design" role="tabpanel" aria-labelledby="t-design"></section>
   <section class="panel doc" id="p-choices" role="tabpanel" aria-labelledby="t-choices" hidden></section>
+  <section class="panel doc" id="p-spec" role="tabpanel" aria-labelledby="t-spec" hidden></section>
   <section id="p-slides" role="tabpanel" aria-labelledby="t-slides" hidden>
     <div class="present">
       <div class="deck" id="deck">
@@ -487,8 +496,20 @@ svg.focus .edge.on path.line { stroke: var(--blue); stroke-width: 3; }
     }
   }
 
+  // ---------------------------------------------------------------- spec
+  if (D.spec && D.spec.html) {
+    var psp = document.getElementById("p-spec"), tsp = document.getElementById("t-spec");
+    tsp.hidden = false;
+    var sum = el("div", "specsum");
+    (D.spec.chips || []).forEach(function (c) { var d = el("div", "chip " + (c.state || "")); d.appendChild(el("b", null, c.value)); d.appendChild(el("span", null, c.label)); sum.appendChild(d); });
+    psp.appendChild(sum);
+    var body = el("div"); body.innerHTML = D.spec.html; psp.appendChild(body);
+    psp.querySelectorAll(".diagram.drawn").forEach(addZoom);
+    psp.querySelectorAll("button.cite").forEach(function (b) { var c = D.cites[b.getAttribute("data-cite")]; if (c && (c.status === "gone" || c.status === "changed")) b.classList.add(c.status); });
+  }
+
   // ---------------------------------------------------------------- tabs
-  var tabs = Array.prototype.slice.call(document.querySelectorAll("nav.tabs button"));
+  var tabs = Array.prototype.slice.call(document.querySelectorAll("nav.tabs button")).filter(function (b) { return !b.hidden; });
   function open(t) {
     tabs.forEach(function (o) { var on = o === t; o.setAttribute("aria-selected", on ? "true" : "false"); document.getElementById(o.getAttribute("aria-controls")).hidden = !on; });
     if (t.id === "t-slides") show(); else draw(document.getElementById(t.getAttribute("aria-controls")));

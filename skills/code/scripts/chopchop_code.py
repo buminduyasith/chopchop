@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -380,8 +381,10 @@ def cmd_verify(args, ws):
         raise UsageError("No profile for %s, so chopchop does not know how to test it. Run --profile %s first."
                          % (task.get("repo"), task.get("repo")))
     results, lines = [], []
-    for kind in profile.COMMANDS:
-        cmd = meta.get(kind)
+    steps = [(kind, meta.get(kind)) for kind in profile.COMMANDS]
+    if task.get("kind") == "prove" and task.get("e2e"):
+        steps.append(("e2e", task.get("e2e")))
+    for kind, cmd in steps:
         if not cmd:
             continue
         if results and results[0]["step"] == "build" and not results[0]["ok"]:
@@ -408,8 +411,19 @@ def cmd_verify(args, ws):
     if not meta.get("confirmed"):
         lines.append("Warning:  the profile is a draft. Confirm the commands with the user.")
     lines.append("Result:   %s" % ("all passed" if ok else "FAILED. Fix it and run --verify again."))
+    save_verify(feature, task, path, ok, results)
     emit(args, {"task": task.id, "ok": ok, "results": results}, lines)
     return 0 if ok else 1
+
+
+def save_verify(feature, task, repo_path, ok, results):
+    """Keep the last check of a task, so /chopchop:spec --status can show what is proved."""
+    out = feature.path / "work" / "verify"
+    out.mkdir(parents=True, exist_ok=True)
+    commit = git(repo_path, "rev-parse", "HEAD")[1].strip() if Path(repo_path).is_dir() else ""
+    record = {"task": task.id, "ok": ok, "when": datetime.now().isoformat(timespec="seconds"), "commit": commit,
+              "steps": [{"step": r["step"], "command": r["command"], "ok": r["ok"]} for r in results]}
+    (out / ("%s.json" % task.id)).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
 
 def cmd_log(args, ws):

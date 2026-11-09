@@ -184,6 +184,8 @@ and next steps:
 - Open the page: `/chopchop:design --open`. The Slides tab presents it with speaker notes. The
   Send for review tab has a message to paste into chat or email.
 - After the review: `/chopchop:design --approve "Name"`.
+- Then `/chopchop:spec`: the full plan to build it. It can start while the lead reviews.
+  Tasks are cut from the spec, not from the design.
 
 ## --auto
 

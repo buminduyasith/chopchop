@@ -1,6 +1,6 @@
 ---
 name: tasks
-description: Cut a design or spec (one file, many files or a folder) into small, independent tasks that each fit one PR in one repo, then track them on a board. Use when the user gives design or spec files and asks for tasks, a plan or a work breakdown, asks for the task board or status (--status), or sets a task's status (--set). Writes _chopchop/<NNN-feature>/design/ and tasks/, and creates the feature branch after the user approves it.
+description: Cut a spec into small, independent tasks that each fit one PR in one repo, then track them on a board. For a chopchop feature it cuts them straight from spec/spec.json (one task per work package, one prove task per end-to-end journey); it also takes design or spec files you hand it. Use when the user gives design or spec files and asks for tasks, a plan or a work breakdown, asks for the task board or status (--status), or sets a task's status (--set). Writes _chopchop/<NNN-feature>/design/ and tasks/, and creates the feature branch after the user approves it.
 argument-hint: "<design files or folder> [--name <short-name> | --feature <ref>] | --status [<ref>] | --set <task> <status>"
 ---
 
@@ -35,13 +35,29 @@ from the user's project folder.
 | User typed | Do this |
 | --- | --- |
 | files or a folder | Steps 1 to 6 below. |
-| a feature (`1`, `PAY-120`) that has a `design/` folder, such as one `/chopchop:design` wrote | Steps 1 to 6, with `--new <feature folder>/design --feature <ref>`. If `design.md` says the design is not approved yet, say so first and ask whether to go on. |
+| a feature (`1`, `PAY-120`) that has `spec/spec.json`, from `/chopchop:spec` | "From the spec" below. You do not cut tasks by hand. |
+| a feature with a design from `/chopchop:design` but no spec | Do not cut tasks from the design. Say the spec comes first, and offer `/chopchop:spec <ref>`. |
 | `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --status <ref> --open`, then reply with one line per column. |
 | `--set T02 in-review` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
 | `--list` or nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --list`, then ask what they want. |
 
 `ref` is a feature number (1, 001), an epic key (PAY-120) or part of the folder name. With
 only one feature it can be left out.
+
+## From the spec
+
+```
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --from-spec <ref>
+```
+
+The script writes one task per work package (waves 0 to 2) and one prove task per
+end-to-end journey (wave 3), with the rules, contracts, code to copy, sketches and test names
+taken word for word from the spec. Then it checks them.
+
+- It refuses when the spec is not ready. Tell the user to run `/chopchop:spec <ref>`.
+- When tasks already exist it writes nothing, and lists packages that have no task. Ask the
+  user before adding any. Never rewrite a task.
+- Then go to step 6 (the plan and the branch).
 
 ## 1. Setup (first run only)
 
@@ -91,7 +107,8 @@ Write one file per task in `tasks/`, named `T01-short-name.md`, using
    12 files and 150 to 500 changed lines, tests included. Anything bigger: split it.
 4. **Unit tests only.** `## Done when` names each unit test and what it proves. The tests
    must pass with only this task's dependencies merged. Mock or fake everything else. No
-   end-to-end tests in tasks.
+   end-to-end tests in build tasks. End-to-end tests live in prove tasks (`kind: prove`,
+   wave 3), which only come from a spec.
 5. **Few dependencies.** Use waves:
    - Wave 0: contracts. One task per repo with all the shared types, interfaces, schemas,
      migrations and stubs that others code against. Small, so it merges first.

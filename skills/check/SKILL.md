@@ -1,6 +1,6 @@
 ---
 name: check
-description: Find where a design or spec disagrees with the requirements. Reports conflicts, requirements the design misses, things the design adds that nobody asked for, and open questions, each with quotes from both sides, plus a coverage table. Works on a chopchop feature (its requirement.md and design/ folder) or on any requirement and design files. Use when the user asks to check, review or compare a design or spec against requirements or stories, find conflicts or gaps, or asks if a design is ready for tasks.
+description: Find where a design or spec disagrees with the requirements. Reports conflicts, requirements the design misses, things the design adds that nobody asked for, and open questions, each with quotes from both sides, plus a coverage table. Works on a chopchop feature (its requirement.md, design/ folder and spec/spec.md) or on any requirement and design files. Use when the user asks to check, review or compare a design or spec against requirements or stories, find conflicts or gaps, or asks if a design is ready for tasks.
 argument-hint: "[feature] [--req <files>] [--design <files>]"
 ---
 

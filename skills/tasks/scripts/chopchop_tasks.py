@@ -4,6 +4,7 @@
 Usage (the same words you type after /chopchop:tasks)
   chopchop_tasks.py --new design.md specs/ --name refunds   new feature 00N-refunds, design copied in
   chopchop_tasks.py --new design.md --feature 1             add or refresh the design of feature 001
+  chopchop_tasks.py --from-spec 1                           cut tasks from the feature's spec/spec.json
   chopchop_tasks.py --check 1                               check the task files, refresh plan and board
   chopchop_tasks.py --branch 1                              show the feature branch chopchop suggests
   chopchop_tasks.py --branch 1 --create                     create it in every repo the tasks use, and push
@@ -30,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from chopchoplib import board, features, gitops, tasks  # noqa: E402
+from chopchoplib import board, cite, features, gitops, specdata, tasks  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, git_toplevel, load_config  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 
@@ -325,6 +326,74 @@ def cmd_new(args, ws):
     return 0
 
 
+def cmd_from_spec(args, ws):
+    cfg = load_cfg(ws)
+    feature = features.resolve(ws, args.from_spec)
+    spec_path = feature.path / specdata.SPEC_DIR / specdata.SPEC_JSON
+    if not spec_path.is_file():
+        design = feature.path / tasks.DESIGN_DIR / "design.md"
+        hint = (" The feature has a design: run /chopchop:spec first, tasks are cut from the spec."
+                if design.is_file() else "")
+        raise UsageError("No spec/spec.json in %s.%s" % (feature.name, hint))
+    try:
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise UsageError("spec/spec.json is not valid JSON: %s" % e)
+    report = feature.path / "work" / "spec-build.json"
+    try:
+        built = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        built = None
+    if not built or not built.get("ready"):
+        raise UsageError("The spec is not ready: run /chopchop:spec --build %s until it says ready." % feature.number)
+    d = ensure_tasks_dir(feature)
+    repos, _ = repos_of(cfg, ws)
+    dirs = {name: repo_dir(ws, path) for name, path in repos.items()}
+    snippets = {}
+    for r in cite.check_all(specdata.cites(spec), dirs):
+        lines = r.get("now") or r.get("old")
+        if lines:
+            snippets[r["raw"]] = "\n".join(cite.mask(x)[0] for x in lines[:cite.MAX_LINES])
+    wanted = specdata.to_tasks(spec, snippets)
+    existing = tasks.load_tasks(d)
+    if existing:
+        have = {t.get("package") or t.get("journey") for t in existing}
+        new = [w for w in wanted if (w["meta"].get("package") or w["meta"].get("journey")) not in have]
+        data = {"feature": feature.name, "written": [], "existing": len(existing),
+                "not_cut": [w["meta"].get("package") or w["meta"].get("journey") for w in new]}
+        lines = ["Tasks:    %d already exist. chopchop never rewrites them." % len(existing)]
+        if new:
+            lines.append("Not cut:  %s are in the spec but have no task. Ask the user before adding them."
+                         % ", ".join(data["not_cut"]))
+        emit(args, data, lines)
+        return 1 if new else 0
+    plan_path = d / tasks.PLAN_FILE
+    if not plan_path.exists():
+        plan_path.write_text(render_front_matter({"title": spec.get("title") or feature.name}), encoding="utf-8")
+    written = []
+    for w in wanted:
+        path = d / w["file"]
+        path.write_text(render_front_matter(w["meta"]) + w["body"], encoding="utf-8")
+        written.append(w["file"])
+    found, _ = refresh(ws, feature, cfg)
+    repos, configured = repos_of(cfg, ws)
+    errors, warnings = tasks.check(found, list(repos) if configured else None)
+    data = {"feature": feature.name, "written": written, "errors": errors, "warnings": warnings,
+            "tasks": [{"id": t.id, "title": t.get("title"), "repo": t.get("repo"), "wave": t.get("wave"),
+                       "size": t.get("size"), "depends_on": t.get("depends_on"),
+                       "from": t.get("package") or t.get("journey")} for t in found]}
+    lines = ["Cut:      %d tasks from %s" % (len(written), rel(ws, spec_path))]
+    for t in found:
+        lines.append("  %s  %-34s %-16s wave %s  %s  from %s%s" % (
+            t.id, str(t.get("title"))[:34], t.get("repo"), t.get("wave"), t.get("size"),
+            t.get("package") or t.get("journey"),
+            "  after %s" % ", ".join(t.get("depends_on")) if t.get("depends_on") else ""))
+    lines += ["Error:    %s" % e for e in errors]
+    lines += ["Warning:  %s" % w for w in warnings]
+    emit(args, data, lines)
+    return 0 if not errors else 1
+
+
 def cmd_check(args, ws):
     cfg = load_cfg(ws)
     feature = features.resolve(ws, args.check)
@@ -544,6 +613,7 @@ def build_parser():
     p.add_argument("--name", help="short name for a new feature (with --new)")
     p.add_argument("--epic", help="epic key for a new feature (with --new --name)")
     p.add_argument("--feature", metavar="REF", help="which feature (with --new or --set)")
+    p.add_argument("--from-spec", nargs="?", const="", metavar="REF", help="cut tasks from spec/spec.json")
     p.add_argument("--check", nargs="?", const="", metavar="REF", help="check the task files")
     p.add_argument("--branch", nargs="?", const="", metavar="REF", help="show or create the feature branch")
     p.add_argument("--create", action="store_true", help="with --branch: create and push it")
@@ -564,7 +634,8 @@ def build_parser():
 
 
 def pick_command(args):
-    chosen = [name for name, on in (("new", args.new is not None), ("check", args.check is not None),
+    chosen = [name for name, on in (("new", args.new is not None), ("from_spec", args.from_spec is not None),
+                                    ("check", args.check is not None),
                                     ("branch", args.branch is not None), ("status", args.status is not None),
                                     ("set", args.set is not None), ("list", args.list)) if on]
     if len(chosen) > 1:
@@ -578,7 +649,7 @@ def pick_command(args):
     raise UsageError("Nothing to do. See --help.")
 
 
-COMMANDS = {"new": cmd_new, "check": cmd_check, "branch": cmd_branch, "status": cmd_status,
+COMMANDS = {"new": cmd_new, "from_spec": cmd_from_spec, "check": cmd_check, "branch": cmd_branch, "status": cmd_status,
             "set": cmd_set, "list": cmd_list, "config": cmd_config}
 
 

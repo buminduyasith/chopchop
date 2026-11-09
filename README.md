@@ -5,7 +5,7 @@ end to end. A small team of people and AI agents can work on one feature in para
 every PR stays small enough for a person to review in one sitting.
 
 ```
-learn the system  ->  stories  ->  design (a lead approves)  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  a person merges
+learn the system  ->  stories  ->  design (a lead approves)  ->  spec  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  prove  ->  done
 ```
 
 chopchop holds no logins and talks to no tracker or git host by itself. It uses what your
@@ -48,11 +48,13 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
 | 3. Stories | `/chopchop:stories PAY-120` | lead | per epic (optional) |
 | 4. Design | `/chopchop:design refunds for card payments` | developer | per feature |
 | 5. Approve | `/chopchop:design --approve "Asha"` | developer, after the review | per feature |
-| 6. Check | `/chopchop:check 1` | lead | per design change |
-| 7. Tasks | `/chopchop:tasks 1` | lead | per feature |
-| 8. Board | `/chopchop:tasks --status` | anyone | any time |
-| 9. Build | `/chopchop:code T02` | developer | per task |
-| 10. Done | `/chopchop:code --done T02` | developer | per task |
+| 6. Spec | `/chopchop:spec 1` | developer | per feature |
+| 7. Check | `/chopchop:check 1` | lead | per design or spec change |
+| 8. Tasks | `/chopchop:tasks 1` | lead | per feature |
+| 9. Board | `/chopchop:tasks --status` | anyone | any time |
+| 10. Build | `/chopchop:code T02` | developer | per task |
+| 11. Task done | `/chopchop:code --done T02` | developer | per task |
+| 12. Feature done | `/chopchop:spec --done --by "Asha"` | lead | per feature |
 | Update | `/chopchop:update` | everyone | when a new version is out |
 
 1. **`/chopchop:init`** looks at your repos and asks a few questions, with click options:
@@ -77,17 +79,26 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
    the real choices kept in `options.md`, failure answers for every arrow, and a citation of
    the code for every claim. It also writes `feature.html`: the design, the choices, slides
    with speaker notes, and a review message to paste into chat. `--auto` asks nothing.
-5. **`/chopchop:check 1`** compares the design with the
+5. **`/chopchop:spec 1`** turns the approved design into the full plan to build it, in
+   simple English with no length cap: the rules with examples, every file per repo, the real
+   code to copy, the existing methods to reuse, a sketch of the new code in the repo's own
+   style, every unit test by name, the end-to-end journeys, and work packages. It checks all
+   of it against the code, and tracks each test from planned to built to proved.
+6. **`/chopchop:check 1`** compares the design with the
    requirements and lists conflicts, gaps, extras and questions, with quotes from both sides
    and a coverage table. `/chopchop:check --req <files> --design <files>` works on any
    files, with no feature.
-6. **`/chopchop:tasks <design files or folder>`** copies the design in and cuts it into small
-   tasks in waves: contracts first, then slices that run in parallel. It checks them and
-   suggests a feature branch. Say yes, and it creates and pushes the branch.
-7. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
+7. **`/chopchop:tasks 1`** cuts the spec into tasks, one per work package, in waves:
+   contracts first, then slices that run in parallel, then one prove task per end-to-end
+   journey. Each task carries its rules, contract, code to copy and test names. It suggests
+   a feature branch. Say yes, and it creates and pushes the branch. It also takes design or
+   spec files you hand it: `/chopchop:tasks <files or folder>`.
+8. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
    unit tests and code in the repo's style, runs build, lint and tests, pushes, opens the PR
    your team's usual way, and sets it to in-review. `T02 -p` only previews the plan.
-8. **`/chopchop:code --done T02`**: a person marks it done after the merge.
+9. **`/chopchop:code --done T02`**: a person marks it done after the merge.
+10. **`/chopchop:spec --done --by "Asha"`**: a person sets the whole feature to done, only
+    when every test, journey and manual check is proved.
 
 ## Commands
 
@@ -126,6 +137,21 @@ step checks it: every story is in scope or out of scope, every message on the ma
 answers what happens when it fails, is slow, runs twice or gets the wrong caller, every
 citation still matches the code, and the English stays plain. Missing helper settings are
 asked once, the first time, so there is no need to run init again.
+
+### `/chopchop:spec`
+
+| You type | What it does |
+| --- | --- |
+| (nothing) or a feature | Reads the code in each repo, asks only what the code cannot answer, writes `spec.md` and `spec.json`, checks them against the code and adds a Spec tab to `feature.html`. |
+| the same, with `--auto` | No questions. Every guess is listed as an assumption. |
+| `--status` | What is planned, built (its task is merged) and proved (its checks passed). |
+| `--sign M1 --by "Asha"` | A person signs a manual check. |
+| `--done --by "Asha"` | A person sets the feature to done, when everything is proved. |
+
+`spec.md` has 21 sections in 4 parts: Understand (anyone, 10 minutes), Build, Prove, and Ship
+and track. Each section starts with an "In short" line. Code in the spec comes from the repo:
+every piece of code to copy is cited and checked, every reused method must exist where it is
+cited, new files go next to similar files, and test names follow the repo's own naming.
 
 ### `/chopchop:diagram`
 
@@ -217,8 +243,9 @@ _chopchop/
 └── 001-PAY-120-refunds/             one folder per feature
     ├── requirements/requirement.md  the epic and its stories
     ├── design/                      design.md, options.md, architecture.json, flow.json
-    ├── work/                        answers, helper reports, approved copies
-    ├── feature.html                 the page: design, choices, slides, review message
+    ├── spec/                        spec.md (for people) and spec.json (the facts tasks are cut from)
+    ├── work/                        answers, helper reports, approved copies, test results
+    ├── feature.html                 the page: design, choices, spec, slides, review message
     ├── check.md                     design vs requirements (from /chopchop:check)
     └── tasks/
         ├── plan.md                  waves, graph, branches
@@ -263,7 +290,7 @@ agents:                               # helpers (subagents); asked once
 
 Copy the folders in `skills/` into a repo's `.claude/skills/`, and `agents/` into
 `.claude/agents/` (`update` is only for the plugin). `stories` and `tasks` work on their own.
-`check`, `code`, `init`, `learn`, `diagram` and `design` need `tasks` next to them. `design` also needs `diagram`. Every script also runs
+`check`, `code`, `init`, `learn`, `diagram`, `design` and `spec` need `tasks` next to them. `design` also needs `diagram`. Every script also runs
 without an agent, for example:
 
 ```sh
@@ -298,6 +325,7 @@ claude plugin validate . --strict
 (cd skills/learn && python3 -m unittest discover -s tests)
 (cd skills/design && python3 -m unittest discover -s tests)
 (cd skills/diagram && python3 -m unittest discover -s tests)
+(cd skills/spec && python3 -m unittest discover -s tests)
 claude plugin eval . --scaffold       # agent evals on the sample project (slow: real runs)
 ```
 

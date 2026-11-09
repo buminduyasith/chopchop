@@ -6,7 +6,9 @@ Release 1 fills the design, choices and slides tabs. The page is a fixed templat
 
 import html
 import json
+import re
 from datetime import datetime
+from pathlib import Path
 
 from . import designdoc, diagrams, mdhtml, options, systemmap
 from .cite import short
@@ -241,3 +243,71 @@ def render(template_text, data):
         raise ValueError("the feature.html template has no data mark")
     blob = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
     return template_text.replace(DATA_MARK, blob)
+
+
+# --------------------------------------------------------------------------- the spec on the page
+
+
+def read_data(path):
+    """The data a written feature.html carries, or None."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r'<script[^>]*type="application/json"[^>]*>(.*?)</script>', text, re.S)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(1))
+    except ValueError:
+        return None
+
+
+def spec_stages(stages_list, st, meta, has_spec=True):
+    """Set the spec, build, proof and done stages from the spec's status."""
+    out = [dict(s) for s in stages_list]
+    by = {s["key"]: s for s in out}
+    status = (meta or {}).get("status") or "draft"
+    if "spec" in by and has_spec:
+        by["spec"].update(state="ok" if status in ("ready", "building", "done") else "now",
+                          text={"draft": "Draft", "ready": "Ready", "building": "Ready", "done": "Ready"}.get(status, "Draft"))
+    tasks_n = st["tasks"]["total"]
+    if "build" in by and tasks_n:
+        done = st["tasks"]["done"]
+        by["build"].update(state="ok" if done == tasks_n else "now", text="%d of %d tasks done" % (done, tasks_n))
+    if "proof" in by and st["total"]:
+        by["proof"].update(state="ok" if st["proved"] == st["total"] else ("now" if st["proved"] else "todo"),
+                           text="%d of %d proved" % (st["proved"], st["total"]))
+    if "done" in by:
+        if status == "done":
+            by["done"].update(state="ok", text="Done, set by %s" % meta.get("done_by"))
+        elif st["ready_for_done"]:
+            by["done"].update(state="now", text="Ready for a person to set")
+    return out
+
+
+def spec_part(spec_html, counts, st, meta):
+    return {"html": spec_html, "status": (meta or {}).get("status") or "draft",
+            "chips": [
+                {"label": "rules", "value": str(counts["rules"])},
+                {"label": "packages, %d repos" % counts["repos"], "value": str(counts["packages"])},
+                {"label": "files", "value": str(counts["files"])},
+                {"label": "unit and integration tests", "value": str(counts["tests"])},
+                {"label": "e2e journeys", "value": str(counts["journeys"])},
+                {"label": "proved", "value": "%d/%d" % (st["proved"], st["total"]),
+                 "state": "ok" if st["total"] and st["proved"] == st["total"] else ("now" if st["proved"] else "")},
+            ]}
+
+
+def carry_over(data, old):
+    """Keep what other commands put on the page (the spec, its stages) when design rebuilds it."""
+    if not old:
+        return data
+    if old.get("spec"):
+        data["spec"] = old["spec"]
+        for c in (old.get("cites") or {}):
+            data["cites"].setdefault(c, old["cites"][c])
+    keep = {s["key"]: s for s in old.get("stages") or [] if s.get("key") in ("spec", "build", "proof", "done")}
+    data["stages"] = [keep.get(s["key"], s) if s["key"] != "build" or keep.get("build", {}).get("state") != "todo" else s
+                      for s in data["stages"]]
+    return data

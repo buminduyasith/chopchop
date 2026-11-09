@@ -71,7 +71,10 @@ Use the draft for this task. At the end, ask the user once to check it (step 7).
 
 ## 3. Read the task
 
-- The task file: Goal, Context, Contract, Files, Done when, Do not change, Heads-up.
+- The task file: Goal, Context, Contract, Code, Files, Done when, Do not change, Heads-up.
+- `## Code` (tasks cut from a spec): the folders, names, code to copy, existing methods to
+  reuse and a sketch of the new code. Start from it. Check the cited code still looks the
+  same; if it changed, follow the code and log the difference with `--log`.
 - The `Change:` lines in the preview. They win over the task text.
 - The files in `touches`, the contracts from the tasks it depends on, and nearby code.
 - The design files only when the task's Context is not enough.
@@ -100,8 +103,12 @@ and stops. Tell the user. Never resolve it yourself.
 
 Then build:
 
-- Write the unit tests from `## Done when` first, then the code that makes them pass.
+- Write the unit tests from `## Done when` first, with the exact names it gives, then the
+  code that makes them pass.
 - Unit tests only. Mock or fake anything outside this task. No end-to-end tests.
+- A prove task (`kind: prove`) is the exception: write the end-to-end test for its journey,
+  step by step as the task says, and run it with the task's `e2e` command. If the journey
+  fails because of app code, do not fix the app here: log it with `--log` and tell the user.
 - Stay inside `touches`. Follow the style file, then the guides and profile, then nearby code.
 - No new library unless the task says so.
 - Commit as you go. Use the repo's commit style (`git log`) with the task id in the subject,

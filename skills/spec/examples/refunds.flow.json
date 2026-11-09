@@ -1,0 +1,172 @@
+{
+  "version": 2,
+  "title": "Request a refund",
+  "participants": [
+    "customer",
+    "agent",
+    "page",
+    "api",
+    "db",
+    "job",
+    "psp",
+    "mail"
+  ],
+  "messages": [
+    {
+      "n": 1,
+      "from": "customer",
+      "to": "page",
+      "kind": "person",
+      "say": "clicks Refund",
+      "line": "The customer clicks Refund on the order page.",
+      "stories": [
+        "PAY-121"
+      ],
+      "failure": {
+        "twice": "The button turns off after one click.",
+        "caller": "Only the order's owner sees it."
+      }
+    },
+    {
+      "n": 2,
+      "from": "page",
+      "to": "api",
+      "kind": "call",
+      "say": "POST refunds",
+      "line": "web-app calls the new refund API.",
+      "stories": [
+        "PAY-121"
+      ],
+      "failure": {
+        "fails": "Refund not sent. Try again.",
+        "slow": "5 s timeout.",
+        "twice": "Idempotency key.",
+        "caller": "403 unless the owner."
+      }
+    },
+    {
+      "n": 3,
+      "from": "api",
+      "to": "db",
+      "kind": "db",
+      "say": "saves as pending",
+      "line": "The API checks the 30 day window and saves the refund as pending.",
+      "stories": [
+        "PAY-121.AC1"
+      ],
+      "failure": {
+        "fails": "Rolls back. 500.",
+        "twice": "One open refund per payment."
+      }
+    },
+    {
+      "n": 4,
+      "from": "api",
+      "to": "page",
+      "kind": "reply",
+      "say": "201 pending",
+      "line": "The API answers that the refund is pending."
+    },
+    {
+      "n": 5,
+      "from": "api",
+      "to": "page",
+      "kind": "reply",
+      "say": "422 window closed",
+      "line": "Orders older than 30 days get REFUND_WINDOW_CLOSED, and nothing is saved.",
+      "if": "older than 30 days"
+    },
+    {
+      "n": 6,
+      "from": "job",
+      "to": "db",
+      "kind": "db",
+      "say": "picks pending",
+      "line": "The refund job picks up pending refunds every minute.",
+      "stories": [
+        "PAY-121"
+      ],
+      "failure": {
+        "fails": "The next run picks them up.",
+        "twice": "Row lock, two jobs never take the same refund."
+      }
+    },
+    {
+      "n": 7,
+      "from": "job",
+      "to": "psp",
+      "kind": "external",
+      "say": "sends refund",
+      "line": "The job sends each refund to the card provider.",
+      "stories": [
+        "PAY-121"
+      ],
+      "failure": {
+        "fails": "Tries 5 times, like payouts.",
+        "slow": "15 s timeout.",
+        "twice": "Refund id is the idempotency key.",
+        "caller": "Provider key from the vault."
+      }
+    },
+    {
+      "n": 8,
+      "from": "psp",
+      "to": "job",
+      "kind": "reply",
+      "say": "accepted",
+      "line": "The card provider accepts the refund."
+    },
+    {
+      "n": 9,
+      "from": "job",
+      "to": "mail",
+      "kind": "event",
+      "say": "refund.done event",
+      "line": "The job writes refund.done to the outbox, and the outbox delivers it to notify-service.",
+      "stories": [
+        "PAY-122.AC2"
+      ],
+      "failure": {
+        "fails": "Outbox sends it again later.",
+        "twice": {
+          "text": "notify-service skips an event id it has already handled.",
+          "suggested": true
+        }
+      }
+    },
+    {
+      "n": 10,
+      "from": "mail",
+      "to": "customer",
+      "kind": "message",
+      "say": "email",
+      "line": "notify-service emails the customer once.",
+      "stories": [
+        "PAY-122.AC2"
+      ],
+      "failure": {
+        "fails": "Email retries, like every email."
+      }
+    },
+    {
+      "n": 11,
+      "from": "agent",
+      "to": "api",
+      "kind": "call",
+      "say": "cancels while pending",
+      "line": "A support agent can cancel a refund while it is pending.",
+      "stories": [
+        "PAY-122"
+      ],
+      "failure": {
+        "fails": "409 if already sent.",
+        "slow": "5 s timeout.",
+        "twice": "Second cancel does nothing.",
+        "caller": {
+          "risk": "Any support agent can cancel.",
+          "accepted_by": "Asha"
+        }
+      }
+    }
+  ]
+}

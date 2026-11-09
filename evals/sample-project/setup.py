@@ -61,6 +61,18 @@ REPOS = {
             "        return cancellations.save(c);\n"
             "    }\n"
             "}\n"),
+        "src/orders/Order.java": (
+            "package pay.orders;\n\n"
+            "import java.time.Instant;\n\n"
+            "public class Order {\n"
+            "    private final long id;\n"
+            "    private OrderStatus status;\n"
+            "    private Instant paidAt;\n\n"
+            "    public Instant paidAt() { return paidAt; }\n\n"
+            "    public void requireStatus(OrderStatus wanted) {\n"
+            "        if (status != wanted) throw new IllegalStateException(\"order \" + id + \" is \" + status);\n"
+            "    }\n"
+            "}\n"),
         "src/payouts/PayoutJob.java": (
             "package pay.payouts;\n\n"
             "public class PayoutJob {\n"

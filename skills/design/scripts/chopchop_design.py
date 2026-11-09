@@ -381,6 +381,7 @@ def build(ws, cfg, ref):
     counts = (len(stories), len([r for r in items if r["kind"] == "ac"])) if items else None
     data = page.build(feature, meta, body, options_md, opts, arch, flow, results,
                       diagrams.failures(flow) if flow else [], report, counts, who, lead, assumed)
+    data = page.carry_over(data, page.read_data(paths.page))
     paths.page.write_text(page.render(PAGE_TEMPLATE.read_text(encoding="utf-8"), data), encoding="utf-8")
     return report
 

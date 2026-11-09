@@ -41,6 +41,7 @@ STATUSES = ["todo", "in-progress", "in-review", "done"]
 STATUS_TITLES = {"todo": "Todo", "in-progress": "In progress", "in-review": "In review", "done": "Done"}
 SIZES = ["S", "M"]
 MAX_WAVE = 2
+PROVE_WAVE = 3
 MAX_TOUCHES = 12
 MAX_DEPENDS = 3
 
@@ -131,8 +132,11 @@ def check(tasks, repos=None):
         if size and size not in SIZES:
             errors.append("%s: size '%s' is too big or unknown. Use S or M, split anything bigger." % (t.id, size))
         wave = t.meta.get("wave")
-        if wave is not None and (not isinstance(wave, int) or not 0 <= wave <= MAX_WAVE):
-            errors.append("%s: wave must be 0, 1 or 2" % t.id)
+        prove = t.meta.get("kind") == "prove"
+        if prove and wave != PROVE_WAVE:
+            errors.append("%s: a prove task is in wave %d, after everything it proves" % (t.id, PROVE_WAVE))
+        elif not prove and wave is not None and (not isinstance(wave, int) or not 0 <= wave <= MAX_WAVE):
+            errors.append("%s: wave must be 0, 1 or 2 (wave %d is only for prove tasks)" % (t.id, PROVE_WAVE))
 
         missing = [s for s in SECTIONS if not find_section(t.body, s)]
         if missing:

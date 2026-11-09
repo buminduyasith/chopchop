@@ -836,3 +836,97 @@ def flow_mermaid(f, a=None):
     if open_if:
         lines.append("  end")
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- the file map (spec)
+
+FILE_COLOR = {"new": ("#e9f7ef", "#1d6a51", "NEW"), "change": ("#fff4e2", "#b26100", "CHANGED"),
+              "delete": ("#fdecea", "#b42318", "DELETED")}
+FM_COL_W, FM_GAP, FM_PAD, FM_ROW, FM_HEAD, FM_FOLDER, FM_COLS = 380, 28, 20, 34, 44, 26, 3
+
+
+def _file_groups(spec):
+    """{repo: {folder: [(file name, change, package id)]}} in package order."""
+    out = {}
+    pk = sorted([p for p in spec.get("packages") or [] if isinstance(p, dict)],
+                key=lambda p: (p.get("wave") if isinstance(p.get("wave"), int) else 9, str(p.get("id"))))
+    for p in pk:
+        for f in p.get("files") or []:
+            if not isinstance(f, dict) or not f.get("path"):
+                continue
+            folder, _, name = str(f["path"]).rpartition("/")
+            out.setdefault(p.get("repo") or "?", {}).setdefault(folder or ".", []).append((name, f.get("change"), p.get("id")))
+    return out
+
+
+def file_map_svg(spec):
+    groups = _file_groups(spec)
+    if not groups:
+        return ""
+    cols = []
+    for repo, folders in groups.items():
+        h = FM_HEAD + sum(FM_FOLDER + len(files) * FM_ROW + 10 for files in folders.values()) + 8
+        cols.append((repo, folders, h))
+    per_row = min(FM_COLS, len(cols))
+    W = FM_PAD * 2 + per_row * FM_COL_W + (per_row - 1) * FM_GAP
+    rows = [cols[i:i + per_row] for i in range(0, len(cols), per_row)]
+    H = FM_PAD * 2 + sum(max(c[2] for c in r) for r in rows) + FM_GAP * (len(rows) - 1)
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" role="img" font-family="%s" '
+           'class="cc-files" style="width:100%%;height:auto;max-width:%dpx;min-width:%dpx">'
+           % (W, H, W, H, esc(FONT), W, int(W * 0.7)),
+           '<title>%s</title>' % esc("Files this feature creates or changes, by repo")]
+    y0 = FM_PAD
+    for r in rows:
+        for i, (repo, folders, h) in enumerate(r):
+            x = FM_PAD + i * (FM_COL_W + FM_GAP)
+            n = sum(len(v) for v in folders.values())
+            out.append('<rect x="%d" y="%d" width="%d" height="%d" rx="14" fill="#f7faff" stroke="#c5d1e4"/>' % (x, y0, FM_COL_W, h))
+            out.append('<text x="%d" y="%d" font-size="15" font-weight="700" fill="%s">%s</text>' % (x + 16, y0 + 28, NAVY, esc(repo)))
+            out.append('<text x="%d" y="%d" font-size="12.5" fill="%s" text-anchor="end">%d file%s</text>'
+                       % (x + FM_COL_W - 16, y0 + 28, MUTED, n, "" if n == 1 else "s"))
+            y = y0 + FM_HEAD
+            for folder, files in folders.items():
+                label = folder + "/" if folder != "." else "(repo root)"
+                out.append('<text x="%d" y="%d" font-size="12.5" font-family="JetBrains Mono, ui-monospace, monospace" fill="%s">%s</text>'
+                           % (x + 16, y + 16, MUTED, esc(wrap(label, 12.5 * 1.1, FM_COL_W - 40, 1)[0])))
+                y += FM_FOLDER
+                for name, change, pid in files:
+                    fill, stroke, chip = FILE_COLOR.get(change, ("#ffffff", "#94a3b8", ""))
+                    out.append('<rect x="%d" y="%d" width="%d" height="%d" rx="8" fill="%s" stroke="%s"/>'
+                               % (x + 12, y, FM_COL_W - 24, FM_ROW - 6, fill, stroke))
+                    out.append('<rect x="%d" y="%d" width="4" height="%d" rx="2" fill="%s"/>' % (x + 12, y, FM_ROW - 6, stroke))
+                    out.append('<text x="%d" y="%d" font-size="13.5" font-weight="600" fill="%s">%s</text>'
+                               % (x + 24, y + 19, INK, esc(wrap(name, 13.5, FM_COL_W - 150, 1)[0])))
+                    if chip:
+                        out.append('<text x="%d" y="%d" font-size="10.5" font-weight="700" fill="%s" text-anchor="end" letter-spacing=".04em">%s</text>'
+                                   % (x + FM_COL_W - 62, y + 18, stroke, chip))
+                    if pid:
+                        out.append('<rect x="%d" y="%d" width="34" height="18" rx="9" fill="#eaf1ff" stroke="#bcd0fb"/>'
+                                   % (x + FM_COL_W - 54, y + 5))
+                        out.append('<text x="%d" y="%d" font-size="11" font-weight="700" fill="%s" text-anchor="middle">%s</text>'
+                                   % (x + FM_COL_W - 37, y + 18, NAVY, esc(pid)))
+                    y += FM_ROW
+                y += 10
+        y0 += max(c[2] for c in r) + FM_GAP
+    out.append("</svg>")
+    return "".join(out)
+
+
+def file_map_mermaid(spec):
+    lines = ["flowchart LR"]
+    k = 0
+    for ri, (repo, folders) in enumerate(_file_groups(spec).items()):
+        lines.append("  subgraph r%d[%s]" % (ri, mlabel(repo)))
+        for fi, (folder, files) in enumerate(folders.items()):
+            lines.append("    subgraph r%df%d[%s]" % (ri, fi, mlabel(folder.replace("/", " › ")) if folder != "." else "root"))
+            for name, change, pid in files:
+                k += 1
+                tag = {"new": "NEW", "change": "CHANGED", "delete": "DELETED"}.get(change, "")
+                lines.append("      n%d[%s]" % (k, mlabel("%s %s %s" % (name, tag, pid or ""))))
+                if change in ("new", "change", "delete"):
+                    lines.append("      class n%d %s" % (k, change))
+            lines.append("    end")
+        lines.append("  end")
+    lines += ["  classDef new fill:#e9f7ef,stroke:#1d6a51", "  classDef change fill:#fff4e2,stroke:#b26100",
+              "  classDef delete fill:#fdecea,stroke:#b42318"]
+    return "\n".join(lines)

@@ -97,6 +97,8 @@ def resolve_inputs(ws, ref, req, design):
             req_files = [feature.file]
         if not design and (feature.path / "design").is_dir():
             design_files = expand([feature.path / "design"])
+        if not design and (feature.path / "spec" / "spec.md").is_file():
+            design_files += expand([feature.path / "spec" / "spec.md"])
     if not req_files:
         raise UsageError("No requirements to check. Give a feature that has requirements/requirement.md, "
                          "or --req <files or folder>.")
