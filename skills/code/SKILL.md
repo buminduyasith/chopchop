@@ -19,6 +19,9 @@ Take one task file from `_chopchop/<feature>/tasks/` and turn it into an open PR
 
 That is all the user needs. Everything below is steps you run yourself.
 
+To build every task of a feature one by one, each reviewed before its commit, the user runs
+`/chopchop:auto`. To review pending changes in any repo, `/chopchop:review`.
+
 For `T02`, do not stop between steps. Stop and ask only when:
 - the preview shows a `Blocked:` line
 - the task is unclear or conflicts with the code

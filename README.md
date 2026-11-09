@@ -5,7 +5,7 @@ end to end. A small team of people and AI agents can work on one feature in para
 every PR stays small enough for a person to review in one sitting.
 
 ```
-learn the system  ->  stories  ->  design (a lead approves)  ->  spec  ->  tasks (one repo, one PR each)  ->  code, unit tests, PR  ->  prove  ->  done
+learn the system  ->  stories  ->  design (a lead approves)  ->  spec  ->  tasks  ->  code one task, or auto: every task, reviewed  ->  PR  ->  prove  ->  done
 ```
 
 chopchop holds no logins and talks to no tracker or git host by itself. It uses what your
@@ -52,9 +52,10 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
 | 7. Check | `/chopchop:check 1` | lead | per design or spec change |
 | 8. Tasks | `/chopchop:tasks 1` | lead | per feature |
 | 9. Board | `/chopchop:tasks --status` | anyone | any time |
-| 10. Build | `/chopchop:code T02` | developer | per task |
+| 10. Build | `/chopchop:code T02`, or every task: `/chopchop:auto 1` | developer | per task, or per feature |
 | 11. Task done | `/chopchop:code --done T02` | developer | per task |
 | 12. Feature done | `/chopchop:spec --done --by "Asha"` | lead | per feature |
+| Review | `/chopchop:review` | anyone | before a commit, any repo |
 | Update | `/chopchop:update` | everyone | when a new version is out |
 
 1. **`/chopchop:init`** looks at your repos and asks a few questions, with click options:
@@ -96,6 +97,9 @@ plugin's own command: `claude plugin marketplace update chopchop`, then
 8. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
    unit tests and code in the repo's style, runs build, lint and tests, pushes, opens the PR
    your team's usual way, and sets it to in-review. `T02 -p` only previews the plan.
+   Or **`/chopchop:auto 1`** builds every task, one at a time, each in a fresh agent: tests
+   and code, checks, a review of the pending changes, fixes that fit the spec, then one
+   commit. At the end it opens one PR per repo into the feature branch.
 9. **`/chopchop:code --done T02`**: a person marks it done after the merge.
 10. **`/chopchop:spec --done --by "Asha"`**: a person sets the whole feature to done, only
     when every test, journey and manual check is proved.
@@ -213,6 +217,47 @@ stable id (`PAY-121.AC2`), and a re-check shows what was fixed and what is new.
 It stops to ask only when a task is blocked or unclear, a check keeps failing, or it finds
 no way to open the PR.
 
+### `/chopchop:auto`
+
+| You type | What it does |
+| --- | --- |
+| `1` | Builds every open task of feature 1, one at a time, after one yes. |
+| `1 --max 3` | Only the next 3 tasks. `--only T01,T02` and `--repo web-app` work too. |
+| `1 --step` | Pauses after each task so you can look. |
+| `--status` | Where the run is. |
+| `--resume` | Carries on, in this chat or a new one. |
+
+For each task:
+
+```
+pick  ->  build (fresh agent)  ->  check  ->  review (fresh agent)  ->  sort  ->  fix (at most 2 rounds)  ->  commit  ->  note
+```
+
+- **Branches.** One build branch per repo (`feature/{key}/build`), cut from the latest
+  feature branch. One commit per task. One PR per repo, into the feature branch, never into
+  the base branch.
+- **Review before commit.** The reviewer reads the pending changes, not a commit, and has not
+  seen how they were made.
+- **The spec decides.** Each finding is sorted. Fix now: bugs, lint, names, folders, language
+  mistakes, missing tests, style rules. Park: another approach, a changed contract or rule, a
+  new library, files outside the task. Parked ideas are never applied; they are listed in
+  the PR for the lead. Stop: something serious a person must decide. That repo waits, the
+  others go on.
+- **Small context.** Each task gets a fresh builder and a fresh reviewer. The chat keeps a few
+  lines per task. The run lives in `work/auto.json`, so a new chat carries on.
+
+### `/chopchop:review`
+
+| You type | What it does |
+| --- | --- |
+| (nothing) | Reviews the pending changes in this repo, new files too. Works in any git repo. |
+| `T02` | The same, also against the task and the spec. |
+| `--branch [base]` | Reviews this branch against its base. |
+| `--fix` | Also applies the fix-now findings, then reviews once more. |
+
+A fresh reviewer checks bugs, tests, fit with the repo's style and code, safety, and fit with
+the task. Findings are sorted into fix now, park and stop, the same way as in `auto`.
+
 ### `/chopchop:update`
 
 | You type | What it does |
@@ -244,7 +289,7 @@ _chopchop/
     ├── requirements/requirement.md  the epic and its stories
     ├── design/                      design.md, options.md, architecture.json, flow.json
     ├── spec/                        spec.md (for people) and spec.json (the facts tasks are cut from)
-    ├── work/                        answers, helper reports, approved copies, test results
+    ├── work/                        answers, helper reports, approved copies, test results, the auto run
     ├── feature.html                 the page: design, choices, spec, slides, review message
     ├── check.md                     design vs requirements (from /chopchop:check)
     └── tasks/
@@ -269,6 +314,12 @@ repos:                                # path is relative to the folder that hold
 branches:
   feature: "feature/{key}-{slug}"     # {key} = epic key, or the feature number
   task: "feature/{key}/{task}-{slug}"
+  build: "feature/{key}/build"      # /chopchop:auto: one per repo, one commit per task
+
+auto:                                 # /chopchop:auto (all optional)
+  rounds: 2                           # review rounds per task, 1 to 3
+  pr: draft                           # draft, ready, or push (you open the PRs)
+  reviewer_model: sonnet              # leave out to use the same model as the builder
 
 agents:                               # helpers (subagents); asked once
   max: 3                              # most at the same time; 0 = none. A small job uses fewer
@@ -279,8 +330,8 @@ agents:                               # helpers (subagents); asked once
 ## Safety rules
 
 - It pushes only branches it created, with your own git login: the feature branch (once,
-  after you say yes) and each task's own branch. Never the base branch or main. Never
-  force-push.
+  after you say yes), each task's own branch, and the auto build branches. Never the base
+  branch or main. Never force-push.
 - Task PRs go into the feature branch. It never merges anything.
 - It never resolves merge conflicts and never stashes or discards your changes.
 - It never asks for, stores or sets up logins, tokens or tools.
@@ -290,7 +341,7 @@ agents:                               # helpers (subagents); asked once
 
 Copy the folders in `skills/` into a repo's `.claude/skills/`, and `agents/` into
 `.claude/agents/` (`update` is only for the plugin). `stories` and `tasks` work on their own.
-`check`, `code`, `init`, `learn`, `diagram`, `design` and `spec` need `tasks` next to them. `design` also needs `diagram`. Every script also runs
+`check`, `code`, `init`, `learn`, `diagram`, `design`, `spec` and `review` need `tasks` next to them. `design` also needs `diagram`, and `auto` needs `code` and `tasks`. Every script also runs
 without an agent, for example:
 
 ```sh
@@ -326,6 +377,8 @@ claude plugin validate . --strict
 (cd skills/design && python3 -m unittest discover -s tests)
 (cd skills/diagram && python3 -m unittest discover -s tests)
 (cd skills/spec && python3 -m unittest discover -s tests)
+(cd skills/review && python3 -m unittest discover -s tests)
+(cd skills/auto && python3 -m unittest discover -s tests)
 claude plugin eval . --scaffold       # agent evals on the sample project (slow: real runs)
 ```
 

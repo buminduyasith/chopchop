@@ -75,6 +75,8 @@ h1 { margin: 4px 0 10px; font-size: 22px; font-weight: 600; }
 .badge.wait { background: var(--warn-bg); color: var(--warn); }
 .badge.chg { background: var(--info-bg); color: var(--info); }
 .badge.pr { background: var(--chip); color: var(--text); text-decoration: none; }
+.badge.auto { background: var(--info-bg); color: var(--info); }
+.badge.auto.stopped, .badge.auto.skipped { background: var(--warn-bg); color: var(--warn); }
 
 dialog { border: 0; border-radius: 8px; padding: 0; width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
   background: var(--card); color: var(--text); box-shadow: 0 8px 32px rgba(9, 30, 66, .35); }
@@ -300,11 +302,18 @@ footer { color: var(--muted); font-size: 12px; padding: 0 24px 24px; }
     return !q || (t.id + " " + t.title + " " + (t.repo || "") + " " + (t.owner || "") + " " + t.body).toLowerCase().indexOf(q) >= 0;
   }
 
+  function autoText(a) {
+    if (a.state === "committed") return "Committed " + a.commit + " on " + a.branch + " · " + a.fixed + " fixed · " + a.parked + " parked" + (a.left ? " · " + a.left + " left" : "");
+    if (a.state === "stopped" || a.state === "skipped") return a.state.charAt(0).toUpperCase() + a.state.slice(1) + ": " + (a.why || "");
+    return a.state.charAt(0).toUpperCase() + a.state.slice(1) + (a.round ? ", review round " + a.round : "");
+  }
+
   function card(t) {
     var badges = "";
     if (t.status === "todo" && t.waiting_on.length) badges += '<span class="badge wait">Waiting on ' + esc(t.waiting_on.join(", ")) + "</span>";
     if (t.changes.length) badges += '<span class="badge chg">' + t.changes.length + " change" + (t.changes.length === 1 ? "" : "s") + "</span>";
     if (t.pr) badges += '<span class="badge pr">PR</span>';
+    if (t.auto && t.auto.state !== "queued") badges += '<span class="badge auto ' + esc(t.auto.state) + '">Auto: ' + esc(t.auto.state) + "</span>";
     return '<button type="button" class="card" data-id="' + esc(t.id) + '">' +
       '<div class="top"><span class="mono">' + esc(t.id) + "</span>" +
       (t.size ? '<span class="chip">' + esc(t.size) + "</span>" : "") +
@@ -363,6 +372,7 @@ footer { color: var(--muted); font-size: 12px; padding: 0 24px 24px; }
       (t.branch ? '<button class="copy" type="button" data-copy="' + esc(t.branch) + '">Copy</button>' : "") + "</dd>" +
       '<dt>PR into</dt><dd><span class="mono">' + esc(DATA.feature_branch || "feature branch not created") + "</span></dd>" +
       (t.pr ? '<dt>PR</dt><dd><a href="' + esc(t.pr) + '" target="_blank" rel="noopener">' + esc(t.pr) + "</a></dd>" : "") +
+      (t.auto ? "<dt>Auto run</dt><dd>" + esc(autoText(t.auto)) + "</dd>" : "") +
       "</dl></div>");
     if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
   }

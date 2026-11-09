@@ -113,7 +113,7 @@ def render_status(feature, tasks):
 # --------------------------------------------------------------------------- board.html
 
 
-def board_data(feature, tasks, plan_meta, changelog, branches, base=None):
+def board_data(feature, tasks, plan_meta, changelog, branches, base=None, auto=None):
     by_id = {t.id: t for t in tasks}
     out = []
     for t in tasks:
@@ -123,7 +123,7 @@ def board_data(feature, tasks, plan_meta, changelog, branches, base=None):
             "repo": t.get("repo"), "wave": t.get("wave"), "size": t.get("size"), "owner": t.get("owner"),
             "depends_on": as_list(t.get("depends_on")), "waiting_on": waiting_on(t, by_id),
             "stories": as_list(t.get("stories")), "pr": t.get("pr"), "branch": branches.get(t.id),
-            "file": t.path.name, "changes": changes, "body": t.body.strip(),
+            "file": t.path.name, "changes": changes, "body": t.body.strip(), "auto": (auto or {}).get(t.id),
         })
     return {
         "feature": feature.name, "number": "%03d" % feature.number, "epic": feature.epic,

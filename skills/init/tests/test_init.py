@@ -135,7 +135,7 @@ class WriteTest(Base):
         self.assertIn("team: old", (ws / "chopchop.yaml.bak").read_text())
         cfg = parse_yaml((ws / "chopchop.yaml").read_text())
         self.assertEqual(cfg["base_branch"], "dev")
-        self.assertEqual(cfg["branches"], {"feature": "feat/{key}", "task": "feat/{key}/{task}"})
+        self.assertEqual(cfg["branches"], {"feature": "feat/{key}", "task": "feat/{key}/{task}", "build": "feature/{key}/build"})
         self.assertEqual(cfg["freshen"], {"run_tests": True, "token": "${SOME_TOKEN}"})
 
     def test_helper_settings_written_and_kept(self):
@@ -194,14 +194,14 @@ class PluginTest(unittest.TestCase):
         self.assertEqual(market["plugins"][0]["name"], manifest["name"])
         self.assertEqual(market["plugins"][0]["source"], "./")
         names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
-        self.assertEqual(names, ["check", "code", "design", "diagram", "init", "learn", "spec", "stories", "tasks", "update"])
+        self.assertEqual(names, ["auto", "check", "code", "design", "diagram", "init", "learn", "review", "spec", "stories", "tasks", "update"])
         for name in names:
             text = (SKILLS / name / "SKILL.md").read_text()
             self.assertTrue(text.startswith("---\nname: %s\n" % name), name)
             self.assertNotIn("python3 scripts/", text, name)  # paths go through ${CLAUDE_SKILL_DIR}
             self.assertNotIn("\u2014", text, name)  # no em-dashes
         agents = sorted(p.stem for p in (root / "agents").glob("*.md"))
-        self.assertEqual(agents, ["architect", "explorer", "reviewer"])
+        self.assertEqual(agents, ["architect", "builder", "code-reviewer", "explorer", "reviewer"])
         for name in agents:
             text = (root / "agents" / (name + ".md")).read_text()
             self.assertTrue(text.startswith("---\nname: %s\ndescription: " % name), name)

@@ -242,7 +242,8 @@ def render(answers, ws, existing):
     lines += ["", "branches:",
               "  # {key} is the epic key (PAY-120), or the feature number (007) when there is no epic.",
               "  feature: %s" % scalar(branches.get("feature") or "feature/{key}-{slug}"),
-              "  task: %s" % scalar(branches.get("task") or "feature/{key}/{task}-{slug}"), ""]
+              "  task: %s" % scalar(branches.get("task") or "feature/{key}/{task}-{slug}"),
+              "  build: %s" % scalar(branches.get("build") or "feature/{key}/build"), ""]
     agents = answers.get("agents") or ((existing or {}).get("agents") if isinstance((existing or {}).get("agents"), dict) else None)
     if agents:
         s = helpers.settings({"agents": agents})

@@ -1,7 +1,7 @@
 {
   "name": "chopchop",
-  "version": "0.8.0",
-  "description": "chopchop: cut big features into small, one-repo tasks and build each one end to end, using the tools your team already has. Learn the system, bring in an epic's stories, write a design a lead can approve (with a high-level design, a main flow, choices, slides and a review message), turn it into a full spec with code that fits each repo, cut tasks from the spec with a board, code one task to an open PR, and track every test to done.",
+  "version": "0.9.0",
+  "description": "chopchop: cut big features into small, one-repo tasks and build each one end to end, using the tools your team already has. Learn the system, bring in an epic's stories, write a design a lead can approve (with a high-level design, a main flow, choices, slides and a review message), turn it into a full spec with code that fits each repo, cut tasks from the spec with a board, code one task to an open PR or let auto build every task one by one (each reviewed before its commit, one PR per repo), review any change, and track every test to done.",
   "author": {
     "name": "bumindu"
   },

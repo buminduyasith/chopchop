@@ -240,9 +240,24 @@ def refresh(ws, feature, cfg):
     board.write_if_changed(d / tasks.STATUS_FILE, board.render_status(feature, found))
     template = (SKILL_DIR / "templates" / "board.html").read_text(encoding="utf-8")
     changelog = tasks.read_changelog(d / tasks.CHANGELOG_FILE)
-    data = board.board_data(feature, found, plan_meta, changelog, branches, base)
+    data = board.board_data(feature, found, plan_meta, changelog, branches, base, auto_view(feature))
     (d / tasks.BOARD_FILE).write_text(board.render_board(template, data), encoding="utf-8")
     return found, plan_meta
+
+
+def auto_view(feature):
+    """What /chopchop:auto did to each task, for the board."""
+    f = feature.path / "work" / "auto.json"
+    try:
+        st = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
+        if not st:
+            return {}
+        return {tid: {"state": t.get("state"), "commit": t.get("commit"), "fixed": t.get("fixed", 0),
+                      "parked": len(t.get("parked") or []), "left": len(t.get("left") or []), "why": t.get("why"),
+                      "round": t.get("round", 0), "branch": st["repos"][t["repo"]]["build_branch"]}
+                for tid, t in st.get("tasks", {}).items()}
+    except (ValueError, KeyError, TypeError, OSError):
+        return {}
 
 
 def rel(ws, path):

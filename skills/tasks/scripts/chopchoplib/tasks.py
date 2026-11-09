@@ -49,7 +49,8 @@ TASK_FILE_RE = re.compile(r"^(T\d{2,})-([a-z0-9][a-z0-9-]*)\.md$")
 REQUIRED = ["id", "title", "repo", "wave", "size", "status", "depends_on", "touches"]
 SECTIONS = ["Goal", "Done when", "Branch"]
 
-DEFAULT_BRANCHES = {"feature": "feature/{key}-{slug}", "task": "feature/{key}/{task}-{slug}"}
+DEFAULT_BRANCHES = {"feature": "feature/{key}-{slug}", "task": "feature/{key}/{task}-{slug}",
+                    "build": "feature/{key}/build"}
 
 
 class Task:
@@ -241,6 +242,12 @@ def feature_branch_name(feature, patterns=None):
 def task_branch_name(feature, task, patterns=None):
     pattern = (patterns or {}).get("task") or DEFAULT_BRANCHES["task"]
     return pattern.format(key=branch_key(feature), slug=task.slug, task=task.id)
+
+
+def build_branch_name(feature, patterns=None):
+    """The one branch /chopchop:auto builds all of a repo's tasks on, one commit per task."""
+    pattern = (patterns or {}).get("build") or DEFAULT_BRANCHES["build"]
+    return pattern.format(key=branch_key(feature), slug=branch_slug(feature))
 
 
 def branch_section(task, feature_branch, task_branch, repo_path):
