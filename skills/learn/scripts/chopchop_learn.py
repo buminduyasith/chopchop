@@ -30,7 +30,7 @@ if not (TASKS_SCRIPTS / "chopchoplib" / "systemmap.py").is_file():
     sys.exit("Error: learn needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from chopchoplib import systemmap  # noqa: E402
+from chopchoplib import helpers, systemmap  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 
 WORK_DIR = "work"
@@ -68,7 +68,8 @@ def prepare(ws, cfg, only=None):
         out.append(fact)
     return {"workspace": str(ws), "map": str(systemmap.path_of(ws)), "map_exists": systemmap.path_of(ws).is_file(),
             "work": str(work), "repos": out,
-            "to_read": [f["name"] for f in out if f["mode"] in ("full", "refresh")]}
+            "to_read": [f["name"] for f in out if f["mode"] in ("full", "refresh")],
+            "calls": {"explorer": helpers.for_role(helpers.settings(cfg), "explorer")}}
 
 
 def write(ws, cfg, files):

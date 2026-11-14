@@ -145,7 +145,7 @@ def task_rules(task):
             "touches": tasklib.as_list(task.get("touches")), "goal": section("Goal"),
             "done_when": section("Done when"), "do_not": do_not,
             "banned_paths": [t for t in tokens if _is_path(t)],
-            "banned_names": [t for t in tokens if not _is_path(t) and len(t) > 2]}
+            "banned_names": tasklib.as_list(task.get("forbid"))}
 
 
 def outside(paths, rules, allowed=()):
@@ -154,9 +154,9 @@ def outside(paths, rules, allowed=()):
 
 
 def banned_uses(diff, rules):
-    """Names the task says not to use that the change adds."""
-    added = "\n".join(added_lines(diff))
-    return [n for n in rules["banned_names"] if re.search(r"(?<![\w.])%s(?!\w)" % re.escape(n), added)]
+    """Names from the task's forbid list that the change adds (comments and object keys do not count)."""
+    from .specdata import uses
+    return uses("\n".join(added_lines(diff)), rules["banned_names"])
 
 
 # --------------------------------------------------------------------------- the pack
@@ -198,6 +198,9 @@ def render_pack(info):
         lines.append("- No style file or guide. Judge against the code next to each change.")
     lines += ["", "## Files changed", ""]
     lines += ["- %-6s `%s`" % (f["change"], f["path"]) for f in info["files"]]
+    if info.get("accepted"):
+        lines += ["", "## Already accepted by the lead, do not raise", ""]
+        lines += ["- %s" % a for a in info["accepted"]]
     if info.get("parked"):
         lines += ["", "## Already parked, do not raise again", ""]
         lines += ["- %s" % p for p in info["parked"]]

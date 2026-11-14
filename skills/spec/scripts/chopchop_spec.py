@@ -358,7 +358,8 @@ def print_report(r):
         print("Error:    %s" % e)
     for w in r["warnings"]:
         print("Warning:  %s" % w)
-    print("Result:   %s" % ("ready. Next: /chopchop:tasks" if r["ready"] else
+    print("Result:   %s" % ("ready (the structure checks pass). Next: the cold read (step 7), then /chopchop:tasks"
+                            if r["ready"] else
                             "%d thing(s) block it. Fix them and build again." % len(r["errors"])))
 
 
@@ -439,7 +440,7 @@ def main(argv=None):
     p.add_argument("ref", nargs="?", default=None, help="the feature: number, epic key or part of the name")
     p.add_argument("--prepare", action="store_true")
     p.add_argument("--plan", metavar="SIZE", help="small, medium or large")
-    p.add_argument("--repos", help="repos the feature changes, comma separated (with --plan)")
+    p.add_argument("--repos", nargs="+", help="repos the feature changes, with --plan: a,b or a b")
     p.add_argument("--scaffold", action="store_true")
     p.add_argument("--build", action="store_true")
     p.add_argument("--status", action="store_true")
@@ -459,7 +460,7 @@ def main(argv=None):
                 print_prepare(out)
                 return 0
         elif args.plan:
-            names = [r.strip() for r in (args.repos or "").split(",") if r.strip()]
+            names = [r.strip() for x in (args.repos or []) for r in x.split(",") if r.strip()]
             try:
                 out = helpers.plan(args.plan, names, helpers.settings(cfg), choices=False)
             except ValueError as e:

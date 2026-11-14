@@ -39,6 +39,7 @@
       "test_example": "cancels_only_paid_orders",
       "style": ["Order and payment endpoints return errors as ApiError(code, message).",
                 "Jobs run with @Scheduled(fixedDelay = 60_000) and retry with retry.run, 5 tries."],
+      "forbid": ["ProblemDetail"],
       "do_not": ["No `ProblemDetail` in refunds: only payouts use it, and choice 2 picked ApiError.",
                  "Never send an event straight out: write it with EventPublisher (ADR 1, events go through the outbox).",
                  "No new retry or HTTP helper: use retry.run and CardClient."]
@@ -49,12 +50,14 @@
                   {"path": "src/api/", "like": "src/api/paymentsApi.ts", "why": "one file for payments-api calls"}],
       "naming": [{"today": "cancelOrder(id)", "new": "requestRefund(id, amount)"}],
       "style": ["OrderPage is a class component. Keep it one."],
+      "forbid": ["useState", "useEffect"],
       "do_not": ["No hooks in OrderPage (`useState`, `useEffect`): it is a class component."]
     },
     "notify-service": {
       "language": "ts",
       "folders": [{"path": "src/handlers/", "like": "src/handlers/payoutSent.ts", "why": "one handler per event"}],
       "naming": [{"today": "payoutSent", "new": "refundDone"}, {"today": "'payout-sent'", "new": "'refund-done'"}],
+      "forbid": ["smtp"],
       "do_not": ["Do not call the mail provider directly (`smtp`): use sendEmail."]
     }
   },

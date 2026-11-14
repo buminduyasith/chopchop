@@ -477,7 +477,7 @@ def main(argv=None):
     p.add_argument("ref", nargs="?", default=None, help="the feature: number, epic key or part of the name")
     p.add_argument("--prepare", action="store_true")
     p.add_argument("--plan", metavar="SIZE", help="small, medium or large")
-    p.add_argument("--repos", help="repos the feature changes, comma separated (with --plan)")
+    p.add_argument("--repos", nargs="+", help="repos the feature changes, with --plan: a,b or a b")
     p.add_argument("--no-choices", action="store_true", help="no real choices, so no architect (with --plan)")
     p.add_argument("--helpers", action="store_true", help="save helper settings in chopchop.yaml")
     p.add_argument("--max", type=int)
@@ -509,7 +509,7 @@ def main(argv=None):
                 print_prepare(out)
                 return 0
         elif args.plan:
-            names = [r.strip() for r in (args.repos or "").split(",") if r.strip()]
+            names = [r.strip() for x in (args.repos or []) for r in x.split(",") if r.strip()]
             try:
                 out = helpers.plan(args.plan, names, helpers.settings(cfg), choices=not args.no_choices)
             except ValueError as e:

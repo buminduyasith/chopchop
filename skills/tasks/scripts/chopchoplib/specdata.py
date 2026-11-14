@@ -75,6 +75,18 @@ PROVE_WAVE = 3
 SPLIT_PACKAGES, SPLIT_REPOS, BIG_PACKAGE = 12, 4, 12
 ID_RES = {"rules": r"R-\d+", "contracts": r"C-\d+", "packages": r"P\d+", "journeys": r"J\d+", "checks": r"M\d+"}
 TICKED = re.compile(r"`([A-Za-z_][\w.]*)`")
+COMMENT = re.compile(r"(?m)(/\*.*?\*/)|(^[ \t]*(//|#|\*)[^\n]*$)|([ \t]//[^\n]*$)", re.S)
+
+
+def forbidden(package, repo_info=None):
+    """Code names no new code may use: the package's and its repo's `forbid` lists."""
+    return set(_list((package or {}).get("forbid")) + _list((repo_info or {}).get("forbid")))
+
+
+def uses(code, names):
+    """Names from the list that the code uses, imports included. Comments and object keys do not count."""
+    code = COMMENT.sub("", code)
+    return sorted(n for n in names if re.search(r"(?<![\w$])%s(?![\w$])(?!\s*:(?!:))" % re.escape(n), code))
 EXT_LANG = {".java": "java", ".kt": "kotlin", ".ts": "ts", ".tsx": "tsx", ".js": "js", ".jsx": "jsx", ".py": "python",
             ".go": "go", ".rb": "ruby", ".cs": "csharp", ".rs": "rust", ".sql": "sql", ".php": "php", ".swift": "swift",
             ".scala": "scala", ".yaml": "yaml", ".yml": "yaml", ".json": "json", ".sh": "bash", ".md": "markdown"}
@@ -285,9 +297,10 @@ def validate(spec, stories=None, known=None, repos=None, flow=None):
             if cid not in contracts:
                 errors.append("%s gives %s, which is not in contracts" % (where, cid))
         for name in _list(p.get("makes")):
-            if name in makes:
-                errors.append("%s and %s both make %s" % (makes[name], pid, name))
-            makes[name] = pid
+            key = (repo, name)  # the web may mirror an API constant: unique per repo, not per feature
+            if key in makes:
+                errors.append("%s and %s both make %s in %s" % (makes[key], pid, name, repo))
+            makes[key] = pid
         for j, c in enumerate(_list(p.get("copy")), 1):
             if not isinstance(c, dict) or len(cite.find(str(c.get("cite") or ""))) != 1:
                 errors.append("%s copy %d needs a cite such as repo/path:12-17@abc1234" % (where, j))
@@ -296,17 +309,17 @@ def validate(spec, stories=None, known=None, repos=None, flow=None):
         for j, r in enumerate(_list(p.get("reuse")), 1):
             if not isinstance(r, dict) or not r.get("name") or len(cite.find(str(r.get("cite") or ""))) != 1:
                 errors.append("%s reuse %d needs a name and a cite where it lives" % (where, j))
-        banned = {w for d in _list(p.get("do_not")) + _list((repos_info.get(repo) or {}).get("do_not"))
-                  for w in TICKED.findall(str(d))}
+        banned = forbidden(p, repos_info.get(repo))
         for j, s in enumerate(_list(p.get("sketch")), 1):
             if not isinstance(s, dict) or not s.get("code"):
                 errors.append("%s sketch %d needs code" % (where, j))
                 continue
             if s.get("file") not in paths:
                 errors.append("%s sketch %d: file %r is not one of the package's files" % (where, j, s.get("file")))
-            hit = sorted(w for w in banned if re.search(r"(?<![\w.])%s(?!\w)" % re.escape(w), s["code"]))
+            hit = uses(s["code"], banned)
             if hit:
-                errors.append("%s sketch for %s uses %s, which its do-not list forbids" % (where, s.get("file"), ", ".join(hit)))
+                errors.append("%s sketch for %s uses %s, which `forbid` does not allow. Take it out of the sketch, "
+                              "or out of forbid if it is safe." % (where, s.get("file"), ", ".join(hit)))
         tests = [t for t in _list(p.get("tests")) if isinstance(t, dict)]
         if not tests:
             errors.append("%s has no tests. Name each unit test, its values and what it proves." % where)
@@ -874,6 +887,9 @@ def to_tasks(spec, snippets=None):
                     "depends_on": sorted(task_of[d] for d in deps if d in task_of),
                     "touches": [f.get("path") for f in _list(p.get("files")) if isinstance(f, dict)],
                     "stories": stories, "package": p["id"], "pr": None}
+            banned = sorted(forbidden(p, repos_info.get(p.get("repo"))))
+            if banned:
+                meta["forbid"] = banned
             body = ["# %s · %s" % (x["id"], p.get("title")), "", "## Goal", "", p.get("goal", ""), "", "## Context", ""]
             body += _quote_rules(spec, _list(p.get("rules"))) or ["None."]
             body += ["## Contract", ""]

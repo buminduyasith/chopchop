@@ -177,7 +177,8 @@ def render(title, req_files, design_files, data, previous, base):
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in KINDS}
     cov_counts = {s: sum(1 for c in cov if c.get("status") == s) for s in STATUSES}
     blocking = counts["conflict"] + sum(1 for f in findings if f["kind"] == "missing" and f["severity"] == "high")
-    result = "ready" if not blocking else "not ready"
+    medium = sum(1 for f in findings if f["kind"] == "missing" and f["severity"] == "medium")
+    result = "not ready" if blocking else "ready with gaps" if medium else "ready"
 
     def rel(p):
         try:
@@ -191,7 +192,10 @@ def render(title, req_files, design_files, data, previous, base):
              "_Written by chopchop on %s. Run `/chopchop:check` again after fixing things._" % today, "",
              "- **Requirements:** %s" % ", ".join("`%s`" % rel(p) for p in req_files),
              "- **Design:** %s" % ", ".join("`%s`" % rel(p) for p in design_files), ""]
-    if result == "ready":
+    if result == "ready with gaps":
+        verdict = ("**Result: ready with gaps.** No conflicts, but %d medium gap%s to settle or accept before "
+                   "cutting tasks." % (medium, "" if medium == 1 else "s"))
+    elif result == "ready":
         verdict = "**Result: ready.** No conflicts and nothing important missing."
         rest = counts["missing"] + counts["extra"] + counts["question"]
         if rest:

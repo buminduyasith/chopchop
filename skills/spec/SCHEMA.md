@@ -37,7 +37,8 @@ One entry per repo the feature changes. See `references/code.md`.
 | `naming` | `[{"today", "new"}]`: new names made the way the neighbors are named. |
 | `test_example` | One real test name from the repo. New test names must look the same. |
 | `style` | The rules from the team's style file this feature touches. |
-| `do_not` | Traps. Code names in backticks are checked: no sketch may use them. |
+| `do_not` | Traps, in plain words. Not checked by the script. |
+| `forbid` | Code names no new code may use, such as `["orderHelpers", "XMLHttpRequest"]`. The build checks every sketch, and auto checks every commit. Comments and object keys do not count; imports do. A package can add its own `forbid`. |
 
 ## contracts
 
@@ -72,6 +73,7 @@ Each package becomes one task: one repo, one PR.
 | `tests` | At least one: `{"name", "level", "file", "proves", "rules", "failures"}`. `level` is `unit` or `integration`. `failures` names failure answers of design/flow.json, such as `2.twice`. |
 | `run` | `{"command", "expect"}`: how to run this package's tests. |
 | `do_not` | What this package must not touch. |
+| `forbid` | Optional: more code names this package may not use, on top of its repo's. |
 
 Every failure answer in design/flow.json needs a test, a journey or a manual check that names
 it in `failures`, unless a person accepted it as a risk.

@@ -176,9 +176,32 @@ def ci_commands(root, limit=15):
     return [{"file": f, "command": c} for f, c in out[:limit]]
 
 
+TRAP_WORDS = re.compile(r"deprecated|legacy|do not use|don't use|never use|must not be used|avoid", re.I)
+
+
+def traps(root):
+    """Lower-case words from guide lines that warn against some code, such as 'orderhelpers'."""
+    words = set()
+    for name in GUIDES + ["docs/code-style.md", "docs/CODE_STYLE.md"]:
+        f = Path(root) / name
+        if f.is_file():
+            for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                if TRAP_WORDS.search(line):
+                    words |= {w.lower() for w in re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", line)}
+    return words
+
+
+def is_trap_test(rel, words):
+    if re.search(r"(^|/)(legacy|deprecated|old)(/|$)", rel, re.I):
+        return True
+    stem = re.sub(r"([._-]?(test|tests|spec)|^test_)", "", Path(rel).stem, flags=re.I).lower()
+    return bool(stem) and stem in words
+
+
 def example_tests(root, limit=5):
     root = Path(root)
     found = []
+    avoid = traps(root)
     stack = [root]
     while stack and len(found) < limit:
         folder = stack.pop()
@@ -190,7 +213,7 @@ def example_tests(root, limit=5):
             if p.is_dir():
                 if p.name not in SKIP_DIRS and not p.name.startswith("."):
                     stack.append(p)
-            elif TEST_NAME.search(p.name):
+            elif TEST_NAME.search(p.name) and not is_trap_test(p.relative_to(root).as_posix(), avoid):
                 found.append(p.relative_to(root).as_posix())
                 if len(found) >= limit:
                     break

@@ -50,11 +50,11 @@ customer.
 | `nodes[].status` | `new` (green), `changed` (amber), `same` (white, context), `external` (dashed). People have none. |
 | `nodes[].repo` | the repo it lives in, as named in chopchop.yaml. People and outside systems have none. |
 | `nodes[].note` | optional, 1 to 4 words, under 40 characters |
-| `nodes[].row`, `col` | whole numbers from 0. `col` at most 4. Left out: the script places it, badly. Always place. |
+| `nodes[].row`, `col` | whole numbers from 0. `col` at most 3 for a clean draw (4 at most). Left out: the script places it, badly. Always place. |
 | `links[].label` | what moves along it, 1 to 4 words. Never a step number. |
 | `links[].kind` | `call`, `data`, `event`, `external` |
 
-Limits: 14 parts, 5 columns, about 1240 px wide (5 columns).
+Limits: 14 parts. 4 columns fit in about 1240 px. A 5th column works, but the text gets small.
 
 ## design/flow.json
 

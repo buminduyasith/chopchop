@@ -13,7 +13,8 @@ design/options.md in 7 fixed sections. Picks change with --pick 2=B and are neve
                              "rows": {"Touches": "1 migration, 3 new files", "Undo": "Drop the table"},
                              "sketch": {a small high-level design: nodes and links, optional}}],
                 "recommended": "A", "reason": "...",
-                "picked": "A", "picked_by": "you|chopchop|lead", "concern": "..."}],
+                "picked": "A", "picked_by": "you|chopchop|lead", "concern": "...",
+                "picked_reason": "why the person picked it, when it differs"}],
    "for_lead": [{"text": "...", "owner": "ledger team"}],
    "parked": [{"text": "...", "why": "..."}]}
 
@@ -254,9 +255,10 @@ def decisions_table(data):
         others = "; ".join("%s. %s" % (x["key"], x["title"]) for x in c.get("options") or [] if x.get("key") != key)
         why = c.get("reason") or ""
         if c.get("picked") and c["picked"] != c.get("recommended"):
-            why = "Picked by %s. chopchop picked %s: %s" % (
-                "the lead" if c.get("picked_by") == "lead" else "the developer", c["recommended"],
-                c.get("concern") or c.get("reason") or "")
+            why = "Picked by %s%s. chopchop picked %s: %s" % (
+                "the lead" if c.get("picked_by") == "lead" else "the developer",
+                ", because %s" % str(c["picked_reason"]).strip().rstrip(".") if c.get("picked_reason") else "",
+                c["recommended"], c.get("concern") or c.get("reason") or "")
         elif not c.get("picked"):
             why += " Not picked yet."
         elif c.get("picked_by") == "chopchop":

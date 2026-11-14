@@ -39,7 +39,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_spec.py --prepare <ref> --json
 - A repo with no profile (`_chopchop/repos/<repo>.md`): its tests have no run command. Offer
   to make it with `/chopchop:code --profile <repo>`, and use the commands it finds.
 - Helper settings not set: ask the 3 helper questions once, the way the design skill does,
-  even with `--auto`. Then `--plan <size> --repos <repos>` and say its line.
+  even with `--auto`. Then `--plan <size> --repos <repo1,repo2>` and say its line.
 
 ## 2. Read the code
 
@@ -85,7 +85,7 @@ Fill `spec/spec.json` as `SCHEMA.md` says:
   shows it was met (with a real value), and at least one Given/When/Then example. Put the
   error cases in examples too.
 - **repos**: per repo, where new files go, names copied from the neighbors, an example test
-  name, the style rules that apply, and what not to do.
+  name, the style rules that apply, what not to do (`do_not`), and the trap names no code may use (`forbid`).
 - **contracts**: every request, response, event, shared type or table that two packages share,
   with an exact example.
 - **packages**: the build plan. Follow `references/code.md`, and these rules:

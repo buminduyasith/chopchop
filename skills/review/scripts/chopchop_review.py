@@ -68,11 +68,39 @@ def task_setup(args):
     return repo, ctx["repo"], base, extra, lambda n: feature.path / "work" / "reviews" / ("%s-r%d" % (task.id, n))
 
 
+def team_rules(repo, workspace=None):
+    """The style files and profile chopchop.yaml sets for this repo, when there is a workspace."""
+    try:
+        from chopchoplib.config import find_workspace, load_config
+        import os
+        here = os.getcwd()
+        try:
+            os.chdir(str(repo))
+            ws = find_workspace(workspace)
+        finally:
+            os.chdir(here)
+        cfg = load_config(ws)
+        sys.path.insert(0, str(CODE_SCRIPTS))
+        import chopchop_code
+        from codelib import profile
+    except Exception:  # no workspace, or no code skill: a plain review
+        return None, [], None
+    paths, _ = chopchop_code.chopchop_tasks.repos_of(cfg, ws)
+    for name, raw in paths.items():
+        if chopchop_code.chopchop_tasks.repo_dir(ws, raw).resolve() == repo.resolve():
+            _, options = chopchop_code.repo_of(ws, cfg, name)
+            style = [x["path"] for x in chopchop_code.style_files(repo, options, ws) if x["exists"]]
+            prof = profile.path_for(ws, name)
+            return name, style, str(prof) if prof.is_file() else None
+    return None, [], None
+
+
 def plain_setup(args):
     repo = review.toplevel(Path(args.repo or ".").expanduser().resolve())
-    extra = {"task": None, "task_file": None, "style": [], "profile": None,
+    name, style, prof = team_rules(repo, args.workspace)
+    extra = {"task": None, "task_file": None, "style": style, "profile": prof,
              "guides": [str(repo / g) for g in review.GUIDES if (repo / g).is_file()]}
-    return repo, repo.name, None, extra, lambda n: review.git_dir(repo) / "chopchop-review" / ("r%d" % n)
+    return repo, name or repo.name, None, extra, lambda n: review.git_dir(repo) / "chopchop-review" / ("r%d" % n)
 
 
 def earlier(folder_of, n):

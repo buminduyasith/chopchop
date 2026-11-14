@@ -103,11 +103,13 @@ def detect(cwd):
     if top and is_repo(top):
         repos.append(repo_facts(top))
         parent = Path(top).parent
-        for sib in sorted(parent.iterdir()):
-            if len(repos) >= 12:
-                break
-            if sib.is_dir() and sib != Path(top) and not sib.name.startswith(".") and (sib / ".git").exists():
-                repos.append(repo_facts(sib))
+    else:
+        parent = cwd  # a folder that holds the repos: look at its children
+    for sib in sorted(parent.iterdir()):
+        if len(repos) >= 12:
+            break
+        if sib.is_dir() and sib != Path(top or "/nonexistent") and not sib.name.startswith(".") and (sib / ".git").exists():
+            repos.append(repo_facts(sib))
     votes = Counter(b for r in repos for b in r["base_candidates"])
     base = next((b for b in BASE_CANDIDATES if votes.get(b)), None)
     locations = []
@@ -117,7 +119,8 @@ def detect(cwd):
             locations.append({"path": str(Path(top).parent / WORKSPACE_DIR),
                               "why": "next to all the repos, so every repo finds it"})
     else:
-        locations.append({"path": str(cwd / WORKSPACE_DIR), "why": "in this folder"})
+        locations.append({"path": str(cwd / WORKSPACE_DIR),
+                          "why": "next to all the repos, so every repo finds it" if repos else "in this folder"})
     config = None
     if existing:
         config = parse_yaml((existing / CONFIG_FILE).read_text(encoding="utf-8")) or {}

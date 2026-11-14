@@ -33,6 +33,8 @@ def task_text(tid, slug, repo, wave=1, deps=(), touches=(), do_not=""):
     meta = {"id": tid, "title": slug.replace("-", " ").title(), "repo": repo, "wave": wave, "size": "S",
             "status": "todo", "owner": None, "depends_on": list(deps), "touches": list(touches),
             "stories": ["PAY-121"], "pr": None}
+    if "LegacyMoney" in do_not:
+        meta["forbid"] = ["LegacyMoney"]
     return features.render_front_matter(meta) + (
         "# %s\n\n## Goal\n\nIt works.\n\n## Done when\n\n- [ ] Unit test `does_the_thing`: it works.\n\n"
         "## Do not change\n\n%s- Contracts from earlier tasks.\n\n## Branch\n\n_Written by chopchop._\n" % (tid, do_not))
@@ -211,7 +213,8 @@ class LoopTest(Base):
         self.assertIn("Next:     nothing left to build.", self.auto("--next"))
 
         out = self.auto("--finish")
-        self.assertIn("app            pushed · feature/001/build (2 commits)", out)
+        self.assertIn("app            pushed, back on dev · feature/001/build (2 commits)", out)
+        self.assertEqual(git(app, "branch", "--show-current"), "dev")
         self.assertIn("web            not pushed: waits for T03", out)
         self.assertIn("open a draft PR from each pushed build branch into feature/001-refunds", out)
         self.assertEqual(git(self.root / "app.git", "log", "-1", "--format=%s", "feature/001/build"), "T02 Refund Api")
@@ -242,6 +245,15 @@ class LoopTest(Base):
         self.assertIn("Next:     nothing left to build.", self.auto("--next"))
         self.assertIn("not pushed: waits for T01", self.auto("--finish"))
         self.assertIn("Next:     a person decides on T01.", self.auto("--status"))
+
+
+class SubjectTest(unittest.TestCase):
+    def test_keeps_the_repo_commit_style(self):
+        f = chopchop_auto.task_subject
+        self.assertEqual(f("T01", "feat(orders): add refund status"), "feat(orders): add refund status (T01)")
+        self.assertEqual(f("T01", "T01 feat(orders): add refund status"), "feat(orders): add refund status (T01)")
+        self.assertEqual(f("T01", "add refund status"), "T01 add refund status")
+        self.assertEqual(f("T01", "T01 add refund status"), "T01 add refund status")
 
 
 class TaskReviewTest(Base):

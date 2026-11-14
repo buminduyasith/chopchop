@@ -76,6 +76,13 @@ class Base(unittest.TestCase):
 
 
 class DetectTest(Base):
+    def test_detect_from_the_folder_that_holds_the_repos(self):
+        os.chdir(str(self.root))
+        data = json.loads(self.cli("--detect", "--json"))
+        self.assertEqual([r["name"] for r in data["repos"]], ["payments-api", "payments-web"])
+        self.assertEqual(data["suggested_base"], "dev")
+        self.assertEqual(data["workspace_options"][0]["path"], str(self.root.resolve() / "_chopchop"))
+
     def test_detect_finds_repos_branches_and_styles(self):
         data = json.loads(self.cli("--detect", "--json"))
         self.assertEqual([r["name"] for r in data["repos"]], ["payments-api", "payments-web"])

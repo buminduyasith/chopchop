@@ -49,7 +49,7 @@ With `agents.max: 0`, or with only one repo to read, read it yourself. Tell the 
 in one line first, such as "Reading 4 repos with 3 explorers at a time."
 
 Pass `model` and `effort` on each call from the settings (`calls.explorer` in
-`chopchop_design.py --prepare --json`). Leave a value out when it is `inherit`. Give each
+the `--prepare --json` output above). Leave a value out when it is `inherit`. Give each
 explorer this brief, filled in:
 
 > Mode: system. Repo: `<name>` at `<path>`. Mode for this repo: `<full or refresh>`.

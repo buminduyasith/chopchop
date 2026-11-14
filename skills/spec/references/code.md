@@ -12,7 +12,9 @@ the way the repo already writes code.
   `RefundService`. `V41__order_cancellations.sql` gives `V42__refunds.sql`.
 - **test_example**: one real test name from the repo, so new tests are named the same way.
 - **style**: the rules from the team's style file that this feature touches, quoted.
-- **do_not**: the traps. Put code names in backticks: the script checks no sketch uses them.
+- **do_not**: the traps, in plain words. **forbid**: the code names of those traps (`["orderHelpers"]`). The
+  script checks no sketch uses them, and auto checks no commit adds them. Only list names that are
+  wrong everywhere: never a safe name like the feature's own field.
 
 ## Per package
 

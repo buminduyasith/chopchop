@@ -94,7 +94,7 @@ question and answer in `work/answers.json` (shape in SCHEMA.md).
 ## 6. Deep read
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --plan <size> --repos <repos it touches> [--no-choices]
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --plan <size> --repos <repo1,repo2> [--no-choices]
 ```
 
 Say its line to the user, such as "Using 4 helpers: 2 explorers (payments-api, web-app),
@@ -125,7 +125,7 @@ options.md first" as the last option of the first question.
   and end the run.
   The next `/chopchop:design` goes on from the picks.
 - A pick that differs from yours: say your concern once, in one line, record it in
-  `concern`, and re-check the choices that depend on it.
+  `concern`, put the person's own reason in `picked_reason`, and re-check the choices that depend on it.
 - "You decide": pick yours with `picked_by: "chopchop"`. It shows as an assumption.
 
 Write the picks into `work/options.json` (`picked`, `picked_by`).

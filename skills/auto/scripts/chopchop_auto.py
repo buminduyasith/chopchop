@@ -22,6 +22,7 @@ Needs the code and tasks skills next to this one. Standard library only. Python 
 
 import argparse
 import json
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -47,6 +48,7 @@ RUN_DIR = "auto"
 REPORT = "report.json"
 ACTIVE = ("building", "reviewing", "fixing", "ready")
 PR_MODES = ("draft", "ready", "push")
+CONVENTIONAL = re.compile(r"^[a-z]+(\([^)]*\))?!?: \S")
 UsageError = chopchop_code.UsageError
 KEEP = chopchop_code.KEEP
 now = review.now
@@ -145,6 +147,24 @@ def own_pending(path, ws):
         return items
     prefix = str(inside).replace("\\", "/").rstrip("/") + "/"
     return [x for x in items if not (x["path"] + "/").startswith(prefix)]
+
+
+def accepted(feature):
+    """Risks the lead accepted and the spec's assumptions, so the reviewer does not raise them as new."""
+    out = []
+    try:
+        spec = json.loads((feature.path / "spec" / "spec.json").read_text(encoding="utf-8"))
+        out += [str(a) for a in spec.get("assumptions") or []]
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        from chopchoplib import diagrams
+        flow = json.loads((feature.path / "design" / "flow.json").read_text(encoding="utf-8"))
+        out += ["Accepted risk, message %s (%s): %s" % (r["n"], r["question"], r["answer"])
+                for r in diagrams.failures(flow) if r.get("state") == "risk"]
+    except (OSError, ValueError, KeyError, AttributeError):
+        pass
+    return out
 
 
 def read_verify(feature, tid):
@@ -353,6 +373,7 @@ def cmd_start(args, ws):
         return 1
     lines = []
     for name, r in plan["repos"].items():
+        r["was_on"] = chopchop_code.current_branch(Path(r["path"]))
         action = open_build_branch(Path(r["path"]), r["build_branch"], r["feature_branch"], r["online"])
         lines.append("Branch:   %s %s in %s" % (action, r["build_branch"], name))
     s = plan["settings"]
@@ -362,7 +383,8 @@ def cmd_start(args, ws):
         "options": {"rounds": s["rounds"], "pr": s["pr"], "reviewer_model": s["reviewer_model"],
                     "step": bool(args.step), "max": args.max, "only": ids(args.only), "repo": args.repo},
         "repos": {n: {"path": r["path"], "build_branch": r["build_branch"], "online": r["online"],
-                      "paused": None, "pushed": None, "pr": None} for n, r in plan["repos"].items()},
+                      "paused": None, "pushed": None, "pr": None, "was_on": r.get("was_on")}
+                  for n, r in plan["repos"].items()},
         "queue": plan["queue"], "current": None,
         "tasks": {tid: {"title": plan["titles"][tid], "repo": plan["task_repo"][tid], "state": "queued", "round": 0,
                         "asked": [], "asked_total": 0, "parked": [], "left": [], "fixed": 0} for tid in plan["queue"]},
@@ -439,7 +461,7 @@ def write_brief(run, tid, ctx):
     example = {"task": tid, "ok": True, "blocked": None, "files": ["path/of/each/file/you/changed"],
                "tests": ["the_test_names_you_wrote"],
                "notes": "1 to 3 lines later tasks need: what you added and where.",
-               "commit": "%s <subject in this repo's commit style>" % tid}
+               "commit": "<subject in this repo's commit style; the task id is added for you>"}
     lines += ["## When you finish", "", "Write `%s`:" % (d / REPORT), "", "```json",
               json.dumps(example, indent=2), "```", "",
               "`blocked` is null, or one line on why the task cannot be built as written. Then stop."]
@@ -532,7 +554,8 @@ def cmd_review(args, ws):
             "style": [s["path"] for s in ctx["style"] if s["exists"]],
             "guides": [str(path / g) for g in ctx["guides"]],
             "profile": ctx["profile"]["path"] if ctx["profile"]["exists"] else None,
-            "parked": [review.one_line(p) for p in t["parked"]], "fixed_last": t["asked"]}
+            "parked": [review.one_line(p) for p in t["parked"]], "fixed_last": t["asked"],
+            "accepted": accepted(run.feature)}
     pack = review.write_pack(run.dir(tid) / ("review-%d" % t["round"]), info, review.pending_diff(path, files))
     t.update(state="reviewing", pack=str(pack))
     run.save()
@@ -637,8 +660,7 @@ def cmd_commit(args, ws):
         return 1
     report = read_report(run, tid)
     subject = (args.message or report.get("commit") or "%s %s" % (tid, t["title"])).strip().splitlines()[0]
-    if tid not in subject:
-        subject = "%s %s" % (tid, subject)
+    subject = task_subject(tid, subject)
     git = chopchop_code.git
     git(path, "add", "-A", "--", *[f["path"] for f in files], check=True)
     code, out, err = git(path, "commit", "-q", "-m", subject)
@@ -660,6 +682,14 @@ def cmd_commit(args, ws):
     emit(args, {"task": tid, "commit": sha, "subject": subject, "fixed": t["fixed"], "parked": len(t["parked"]),
                 "left": len(t["left"])}, lines)
     return 0
+
+
+def task_subject(tid, subject):
+    """Keep the repo's style: 'feat(orders): add x (T01)' for conventional commits, else 'T01 add x'."""
+    rest = subject[len(tid):].strip() if subject.startswith(tid + " ") else subject
+    if CONVENTIONAL.match(rest):
+        return rest if tid in rest else "%s (%s)" % (rest, tid)
+    return subject if tid in subject else "%s %s" % (tid, subject)
 
 
 def ids_or_paths(text):
@@ -763,13 +793,17 @@ def cmd_finish(args, ws):
                 else:
                     r["pushed"] = now()
                     row["result"] = "pushed"
+        back = r.get("was_on")
+        if back and not r.get("paused") and back != r["build_branch"] and not own_pending(Path(r["path"]), ws):
+            if chopchop_code.git(Path(r["path"]), "checkout", "-q", back)[0] == 0:
+                row["result"] += ", back on %s" % back
         lines.append("%-14s %s · %s (%d commits)%s" % (name, row["result"], r["build_branch"], len(done),
                                                        " · PR text: %s" % row["pr_file"] if row.get("pr_file") else ""))
     if all(not r.get("paused") for r in st["repos"].values()):
         st["finished"] = now()
     run.save()
     mode = st["options"]["pr"]
-    pushed = [x for x in rows if x.get("result") == "pushed"]
+    pushed = [x for x in rows if str(x.get("result", "")).startswith("pushed")]
     if pushed and mode != "push":
         lines.append("PRs:      open a %sPR from each pushed build branch into %s, with the title and text from its PR "
                      "file. Then --pr <repo> <url>." % ("draft " if mode == "draft" else "", st["feature_branch"]))
