@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "chopchop",
-      "source": "./",
+      "source": {"source": "github", "repo": "buminduyasith/chopchop", "ref": "v0.10.1"},
       "description": "One command from a Jira key or an idea to merged PRs: people approve the brief, design and spec, agents build, review and fix, with a live dashboard."
     }
   ]

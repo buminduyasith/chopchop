@@ -26,7 +26,17 @@ def save():
     json.dump(state, open(state_path, "w"))
 if args[:3] == ["plugin", "list", "--json"]:
     print(json.dumps(state["installed"])); save(); sys.exit(0)
+known_path = os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "plugins", "known_marketplaces.json")
+known = json.load(open(known_path)) if os.path.exists(known_path) else {}
+if args[:3] == ["plugin", "marketplace", "add"]:
+    repo, _, ref = args[3].partition("#")
+    known["chopchop"] = {"source": dict({"source": "github", "repo": repo}, **({"ref": ref} if ref else {}))}
+    json.dump(known, open(known_path, "w"))
+    print(json.dumps({"command": "marketplace-add", "outcome": "ok", "marketplace": "chopchop"}))
+    save(); sys.exit(0)
 if args[:3] == ["plugin", "marketplace", "update"]:
+    if args[3] not in known:
+        print("Marketplace '%s' not found" % args[3], file=sys.stderr); save(); sys.exit(1)
     ok = state.get("market_ok", True)
     print(json.dumps({"command": "marketplace-update", "outcome": "ok" if ok else "error",
                       "message": "Successfully updated" if ok else "network down"}))
@@ -38,13 +48,28 @@ if args[:2] == ["plugin", "update"]:
     here = os.path.realpath(os.getcwd())
     row = next(p for p in state["installed"] if p["id"] == pid and p["scope"] == scope
                and (not p.get("projectPath") or os.path.realpath(p["projectPath"]) == here))
-    old, new = row["version"], state["latest"]
+    # Like the real CLI: a marketplace pinned to a release tag installs that release.
+    ref = known.get("chopchop", {}).get("source", {}).get("ref")
+    old, new = row["version"], ref.lstrip("v") if ref else state["latest"]
     row["version"] = new
     print(json.dumps({"command": "update", "outcome": "ok", "oldVersion": old, "newVersion": new,
                       "updateOutcome": "up_to_date" if old == new else "updated", "message": "done"}))
     save(); sys.exit(0)
 print("unknown command", args, file=sys.stderr); save(); sys.exit(2)
 '''
+
+FAKE_GIT = r'''#!/usr/bin/env python3
+import json, os, sys
+state = json.load(open(os.environ["FAKE_CLAUDE_STATE"]))
+if sys.argv[1:2] == ["ls-remote"]:
+    for i, v in enumerate(state.get("tags", ["0.4.0", "0.5.0"])):
+        print("%040x\trefs/tags/v%s" % (i + 1, v))
+    print("%040x\trefs/tags/not-a-release" % 99)
+    sys.exit(0)
+sys.exit(2)
+'''
+
+ROOT = HERE.parents[2]
 
 
 class UpdateTest(unittest.TestCase):
@@ -56,6 +81,9 @@ class UpdateTest(unittest.TestCase):
         fake = bin_dir / "claude"
         fake.write_text(FAKE)
         fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        fake_git = bin_dir / "git"
+        fake_git.write_text(FAKE_GIT)
+        fake_git.chmod(fake_git.stat().st_mode | stat.S_IEXEC)
         self.state = root / "state.json"
         self.config = root / "config"
         (self.config / "plugins").mkdir(parents=True)
@@ -128,6 +156,63 @@ class UpdateTest(unittest.TestCase):
                            "projectPath": str(gone)}], "0.10.0")
         self.assertIn("project folder %s no longer exists" % gone, self.cli(code=1))
         self.assertFalse(any(c[:2] == ["plugin", "update"] for c in self.calls()))
+
+    def known(self):
+        return json.loads((self.config / "plugins" / "known_marketplaces.json").read_text())["chopchop"]["source"]
+
+    def test_version_pins_and_latest_unpins(self):
+        settings = self.config / "settings.json"
+        settings.write_text(json.dumps({"theme": "dark", "extraKnownMarketplaces": {"chopchop": {
+            "source": {"source": "github", "repo": "buminduyasith/chopchop"}}}}))
+        self.write_state([{"id": "chopchop@chopchop", "version": "0.5.0", "scope": "user"}], "0.5.0")
+        out = self.cli("--version", "v0.4.0")
+        self.assertIn("Updated:   chopchop@chopchop 0.5.0 -> 0.4.0 (scope user)", out)
+        self.assertIn("pinned to release 0.4.0", out)
+        self.assertEqual(self.known()["ref"], "v0.4.0")
+        data = json.loads(settings.read_text())
+        self.assertEqual(data["extraKnownMarketplaces"]["chopchop"]["source"]["ref"], "v0.4.0")
+        self.assertEqual(data["theme"], "dark")
+        self.assertTrue((self.config / "settings.json.bak").exists())
+        check = self.cli("--check")
+        self.assertIn("pinned to v0.4.0", check)
+        self.assertIn("Latest:    release 0.5.0", check)
+        out = self.cli()
+        self.assertIn("0.4.0 -> 0.5.0", out)
+        self.assertIn("follows the latest release", out)
+        self.assertNotIn("ref", self.known())
+        self.assertNotIn("ref", json.loads(settings.read_text())["extraKnownMarketplaces"]["chopchop"]["source"])
+        self.assertIn("follows the latest release", self.cli("--check"))
+
+    def test_project_settings_pin(self):
+        proj = Path(self.tmp.name) / "proj"
+        (proj / ".claude").mkdir(parents=True)
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"extraKnownMarketplaces": {"chopchop": {
+            "source": {"source": "github", "repo": "buminduyasith/chopchop"}}}}))
+        self.write_state([{"id": "chopchop@chopchop", "version": "0.5.0", "scope": "project",
+                           "projectPath": str(proj)}], "0.5.0")
+        self.assertIn("0.5.0 -> 0.4.0 (scope project: %s)" % proj, self.cli("--version", "0.4.0"))
+        data = json.loads((proj / ".claude" / "settings.json").read_text())
+        self.assertEqual(data["extraKnownMarketplaces"]["chopchop"]["source"]["ref"], "v0.4.0")
+
+    def test_unknown_or_bad_version(self):
+        self.assertIn("There is no release 9.9.9. Releases: 0.5.0, 0.4.0", self.cli("--version", "9.9.9", code=2))
+        self.assertIn("is not a version", self.cli("--version", "newest", code=2))
+        self.assertFalse(any(c[:2] == ["plugin", "update"] for c in self.calls()))
+
+    def test_missing_marketplace_is_added(self):
+        (self.config / "plugins" / "known_marketplaces.json").write_text("{}")
+        self.assertIn("0.4.0 -> 0.5.0", self.cli())
+        self.assertIn(["plugin", "marketplace", "add", "buminduyasith/chopchop", "--json"], self.calls())
+        (self.config / "plugins" / "known_marketplaces.json").write_text("{}")
+        self.assertIn("0.5.0 -> 0.4.0", self.cli("--version", "0.4.0"))
+        self.assertIn(["plugin", "marketplace", "add", "buminduyasith/chopchop#v0.4.0", "--json"], self.calls())
+
+    def test_marketplace_points_at_this_release(self):
+        """The release bump sets both: the plugin version and the tag the marketplace installs."""
+        version = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())["version"]
+        market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
+        source = next(x for x in market["plugins"] if x["name"] == "chopchop")["source"]
+        self.assertEqual(source, {"source": "github", "repo": "buminduyasith/chopchop", "ref": "v%s" % version})
 
     def test_plugin_dir_and_failures(self):
         self.write_state([{"id": "chopchop@inline", "version": "0.4.0", "scope": "session"}], "0.5.0")

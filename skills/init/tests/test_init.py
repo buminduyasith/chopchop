@@ -208,7 +208,9 @@ class PluginTest(unittest.TestCase):
         market = json.loads((root / ".claude-plugin" / "marketplace.json").read_text())
         self.assertEqual(manifest["name"], "chopchop")
         self.assertEqual(market["plugins"][0]["name"], manifest["name"])
-        self.assertEqual(market["plugins"][0]["source"], "./")
+        # The marketplace installs the release tag of this version, never main (see skills/update).
+        self.assertEqual(market["plugins"][0]["source"], {"source": "github", "repo": "buminduyasith/chopchop",
+                                                          "ref": "v%s" % manifest["version"]})
         names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
         self.assertEqual(names, ["auto", "check", "code", "comments", "dashboard", "design", "diagram", "groom", "init", "learn",
                                  "review", "run", "spec", "stories", "tasks", "update"])

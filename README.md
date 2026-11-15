@@ -46,7 +46,8 @@ who opens a repo.
 
 | You type | What it does |
 | --- | --- |
-| `/chopchop:update` | Gets the latest version. Then run `/reload-plugins`. |
+| `/chopchop:update` | Gets the latest release (never unreleased work on main). Then run `/reload-plugins`. |
+| `/chopchop:update --version 0.10.1` | Installs that release and stays on it. |
 | `/chopchop:update --auto on` | Lets Claude Code update chopchop by itself from now on. |
 
 ## Quick start
@@ -308,8 +309,13 @@ claude plugin eval . --scaffold       # agent evals on the sample project (slow:
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.
 The plan behind version 2 is in `docs/v2-spec.md`, the trial runs in `docs/v2-trials.md`, the
 dashboard's look in `docs/ui-style-guide.md`, and the picture above comes from
-`docs/images/make_how_it_works.py` (run it again after changing the steps). To release, bump `version` in
-`.claude-plugin/plugin.json`: installed copies update only when it changes.
+`docs/images/make_how_it_works.py` (run it again after changing the steps).
+
+To release: set the new `version` in `.claude-plugin/plugin.json` and the same tag as `ref` in
+`.claude-plugin/marketplace.json` (`"ref": "v0.10.2"` for 0.10.2), commit, push, then create
+the `v0.10.2` tag and GitHub release on that commit. Installed copies only move when the
+version changes, and the marketplace only installs release tags, so work on main between
+releases reaches nobody. `skills/update/tests` fails if the two numbers disagree.
 
 ## License
 
