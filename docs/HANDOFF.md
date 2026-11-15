@@ -354,7 +354,7 @@ Check:
 | A merged PR marks its tasks done. | A person merges, so a person still decides. |
 | Mermaid loads from a pinned CDN link in the browser. Design diagrams are drawn on the server. | No big library in the repo, and the main diagrams work offline. |
 | The dashboard is read only. Approvals happen in chat. | Simpler and safer. |
-| Version is 0.10.0. | Not released yet. Only the user decides when to push. |
+| Version is 0.10.1. | Released as the v0.10.1 GitHub release. Only the user decides when to release. |
 
 ## 8. Known risks
 
