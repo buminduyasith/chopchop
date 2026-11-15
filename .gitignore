@@ -4,3 +4,7 @@ __pycache__/
 
 # claude plugin eval results
 evals/results/
+.ruff_cache/
+_chopchop/.dashboard.json
+_chopchop/.dashboard.log
+docs/handoff/trial-logs/

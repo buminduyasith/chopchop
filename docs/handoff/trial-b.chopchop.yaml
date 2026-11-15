@@ -1,0 +1,24 @@
+# chopchop team config for the v2 trial (humanize, a real open source Python library). No secrets here.
+
+team: humanize
+base_branch: main
+
+repos:
+  humanize: humanize
+
+branches:
+  feature: "feature/{key}-{slug}"
+  task: "feature/{key}/{task}-{slug}"
+  build: "feature/{key}/build"
+
+auto:
+  rounds: 2
+  pr: push
+
+dashboard:
+  open: false
+
+agents:
+  max: 3
+  model: inherit
+  effort: inherit

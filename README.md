@@ -1,12 +1,24 @@
 # chopchop
 
-A Claude Code plugin that cuts big features into small, bite-size tasks and builds each one
-end to end. A small team of people and AI agents can work on one feature in parallel, and
-every PR stays small enough for a person to review in one sitting.
+A Claude Code plugin that takes a feature from a Jira key, or a one-line idea, to merged PRs.
+People decide what to build and approve it. Agents read the code, build, review, test and fix.
 
 ```
-learn the system  ->  stories  ->  design (a lead approves)  ->  spec  ->  tasks  ->  code one task, or auto: every task, reviewed  ->  PR  ->  prove  ->  done
+/chopchop:run PAY-120            or            /chopchop:run let customers ask for a refund
+
+groom -> brief -> design -> spec -> tasks -> build -> review -> done
+          you      lead     you              agents   reviewers
 ```
+
+- **One command.** `/chopchop:run` finds the next step and does it. It stops only where a person
+  must decide.
+- **Three yeses.** You approve the brief. The lead approves the design. You approve the spec.
+- **Agents do the loop.** Each task gets a fresh agent to build it and another to review it,
+  then fixes, tests and one commit. One PR per repo.
+- **A live dashboard.** Every feature, every document and every task, updated as it happens.
+- **Review comments explained.** Each PR comment in simple English: real problem or false
+  alarm, the fix, what it touches, and a reply you can send.
+- **Markdown only, simple English, a Summary on top of every file.**
 
 chopchop holds no logins and talks to no tracker or git host by itself. It uses what your
 team already has in the session: a connected tool (an MCP server), a CLI that is already
@@ -27,254 +39,146 @@ who opens a repo.
 
 ### Update
 
-No need to remove and install again:
-
 ```
 /chopchop:update              get the latest version, then run /reload-plugins
 /chopchop:update --auto on    let Claude Code update chopchop by itself from now on
 ```
 
-Auto-update is off by default for marketplaces that are not official. With it on, Claude
-Code checks in the background and tells you when a new version is ready. Without the
-plugin's own command: `claude plugin marketplace update chopchop`, then
-`claude plugin update chopchop@chopchop`.
-
 ## Quick start
 
-| Step | Command | Who | How often |
-| --- | --- | --- | --- |
-| 1. Set up | `/chopchop:init` | one person | once per team |
-| 2. Learn | `/chopchop:learn` | one person | once, then it refreshes itself |
-| 3. Stories | `/chopchop:stories PAY-120` | lead | per epic (optional) |
-| 4. Design | `/chopchop:design refunds for card payments` | developer | per feature |
-| 5. Approve | `/chopchop:design --approve "Asha"` | developer, after the review | per feature |
-| 6. Spec | `/chopchop:spec 1` | developer | per feature |
-| 7. Check | `/chopchop:check 1` | lead | per design or spec change |
-| 8. Tasks | `/chopchop:tasks 1` | lead | per feature |
-| 9. Board | `/chopchop:tasks --status` | anyone | any time |
-| 10. Build | `/chopchop:code T02`, or every task: `/chopchop:auto 1` | developer | per task, or per feature |
-| 11. Task done | `/chopchop:code --done T02` | developer | per task |
-| 12. Feature done | `/chopchop:spec --done --by "Asha"` | lead | per feature |
-| Review | `/chopchop:review` | anyone | before a commit, any repo |
-| Update | `/chopchop:update` | everyone | when a new version is out |
+| You type | What happens |
+| --- | --- |
+| `/chopchop:init` | Once per team. Asks where to keep files, the base branch, the repos and their code style. |
+| `/chopchop:run PAY-120` | Gets the stories, checks them against the code, asks you a few questions, writes the brief. Then it waits for your yes. |
+| `approve` | The design gets written. It waits for the lead. |
+| `approve Asha` | The spec gets written. It waits for your yes. |
+| `approve` | Tasks are cut and the build loop runs. One PR per repo at the end. |
+| `/chopchop:comments` | When reviewers comment: every comment explained, grouped and planned. |
+| `/chopchop:run` | Any time, in any chat: carries on from where things stood. |
 
-1. **`/chopchop:init`** looks at your repos and asks a few questions, with click options:
-   - where to keep its files
-   - the base branch you work from
-   - which repos the team works in
-   - each repo's code style: use the style file it found, write one from the code, or none
+Everything is saved in files, so you can close the chat at any point.
 
-   - how many helpers (subagents) chopchop may run at once, with which model and effort
+## The steps
 
-   It writes `_chopchop/chopchop.yaml` and can also map the system and learn each repo's
-   build, test and PR steps.
-2. **`/chopchop:learn`** maps every repo: APIs, events, tables, outside systems, owners from
-   CODEOWNERS, the patterns each repo follows, and how they connect. Later runs read only
-   what git diff says changed.
-3. **`/chopchop:stories PAY-120`** copies an epic and its stories, as they are, into
-   `requirement.md`, from whatever tracker tool you have. Run `-rs 1` later to see what
-   changed.
-4. **`/chopchop:design <idea>`** asks at most 2 short rounds of questions, with answers to
-   pick, and writes a short design a lead can approve: a high-level design of the parts and a
-   main flow of the steps,
-   the real choices kept in `options.md`, failure answers for every arrow, and a citation of
-   the code for every claim. It also writes `feature.html`: the design, the choices, slides
-   with speaker notes, and a review message to paste into chat. `--auto` asks nothing.
-5. **`/chopchop:spec 1`** turns the approved design into the full plan to build it, in
-   simple English with no length cap: the rules with examples, every file per repo, the real
-   code to copy, the existing methods to reuse, a sketch of the new code in the repo's own
-   style, every unit test by name, the end-to-end journeys, and work packages. It checks all
-   of it against the code, and tracks each test from planned to built to proved.
-6. **`/chopchop:check 1`** compares the design with the
-   requirements and lists conflicts, gaps, extras and questions, with quotes from both sides
-   and a coverage table. `/chopchop:check --req <files> --design <files>` works on any
-   files, with no feature.
-7. **`/chopchop:tasks 1`** cuts the spec into tasks, one per work package, in waves:
-   contracts first, then slices that run in parallel, then one prove task per end-to-end
-   journey. Each task carries its rules, contract, code to copy and test names. It suggests
-   a feature branch. Say yes, and it creates and pushes the branch. It also takes design or
-   spec files you hand it: `/chopchop:tasks <files or folder>`.
-8. **`/chopchop:code T02`** does one task in one go: claims it, cuts its branch, writes the
-   unit tests and code in the repo's style, runs build, lint and tests, pushes, opens the PR
-   your team's usual way, and sets it to in-review. `T02 -p` only previews the plan.
-   Or **`/chopchop:auto 1`** builds every task, one at a time, each in a fresh agent: tests
-   and code, checks, a review of the pending changes, fixes that fit the spec, then one
-   commit. At the end it opens one PR per repo into the feature branch.
-9. **`/chopchop:code --done T02`**: a person marks it done after the merge.
-10. **`/chopchop:spec --done --by "Asha"`**: a person sets the whole feature to done, only
-    when every test, journey and manual check is proved.
+| Step | What happens | Who says yes |
+| --- | --- | --- |
+| **Groom** | Agents check each story against the real code: does it fit, what it touches, what it clashes with, the work nobody wrote down. Then a short interview: a few questions with answers to pick. What you do not know becomes a ready-to-paste list for the BA. | |
+| **Brief** | What we build, in simple English, on one page. | you |
+| **Design** | For the lead, a 10 minute read: the parts, the main flow, the real choices, the risks. Every claim cites the code. | the lead |
+| **Spec** | For the agents: the rules with examples, every file, the code to copy, every test by name. | you |
+| **Tasks** | Small tasks, one repo each, in waves. | |
+| **Build** | Per task: a fresh agent builds, another reviews, fixes are made, checks run, one commit. | |
+| **Review** | PR comments are explained, grouped by cause, fixed together and answered. | reviewers merge |
+
+**Jira stories or your own idea?** Stories from the tracker are **locked**: chopchop never
+changes what the BA wrote, and every idea it has becomes a question. Your own idea is **open**:
+it suggests better ways and you pick.
 
 ## Commands
 
-### `/chopchop:init`
+### `/chopchop:run`
 
 | You type | What it does |
 | --- | --- |
-| (nothing) | Asks where to keep the files, the base branch, the repos, each repo's code style, and the helper settings. Writes `chopchop.yaml`. Offers to map the system and learn each repo's build, test and PR steps. |
+| `PAY-120`, a tracker link, or an idea in words | Starts the feature and takes it as far as it can go. |
+| a feature (`1`, `PAY-120`, `refunds`) | Carries on with that feature. |
+| (nothing) | Carries on. With several features, it lists them and who each waits for. |
+| `approve`, `approve Asha` | Your yes at a gate. For the design: who approved it. |
+| notes ("change the limit to 14 days") | Changes the document at the open gate, then asks again. |
+| `--auto` | No interview and no design questions. Guesses become listed assumptions. The three yeses still need a person. |
+| `--list` | Every feature: the step it is on and who it waits for. |
 
-Run it again any time. It keeps what you did not change and saves `chopchop.yaml.bak`.
-
-### `/chopchop:learn`
-
-| You type | What it does |
-| --- | --- |
-| (nothing) | Maps every new or changed repo with one explorer each, and writes `_chopchop/system/system-map.json` and `system-map.md`. |
-| `payments-api web-app` | Only those repos. |
-
-People can fix an entry in the JSON and mark it `"source": "person"`. chopchop never
-overwrites it. `/chopchop:design` refreshes the map by itself before it designs.
-
-### `/chopchop:design`
+### `/chopchop:dashboard`
 
 | You type | What it does |
 | --- | --- |
-| an idea, a file, or a pasted image | Learns the area, asks round 1 (intent), reads the code with helpers, writes `options.md`, asks round 2 (your picks), then draws the high-level design and the main flow (the diagram skill) and writes `design.md` and `feature.html`. |
-| the same, with `--auto` | No questions. Every pick it makes is listed as an assumption for the lead. |
-| (nothing) | Goes on from where it stopped. |
-| `"the lead's notes"` | When a design exists: changes it from the feedback and says what changed. |
-| `--pick 2=B` | Changes one choice in `options.md` and rewrites the design. No new research. |
-| `--approve "Asha"` | Records approved, approved with conditions, or changes needed. A person decides. |
-| `--open` | Opens `feature.html`. |
+| (nothing) | Starts the dashboard and opens it. `run` starts it for you. |
+| `--stop` | Stops it. |
+| `--status` | Says if it runs, and where. |
 
-`design.md` has 12 fixed sections, always in the same order, for a 10 minute read. A build
-step checks it: every story is in scope or out of scope, every message on the main flow
-answers what happens when it fails, is slow, runs twice or gets the wrong caller, every
-citation still matches the code, and the English stays plain. Missing helper settings are
-asked once, the first time, so there is no need to run init again.
+- **Home:** every feature as a card: its step, its tasks, who it waits for, and its Summary.
+  Filter by text, step, or who it waits for.
+- **A feature:** the steps on top, then Brief, Design, Spec, Changes, Tasks, Review and Activity.
+  **Compare** shows the design and the spec side by side.
+- **Changes:** for the tech spec, every file it will add, change or delete, as a folder tree per repo, like
+  your editor's file explorer: green A for new, amber M for changed, red D for deleted. Click a file to see why
+  it changes and which task changes it.
+- **Code:** coloured like VS Code.
+- **Tasks:** a board. Click a task to read it, with its diagrams.
+- **Live:** it updates by itself when a file changes.
 
-### `/chopchop:spec`
+It runs on your machine only (`127.0.0.1`), reads the `_chopchop` folder, and never changes
+anything.
 
-| You type | What it does |
-| --- | --- |
-| (nothing) or a feature | Reads the code in each repo, asks only what the code cannot answer, writes `spec.md` and `spec.json`, checks them against the code and adds a Spec tab to `feature.html`. |
-| the same, with `--auto` | No questions. Every guess is listed as an assumption. |
-| `--status` | What is planned, built (its task is merged) and proved (its checks passed). |
-| `--sign M1 --by "Asha"` | A person signs a manual check. |
-| `--done --by "Asha"` | A person sets the feature to done, when everything is proved. |
-
-`spec.md` has 21 sections in 4 parts: Understand (anyone, 10 minutes), Build, Prove, and Ship
-and track. Each section starts with an "In short" line. Code in the spec comes from the repo:
-every piece of code to copy is cited and checked, every reused method must exist where it is
-cited, new files go next to similar files, and test names follow the repo's own naming.
-
-### `/chopchop:diagram`
-
-Design uses it for its two pictures, and you can run it on its own to draw or fix one.
-
-| Picture | Shows | Looks like |
-| --- | --- | --- |
-| High-level design (`architecture.json`) | the parts, the repo each lives in, what talks to what | boxes grouped by repo, labeled lines, no numbers |
-| Main flow (`flow.json`) | the steps in time order, the error paths, a failure answer per step | a sequence: lanes, numbered arrows, dashed replies |
-
-You (or Claude) place each part on a grid. A script checks it (no line through a box, no part
-inside another repo's group, no step numbers on the structure), draws a clean picture for
-`feature.html` and writes the Mermaid copy for `design.md`.
-
-### `/chopchop:stories`
+### `/chopchop:comments`
 
 | You type | What it does |
 | --- | --- |
-| `PAY-120` (or a link) | Gets the epic and its stories with your existing tool, and writes `NNN-PAY-120-<title>/requirements/requirement.md`. If the epic already has a folder, it updates it and explains what changed. |
-| `PAY-120 --name refunds` | Same, with your own folder name. |
-| `-rs 1` / `-rs PAY-120` / `-rs all` | Fetches again and explains what changed. |
-| `--list` | All features. |
+| (nothing), or a feature | Finds the feature's PRs, reads every review comment, and explains each. |
+| a PR link | The same for one PR, even with no chopchop feature. |
+| `--fix` | Fixes the comments you chose, one group at a time, with a review before each commit. |
+| `--watch` | Keeps listening until the PRs are merged, and explains new comments as they come. |
+| `--replies` | Shows the reply drafts. It posts them only after your yes. |
 
-### `/chopchop:tasks`
+For each comment you see:
 
-| You type | What it does |
+| | |
 | --- | --- |
-| `design.md specs/` | Copies the design in, cuts the tasks, checks them, suggests the feature branch. On your yes, creates and pushes it in each repo. |
-| `--status` | Writes `status.md` and `board.html`, and opens the board. |
-| `--set T02 in-review` | Moves a task: `todo`, `in-progress`, `in-review`, `done`. |
-| `--list` | All features with their task counts. |
+| **In plain words** | what the reviewer means |
+| **Verdict** | a real problem, a false alarm, fair but not for this PR, a question |
+| **Why** | what in the code makes chopchop think so |
+| **Priority** | high, medium, low |
+| **Similar** | other comments with the same cause, in any PR or repo. They are fixed together, so one fix never undoes another. |
+| **Fix and impact** | what would change, and what else it touches |
+| **Reply** | a short, polite reply, ready to send |
 
-Every task fits one repo and one PR, can be tested with unit tests alone, and depends only
-on an earlier wave. A script checks this every time.
+Everything is on the dashboard's Review tab and in `comments.md`.
 
-### `/chopchop:check`
+### The single steps
 
-| You type | What it does |
+`run` uses these. Each also works on its own.
+
+| Command | What it does |
 | --- | --- |
-| (nothing) or a feature (`1`, `PAY-120`) | Compares the feature's `requirement.md` with its `design/` and writes `check.md`. |
-| `1 --design new-spec.md` | The feature's requirements against another design file. |
-| `--req brief.md stories/ --design design.md` | Any requirement and design files, no feature needed. |
+| `/chopchop:init` | Sets up `_chopchop/chopchop.yaml`. Safe to run again. |
+| `/chopchop:learn` | Maps every repo: APIs, events, tables, owners, patterns, how they connect. Later runs read only what changed. |
+| `/chopchop:groom <key, link, idea or feature>` | Research, interview, BA questions, the brief. `--auto` asks nothing. |
+| `/chopchop:stories PAY-120` | Only copies an epic and its stories in. `-rs 1` fetches again and explains what changed. |
+| `/chopchop:design <feature>` | Writes `design.md`. `"lead's notes"` changes it. `--pick 2=B` changes one choice. `--approve "Asha"` records the lead's yes. |
+| `/chopchop:spec <feature>` | Writes `spec.md` and `spec.json`. `--approve "Name"` records your yes. `--status` shows what is planned, built and proved. |
+| `/chopchop:check <feature>` | Compares the design with the requirements: conflicts, gaps, extras, questions. |
+| `/chopchop:tasks <feature>` | Cuts the spec into tasks and makes the feature branch after your yes. |
+| `/chopchop:auto <feature>` | The build loop. `--resume` carries on. `--status` shows the run. `--retry T02` restarts a stopped task. `--wave` pauses after each wave. |
+| `/chopchop:code T02` | One task by hand, up to an open PR. |
+| `/chopchop:review` | A fresh review of your pending changes, in any git repo. `--fix` applies the safe fixes. |
+| `/chopchop:diagram` | Draws or fixes the design's two pictures. |
+| `/chopchop:update` | Updates the plugin. |
 
-Each finding is a **conflict** (both cannot be true), **missing** (a requirement with no
-design), **extra** (design nobody asked for) or **question** (unclear), with a severity,
-quotes from both sides, a fix and who to ask. Every story and acceptance criterion gets a
-stable id (`PAY-121.AC2`), and a re-check shows what was fixed and what is new.
-`/chopchop:tasks` warns you when the last check was not ready.
-
-### `/chopchop:code`
-
-| You type | What it does |
-| --- | --- |
-| `T02` | The whole job in one go, up to an open PR. |
-| `T02 -p` | Preview: what it will build, which files and tests, which style, how the PR will be opened. Changes nothing. |
-| `--done T02` | Marks it done. Done is always set by a person. |
-| (nothing) | Tasks you can start now. |
-
-It stops to ask only when a task is blocked or unclear, a check keeps failing, or it finds
-no way to open the PR.
-
-### `/chopchop:auto`
-
-| You type | What it does |
-| --- | --- |
-| `1` | Builds every open task of feature 1, one at a time, after one yes. |
-| `1 --max 3` | Only the next 3 tasks. `--only T01,T02` and `--repo web-app` work too. |
-| `1 --step` | Pauses after each task so you can look. |
-| `--status` | Where the run is. |
-| `--resume` | Carries on, in this chat or a new one. |
-
-For each task:
+### The build loop
 
 ```
-pick  ->  build (fresh agent)  ->  check  ->  review (fresh agent)  ->  sort  ->  fix (at most 2 rounds)  ->  commit  ->  note
+pick  ->  build (fresh agent)  ->  check  ->  review (fresh agent)  ->  sort  ->  fix (at most 2 rounds)  ->  commit
 ```
 
-- **Branches.** One build branch per repo (`feature/{key}/build`), cut from the latest
-  feature branch. One commit per task. One PR per repo, into the feature branch, never into
-  the base branch.
-- **Review before commit.** The reviewer reads the pending changes, not a commit, and has not
-  seen how they were made.
-- **The spec decides.** Each finding is sorted. Fix now: bugs, lint, names, folders, language
-  mistakes, missing tests, style rules. Park: another approach, a changed contract or rule, a
-  new library, files outside the task. Parked ideas are never applied; they are listed in
-  the PR for the lead. Stop: something serious a person must decide. That repo waits, the
-  others go on.
-- **Small context.** Each task gets a fresh builder and a fresh reviewer. The chat keeps a few
-  lines per task. The run lives in `work/auto.json`, so a new chat carries on.
+- **Fresh context every task.** Each task gets a new builder and a new reviewer. The chat keeps
+  a few lines per task, and the run lives in `work/auto.json`, so a new chat carries on.
+- **Review before commit.** The reviewer reads the pending change and has not seen how it was
+  made.
+- **The spec decides.** Each finding is sorted. Fix now: bugs, lint, names, missing tests,
+  style rules. Park: another approach, a changed contract, a new library. Parked ideas are
+  never applied: they go in the PR text for the lead. Stop: something a person must decide.
+- **Few PRs.** One build branch per repo, one commit per task, one PR per repo into the
+  feature branch. A reviewer can go commit by commit.
+- **It stops and asks** when the spec would have to change, a check keeps failing, or a task
+  cannot be built as written.
 
-### `/chopchop:review`
+## Rules for every file
 
-| You type | What it does |
-| --- | --- |
-| (nothing) | Reviews the pending changes in this repo, new files too. Works in any git repo. |
-| `T02` | The same, also against the task and the spec. |
-| `--branch [base]` | Reviews this branch against its base. |
-| `--fix` | Also applies the fix-now findings, then reviews once more. |
-
-A fresh reviewer checks bugs, tests, fit with the repo's style and code, safety, and fit with
-the task. Findings are sorted into fix now, park and stop, the same way as in `auto`.
-
-### `/chopchop:update`
-
-| You type | What it does |
-| --- | --- |
-| (nothing) | Refreshes the chopchop marketplace and updates chopchop in every scope it is installed in. Then run `/reload-plugins`. |
-| `--check` | Shows the installed version and whether auto-update is on. |
-| `--auto on` / `--auto off` | Turns Claude Code's auto-update for chopchop on or off (asks first, since it changes your Claude settings). |
-
-## How it codes
-
-In this order, the first one wins:
-
-1. The repo's own **style file(s)** from `chopchop.yaml` (`style:`).
-2. The repo's guides: `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`.
-3. The repo **profile** (`_chopchop/repos/<repo>.md`), drafted from the code, CI and build
-   files the first time, then confirmed once by a person.
-4. The existing code nearby.
+1. **Markdown only.** The dashboard shows it nicely. A code block is only for real code, coloured like VS Code.
+   Trees, lists, messages and quotes are never put in a grey box.
+2. **A Summary first.** Every file starts with a few short lines: what, why, where it stands.
+3. **Simple English.** Short sentences, everyday words, no long dashes. The same goes for
+   chopchop's replies and questions.
 
 ## The `_chopchop` folder
 
@@ -286,17 +190,16 @@ _chopchop/
 ├── styles/payments-web.md           a code style written from the code (optional)
 ├── repos/payments-api.md            how to build, test and open PRs in that repo
 └── 001-PAY-120-refunds/             one folder per feature
-    ├── requirements/requirement.md  the epic and its stories
-    ├── design/                      design.md, options.md, architecture.json, flow.json
-    ├── spec/                        spec.md (for people) and spec.json (the facts tasks are cut from)
-    ├── work/                        answers, helper reports, approved copies, test results, the auto run
-    ├── feature.html                 the page: design, choices, spec, slides, review message
-    ├── check.md                     design vs requirements (from /chopchop:check)
-    └── tasks/
-        ├── plan.md                  waves, graph, branches
-        ├── status.md  board.html    the board (generated)
-        ├── changelog.md             changes found while building
-        └── T01-refund-contracts.md  one file per task
+    ├── requirements/
+    │   ├── requirement.md           the stories as the BA wrote them, or your idea as you said it
+    │   ├── grooming.md              what the code says, every question and its answer
+    │   └── brief.md                 what we build, in simple English (you approve it)
+    ├── design/                      design.md (the lead approves it), options.md, the two pictures
+    ├── spec/                        spec.md (you approve it) and spec.json
+    ├── tasks/                       T01-*.md, plan.md, status.md, changelog.md
+    ├── comments.md                  the PR review report
+    ├── check.md                     design vs requirements
+    └── work/                        answers, helper reports, the build run, the activity log
 ```
 
 ## `chopchop.yaml`
@@ -314,41 +217,47 @@ repos:                                # path is relative to the folder that hold
 branches:
   feature: "feature/{key}-{slug}"     # {key} = epic key, or the feature number
   task: "feature/{key}/{task}-{slug}"
-  build: "feature/{key}/build"      # /chopchop:auto: one per repo, one commit per task
+  build: "feature/{key}/build"        # the build loop: one per repo, one commit per task
 
-auto:                                 # /chopchop:auto (all optional)
+auto:                                 # the build loop (all optional)
   rounds: 2                           # review rounds per task, 1 to 3
   pr: draft                           # draft, ready, or push (you open the PRs)
+  pause: wave                         # leave out to run to the end; wave pauses after each wave
   reviewer_model: sonnet              # leave out to use the same model as the builder
 
+dashboard:                            # all optional
+  auto: true                          # false: /chopchop:run does not start it
+  open: true                          # false: do not open the browser
+  port: 4747
+
 agents:                               # helpers (subagents); asked once
-  max: 3                              # most at the same time; 0 = none. A small job uses fewer
+  max: 3                              # most at the same time; 0 = none
   model: inherit                      # inherit, sonnet, opus, haiku or fable
   effort: inherit                     # inherit, low, medium, high, xhigh or max
 ```
 
 ## Safety rules
 
-- It pushes only branches it created, with your own git login: the feature branch (once,
-  after you say yes), each task's own branch, and the auto build branches. Never the base
-  branch or main. Never force-push.
-- Task PRs go into the feature branch. It never merges anything.
-- It never resolves merge conflicts and never stashes or discards your changes.
+- People decide at the gates. chopchop never approves a document by itself.
+- It pushes only branches it created, with your own git login. Never the base branch or main.
+  Never force-push.
+- It never merges a PR, and never resolves merge conflicts, stashes or discards your changes.
+- It posts a reply on a PR only after your yes.
+- In locked mode it never changes what the BA wrote.
 - It never asks for, stores or sets up logins, tokens or tools.
-- Done is always set by a person.
+- The dashboard listens on your machine only and is read only.
 
 ## Without the plugin
 
 Copy the folders in `skills/` into a repo's `.claude/skills/`, and `agents/` into
-`.claude/agents/` (`update` is only for the plugin). `stories` and `tasks` work on their own.
-`check`, `code`, `init`, `learn`, `diagram`, `design`, `spec` and `review` need `tasks` next to them. `design` also needs `diagram`, and `auto` needs `code` and `tasks`. Every script also runs
-without an agent, for example:
+`.claude/agents/` (`update` is only for the plugin). Every other skill needs `tasks` next to
+it. Every script also runs without an agent, for example:
 
 ```sh
-python3 skills/init/scripts/chopchop_init.py --detect
-python3 skills/tasks/scripts/chopchop_tasks.py --status 1
-python3 skills/code/scripts/chopchop_code.py T02 --preview
-python3 skills/design/scripts/chopchop_design.py --build 1
+python3 skills/run/scripts/chopchop_run.py --list
+python3 skills/groom/scripts/chopchop_groom.py --status 1
+python3 skills/dashboard/scripts/chopchop_dashboard.py --start
+python3 skills/comments/scripts/chopchop_comments.py --status 1
 ```
 
 ## Try it on the sample
@@ -358,33 +267,23 @@ python3 evals/sample-project/setup.py --to /tmp/refunds
 cd /tmp/refunds && claude
 ```
 
-Then run `/chopchop:learn` and `/chopchop:design refunds for card payments`. The sample has 4
-small repos and a few traps: two error styles, a ledger service nobody mentions, and code that
-changed after it was cited.
+Then type `/chopchop:run PAY-120`. The sample has 4 small repos and a few traps: two error
+styles, a ledger service nobody mentions, and code that changed after it was cited.
 
 ## Develop
 
 ```sh
 claude --plugin-dir .                 # try local changes; /reload-plugins after each edit
 claude plugin validate . --strict
-(cd skills/stories && python3 -m unittest discover -s tests)
-(cd skills/tasks && python3 -m unittest discover -s tests)
-(cd skills/code && python3 -m unittest discover -s tests)
-(cd skills/init && python3 -m unittest discover -s tests)
-(cd skills/check && python3 -m unittest discover -s tests)
-(cd skills/update && python3 -m unittest discover -s tests)
-(cd skills/learn && python3 -m unittest discover -s tests)
-(cd skills/design && python3 -m unittest discover -s tests)
-(cd skills/diagram && python3 -m unittest discover -s tests)
-(cd skills/spec && python3 -m unittest discover -s tests)
-(cd skills/review && python3 -m unittest discover -s tests)
-(cd skills/auto && python3 -m unittest discover -s tests)
+for s in stories tasks code init check update learn design diagram spec review auto groom run dashboard comments; do
+  (cd skills/$s && python3 -m unittest discover -s tests)
+done
 claude plugin eval . --scaffold       # agent evals on the sample project (slow: real runs)
 ```
 
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.
-To release, bump `version` in `.claude-plugin/plugin.json`: installed copies update only when
-it changes.
+The plan behind version 2 is in `docs/v2-spec.md`. To release, bump `version` in
+`.claude-plugin/plugin.json`: installed copies update only when it changes.
 
 ## License
 

@@ -1,0 +1,27 @@
+# chopchop team config for the v2 trial (shop sample). No secrets here.
+
+team: shop
+base_branch: develop
+
+repos:
+  shop-api:
+    path: shop-api
+    style: docs/code-style.md
+  shop-web: shop-web
+
+branches:
+  feature: "feature/{key}-{slug}"
+  task: "feature/{key}/{task}-{slug}"
+  build: "feature/{key}/build"
+
+auto:
+  rounds: 2
+  pr: push
+
+dashboard:
+  open: false
+
+agents:
+  max: 3
+  model: inherit
+  effort: inherit

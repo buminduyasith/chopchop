@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: comments-triage
+description: comments explains five review comments on a sample PR, groups the two that share a cause, spots the false alarm and the out-of-scope ask, and posts nothing.
+tags: [comments, slow]
+context:
+  scaffold_script: scaffold.sh

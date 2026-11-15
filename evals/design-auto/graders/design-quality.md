@@ -3,5 +3,6 @@ type: llm
 focus: {source: file, path: "_chopchop/001-PAY-120-refunds-for-card-payments/design/design.md"}
 ---
 
-PASS if the design keeps its 12 numbered sections in order, says in section 1 the one decision the lead must make, puts both PAY-121 and PAY-122 in section 4, and uses short, plain sentences.
-FAIL if a section is missing, a story is missing from the scope, or the text is long, vague or full of jargon.
+Judge only the writing, not the structure (other checks cover the sections and the scope). Ignore the YAML front matter, HTML comments, Mermaid blocks and tables.
+PASS if a tech lead could read the prose quickly: mostly short sentences, everyday words, and technical terms only where needed (API, endpoint, table names and code names are fine).
+FAIL if the prose is mostly long, winding sentences, vague, or full of buzzwords such as "leverage", "robust", "seamless" or "synergy".

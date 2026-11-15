@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: groom-auto
+description: groom --auto on the refunds sample checks every story against the code, finds the ledger nobody mentions, lists questions for the BA, writes a brief and asks nothing.
+tags: [groom, slow]
+context:
+  scaffold_script: scaffold.sh

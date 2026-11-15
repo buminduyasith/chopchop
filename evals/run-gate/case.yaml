@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: run-gate
+description: run --auto on the refunds sample grooms, writes the brief, and then stops at the first gate without approving anything itself.
+tags: [run, slow]
+context:
+  scaffold_script: scaffold.sh

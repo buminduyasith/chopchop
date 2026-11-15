@@ -8,7 +8,7 @@
     {
       "name": "chopchop",
       "source": "./",
-      "description": "Cut big features into small one-repo tasks and build each one end to end, using the tools your team already has."
+      "description": "One command from a Jira key or an idea to merged PRs: people approve the brief, design and spec, agents build, review and fix, with a live dashboard."
     }
   ]
 }
