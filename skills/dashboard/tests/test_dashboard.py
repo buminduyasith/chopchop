@@ -58,6 +58,22 @@ class Markdown(unittest.TestCase):
         self.assertIn("&lt;script&gt;", html)
 
 
+class PrLinks(unittest.TestCase):
+    def test_create_page_per_host(self):
+        cases = {
+            "git@github.com:acme/shop-api.git": "https://github.com/acme/shop-api/compare/feature/X-y...feature/X/build?expand=1",
+            "https://gitlab.com/g/sub/repo.git": "https://gitlab.com/g/sub/repo/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2FX%2Fbuild&merge_request%5Btarget_branch%5D=feature%2FX-y",
+            "git@bitbucket.org:t/r.git": "https://bitbucket.org/t/r/pull-requests/new?source=feature%2FX%2Fbuild&dest=feature%2FX-y",
+            "git@ssh.dev.azure.com:v3/org/proj/repo": "https://dev.azure.com/org/proj/_git/repo/pullrequestcreate?sourceRef=feature%2FX%2Fbuild&targetRef=feature%2FX-y",
+        }
+        for remote, want in cases.items():
+            kind, web = data.web_base(remote)
+            self.assertEqual(data.new_pr_url(kind, web, "feature/X/build", "feature/X-y"), want, remote)
+
+    def test_a_local_remote_has_no_web_page(self):
+        self.assertEqual(data.web_base("/tmp/remotes/shop-api.git"), (None, None))
+
+
 class Paths(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

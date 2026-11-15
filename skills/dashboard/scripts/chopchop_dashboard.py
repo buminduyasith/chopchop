@@ -174,8 +174,8 @@ class Handler(BaseHTTPRequestHandler):
         nonce = secrets.token_urlsafe(16)
         cdn = [m.group(1) for m in re.finditer(
             r'(?:MERMAID|HLJS)_URL\s*=\s*"(https://(?:cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)/[^"\s;,]+)"', page)]
-        policy = ("default-src 'none'; script-src 'nonce-%s'%s; style-src 'unsafe-inline'; img-src 'self' data:; "
-                  "font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        policy = ("default-src 'none'; script-src 'nonce-%s'%s; style-src 'unsafe-inline' https://fonts.googleapis.com; "
+                  "img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
                   % (nonce, "".join(" " + u for u in cdn)))
         self.send_bytes(200, page.replace(NONCE_MARK, nonce).encode("utf-8"), "text/html; charset=utf-8",
                         {"Content-Security-Policy": policy, "X-Frame-Options": "DENY"})

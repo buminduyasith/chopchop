@@ -15,9 +15,11 @@ A missing, half-written or broken file is "no data yet". It never fails a reques
 
 import html
 import json
+import os
 import posixpath
 import re
 import secrets
+import subprocess
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote, unquote
 
@@ -381,6 +383,74 @@ def run_view(auto):
             "queue": str_list(auto.get("queue")), "repos": repos}
 
 
+def web_base(remote):
+    """The web page of a git remote on a known host, or None. git@github.com:o/r.git -> ("github", "https://github.com/o/r")."""
+    remote = (remote or "").strip()
+    m = re.match(r"^(?:ssh://)?git@([^:/]+)[:/](.+?)(?:\.git)?/?$", remote) or \
+        re.match(r"^https?://(?:[^@/]+@)?([^/]+)/(.+?)(?:\.git)?/?$", remote)
+    if not m:
+        return None, None
+    host, path = m.group(1).lower(), m.group(2)
+    if host == "ssh.dev.azure.com":                     # git@ssh.dev.azure.com:v3/org/project/repo
+        parts = path.split("/")
+        if len(parts) == 4 and parts[0] == "v3":
+            return "azure", "https://dev.azure.com/%s/%s/_git/%s" % tuple(parts[1:])
+        return None, None
+    if host.endswith("dev.azure.com") or host.endswith("visualstudio.com"):
+        return "azure", "https://%s/%s" % (host, path)
+    for name in ("github", "gitlab", "bitbucket"):
+        if name in host:
+            return name, "https://%s/%s" % (host, path)
+    return None, None
+
+
+def new_pr_url(kind, base, head, into):
+    """The host's "create a pull request" page for head into `into`."""
+    q = lambda v: quote(v, safe="")
+    if kind == "github":
+        return "%s/compare/%s...%s?expand=1" % (base, quote(into, safe="/"), quote(head, safe="/"))
+    if kind == "gitlab":
+        return "%s/-/merge_requests/new?merge_request%%5Bsource_branch%%5D=%s&merge_request%%5Btarget_branch%%5D=%s" % (base, q(head), q(into))
+    if kind == "bitbucket":
+        return "%s/pull-requests/new?source=%s&dest=%s" % (base, q(head), q(into))
+    if kind == "azure":
+        return "%s/pullrequestcreate?sourceRef=%s&targetRef=%s" % (base, q(head), q(into))
+    return None
+
+
+def remote_of(path):
+    try:
+        out = subprocess.run(["git", "-C", str(path), "remote", "get-url", "origin"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def add_repo_places(run, auto, f, ws):
+    """Where each repo lives and where its PR text is, as paths from the project folder, for the steps on the page."""
+    if not run or not isinstance(auto, dict):
+        return
+    project = Path(ws).resolve().parent
+    for name, r in (auto.get("repos") or {}).items():
+        view = run["repos"].get(str(name))
+        if view is None or not isinstance(r, dict):
+            continue
+        try:
+            view["path"] = posixpath.normpath(os.path.relpath(str(Path(str(r.get("path") or "")).resolve()), str(project)))
+        except (OSError, ValueError):
+            view["path"] = None
+        kind, web = web_base(remote_of(r.get("path"))) if r.get("path") else (None, None)
+        view["host"], view["web"] = kind, web
+        view["new_pr_url"] = new_pr_url(kind, web, view.get("build_branch") or "", run.get("feature_branch") or "") \
+            if web and view.get("build_branch") and run.get("feature_branch") else None
+        pr_file = (Path(f.path) / "work" / "auto" / ("pr-%s.md" % name)).resolve()
+        view["pr_file"] = posixpath.normpath(os.path.relpath(str(pr_file), str(project))) if pr_file.is_file() else None
+        try:
+            view["pr_title"] = pr_file.read_text(encoding="utf-8").split("\n", 1)[0].strip().lstrip("# ").strip()[:200] or None
+        except OSError:
+            view["pr_title"] = None
+
+
 def pr_links(prs, run, tasks):
     """Every PR link we know for a feature, each one once."""
     out, by_url = [], {}
@@ -423,6 +493,7 @@ def feature(ws, number):
     out["comments"] = comments(stage.paths(f)["comments"])
     out["gates"] = gates(f)
     out["run"] = run_view(auto)
+    add_repo_places(out["run"], auto, f, ws)
     out["links"] = pr_links(out["comments"]["prs"], out["run"], out["tasks"])
     out["changes"] = spec_changes(f, out["tasks"])
     return out
@@ -674,8 +745,7 @@ def render_file(path, rel, feature_=None):
     except Exception:  # noqa: BLE001
         meta, body = {}, raw
     swaps, drawn = {}, []
-    if feature_ is not None and rel == "design/design.md":
-        body, swaps, drawn = draw_design(body, path.parent)
+    # The page draws the design's Mermaid itself, in the theme's colours (draw_design stays for other callers).
     embed = None
     if feature_ is not None and rel == "spec/spec.md":
         m = re.search(r"<!-- chopchop:files -->(.*?)<!-- /chopchop:files -->", body, re.S)
