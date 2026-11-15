@@ -123,6 +123,15 @@ class WriteTest(Base):
         styles = chopchop_code.style_files(self.api, cfg["repos"]["payments-api"], ws)
         self.assertTrue(styles[0]["exists"])
 
+    def test_write_adds_guidelines_placeholder_once(self):
+        out = self.cli("--write", self.answers())
+        rules = self.root / "_chopchop" / "guidelines.md"
+        self.assertIn("Rules:     %s (new, placeholders only" % rules, out)
+        self.assertIn("# Code guidelines for every repo", rules.read_text())
+        rules.write_text("# Rules\n\n- No raw SQL.\n")
+        self.assertIn("kept as it was", self.cli("--write", self.answers()))
+        self.assertEqual(rules.read_text(), "# Rules\n\n- No raw SQL.\n")
+
     def test_write_inside_repo_ignores_it(self):
         self.cli("--write", self.answers(workspace=str(self.api / "_chopchop")))
         self.assertIn("_chopchop/", (self.api / ".gitignore").read_text())

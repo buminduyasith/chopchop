@@ -37,7 +37,7 @@ sys.path.insert(0, str(TASKS_SCRIPTS))
 
 import chopchop_tasks  # noqa: E402
 from codelib import changes, profile  # noqa: E402
-from chopchoplib import events, features, gitops  # noqa: E402
+from chopchoplib import events, features, gitops, guidelines  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError  # noqa: E402
@@ -195,6 +195,7 @@ def context(ws, cfg, feature, task):
                     "pr": (meta or {}).get("pr")},
         "guides": profile.guides(path) if is_repo else [],
         "style": style_files(path, options, ws),
+        "guidelines": guidelines.info(ws, cfg),
     }
     ctx["blockers"], ctx["warnings"] = check_start(ctx)
     return ctx
@@ -250,6 +251,7 @@ def context_lines(ws, ctx, preview=False):
              "Profile:  %s" % prof] + ([prs] if prs else []) + [
              "Style:    %s" % (", ".join(s["file"] for s in ctx["style"]) + " (from chopchop.yaml, always follow it)"
                                  if ctx["style"] else "not set in chopchop.yaml. Follow the code and the profile rules."),
+             "Rules:    %s" % guidelines.describe(ctx["guidelines"]),
              "Guides:   %s" % (", ".join(ctx["guides"]) or "none found"),
              "Design:   %s%s" % (rel(ws, ctx["design_dir"]),
                                  " · story: %s" % rel(ws, ctx["requirement"]) if ctx["requirement"] else "")]

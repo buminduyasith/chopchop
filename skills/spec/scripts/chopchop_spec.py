@@ -41,7 +41,7 @@ if not (TASKS / "scripts" / "chopchoplib" / "specdata.py").is_file():
     sys.exit("Error: spec needs the tasks skill next to it (%s not found)." % TASKS)
 sys.path.insert(0, str(TASKS / "scripts"))
 
-from chopchoplib import board, cite, designdoc, events, features, helpers, specdata  # noqa: E402
+from chopchoplib import board, cite, designdoc, events, features, guidelines, helpers, specdata  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
@@ -169,6 +169,7 @@ def prepare(ws, cfg, ref):
         "repos": {k: str(v) for k, v in repos.items()},
         "profiles": profiles(ws, list(repos)),
         "styles": {k: (v.get("style") if isinstance(v, dict) else None) for k, v in styles.items()},
+        "guidelines": guidelines.info(ws, cfg),
         "reports": sorted(str(p) for p in (paths.work / "reports").glob("*")) if (paths.work / "reports").is_dir() else [],
         "helpers": dict(s, ask=not s["set"], calls={r: helpers.for_role(s, r) for r in helpers.ROLES}),
         "files": paths.as_dict(),
@@ -192,6 +193,7 @@ def print_prepare(d):
     if no_profile:
         print("Profiles: missing for %s. Make them with /chopchop:code --profile <repo>, so tests have run commands."
               % ", ".join(no_profile))
+    print("Rules:    %s" % guidelines.describe(d["guidelines"]))
     h = d["helpers"]
     print("Helpers:  %s" % ("not set yet: ask the 3 helper questions once" if h["ask"] else
                             "max %d, model %s, effort %s" % (h["max"], h["model"], h["effort"])))

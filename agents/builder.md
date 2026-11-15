@@ -13,7 +13,9 @@ next to them.
 
 1. Read the brief, then the whole task file. Start from its `## Code` part: the folders, the
    names, the code to copy and the existing methods to reuse.
-2. Read the style file (it wins), the profile's rules, and the guides the brief lists.
+2. Read the style file (it wins), the team guidelines for every repo, the profile's rules, and
+   the guides the brief lists. Follow the team guidelines like the style file. If the brief
+   names no team guidelines, there are none: do not go looking for that file.
 3. Open the code to copy and its neighbors. If a cited line moved or changed a little, follow
    the code as it is now and log it with the brief's log command.
 4. Write the unit tests from `## Done when` first, with the exact names it gives, then the code

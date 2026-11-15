@@ -209,6 +209,9 @@ For each task, in order:
   - `chopchop.yaml`: team settings (no secrets), written by `/chopchop:init`
   - `team-decisions.md`: decisions every feature follows (optional)
   - `system/`: `system-map.json` and `system-map.md`, the whole system, from `/chopchop:learn`
+  - `guidelines.md`: code rules for every repo, written by your team. Init adds it with
+    placeholders only, and it is ignored until you write real rules in it. The spec writer and
+    the developer agents follow it; a repo's own style file wins when they disagree
   - `styles/payments-web.md`: a code style written from the code (optional)
   - `repos/payments-api.md`: how to build, test and open PRs in that repo
   - `001-PAY-120-refunds/`: one folder per feature

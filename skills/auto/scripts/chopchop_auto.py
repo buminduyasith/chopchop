@@ -476,6 +476,8 @@ def write_brief(run, tid, ctx, forbid=()):
                      "A name is still fine as an object key and in a comment." % ", ".join("`%s`" % n for n in forbid))
     lines += ["- Style file (follow it first): `%s`" % s["path"] for s in ctx["style"]] or [
         "- Style: no style file. Follow the code next to yours, then the profile rules."]
+    if ctx["guidelines"]["filled"]:
+        lines.append("- Team guidelines for every repo (follow them; the style file wins if they disagree): `%s`" % ctx["guidelines"]["path"])
     lines += ["- Guide: `%s`" % (Path(ctx["repo_path"]) / g) for g in ctx["guides"]]
     if ctx["profile"]["exists"]:
         lines.append("- Profile (commands and rules): `%s`" % ctx["profile"]["path"])
@@ -591,6 +593,7 @@ def cmd_review(args, ws):
     info = {"repo": t["repo"], "repo_path": str(path), "mode": "pending", "base": None, "files": files,
             "round": t["round"], "task": review.task_rules(task), "task_file": str(task.path),
             "style": [s["path"] for s in ctx["style"] if s["exists"]],
+            "guidelines": ctx["guidelines"]["path"] if ctx["guidelines"]["filled"] else None,
             "guides": [str(path / g) for g in ctx["guides"]],
             "profile": ctx["profile"]["path"] if ctx["profile"]["exists"] else None,
             "parked": [review.one_line(p) for p in t["parked"]], "fixed_last": t["asked"],

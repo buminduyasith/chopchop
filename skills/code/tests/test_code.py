@@ -252,6 +252,16 @@ class StyleTest(Base):
         self.assertIn("Style:    docs/code-style.md (from chopchop.yaml, always follow it)", out)
         self.assertNotIn("Blocked:", out)
 
+    def test_team_guidelines(self):
+        self.assertIn("Rules:    none. /chopchop:init adds guidelines.md", self.cli("T01", "-p"))
+        from chopchoplib import guidelines
+        guidelines.ensure(self.ws)
+        self.assertIn("has only placeholders, so there are no team rules yet: ignore it", self.cli("T01", "-p"))
+        (self.ws / "guidelines.md").write_text("# Rules\n\n- Money is always in cents.\n")
+        out = self.cli("T01", "-p")
+        self.assertIn("Rules:    %s (team rules for every repo: follow them" % (self.ws.resolve() / "guidelines.md"), out)
+        self.assertNotIn("Blocked:", out)
+
     def test_style_list_with_absolute_path(self):
         shared = self.root / "team-style.md"
         shared.write_text("# Team\n")

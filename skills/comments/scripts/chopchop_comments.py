@@ -45,7 +45,7 @@ if not (TASKS_SCRIPTS / "chopchoplib" / "events.py").is_file():
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from chopchoplib import events, features, gitops, review  # noqa: E402
+from chopchoplib import events, features, gitops, guidelines, review  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, git_toplevel, load_config  # noqa: E402
 from chopchoplib.features import FeatureError  # noqa: E402
@@ -714,6 +714,7 @@ def brief_info(store, cfg, batch, batches, path):
     return {"repo_path": str(path) if path else "not known: ask the person where %s is checked out" % batch["repo"],
             "report": str(folder / "report.json"), "check": [meta[k] for k in ("build", "lint", "test") if meta.get(k)],
             "style": style_files(cfg, store.ws, batch["repo"], path) if path else [],
+            "guidelines": guidelines.active(store.ws, cfg),
             "guides": [str(Path(path) / g) for g in GUIDES if path and (Path(path) / g).is_file()],
             "profile": str(prof) if prof else None, "tasks": tasks,
             "others": [b for b in batches if b is not batch and b.get("state") == "planned"

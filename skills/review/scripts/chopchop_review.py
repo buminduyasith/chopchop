@@ -63,13 +63,14 @@ def task_setup(args):
     base = "origin/%s" % ctx["feature_branch"] if ctx["feature_branch"] else None
     extra = {"task": review.task_rules(task), "task_file": str(task.path),
              "style": [s["path"] for s in ctx["style"] if s["exists"]],
+             "guidelines": ctx["guidelines"]["path"] if ctx["guidelines"]["filled"] else None,
              "guides": [str(repo / g) for g in ctx["guides"]],
              "profile": ctx["profile"]["path"] if ctx["profile"]["exists"] else None}
     return repo, ctx["repo"], base, extra, lambda n: feature.path / "work" / "reviews" / ("%s-r%d" % (task.id, n))
 
 
 def team_rules(repo, workspace=None):
-    """The style files and profile chopchop.yaml sets for this repo, when there is a workspace."""
+    """The style files, team guidelines and profile chopchop.yaml sets for this repo, when there is a workspace."""
     try:
         from chopchoplib.config import find_workspace, load_config
         import os
@@ -83,22 +84,23 @@ def team_rules(repo, workspace=None):
         sys.path.insert(0, str(CODE_SCRIPTS))
         import chopchop_code
         from codelib import profile
+        from chopchoplib import guidelines
     except Exception:  # no workspace, or no code skill: a plain review
-        return None, [], None
+        return None, [], None, None
     paths, _ = chopchop_code.chopchop_tasks.repos_of(cfg, ws)
     for name, raw in paths.items():
         if chopchop_code.chopchop_tasks.repo_dir(ws, raw).resolve() == repo.resolve():
             _, options = chopchop_code.repo_of(ws, cfg, name)
             style = [x["path"] for x in chopchop_code.style_files(repo, options, ws) if x["exists"]]
             prof = profile.path_for(ws, name)
-            return name, style, str(prof) if prof.is_file() else None
-    return None, [], None
+            return name, style, str(prof) if prof.is_file() else None, guidelines.active(ws, cfg)
+    return None, [], None, None
 
 
 def plain_setup(args):
     repo = review.toplevel(Path(args.repo or ".").expanduser().resolve())
-    name, style, prof = team_rules(repo, args.workspace)
-    extra = {"task": None, "task_file": None, "style": style, "profile": prof,
+    name, style, prof, rules = team_rules(repo, args.workspace)
+    extra = {"task": None, "task_file": None, "style": style, "guidelines": rules, "profile": prof,
              "guides": [str(repo / g) for g in review.GUIDES if (repo / g).is_file()]}
     return repo, name or repo.name, None, extra, lambda n: review.git_dir(repo) / "chopchop-review" / ("r%d" % n)
 

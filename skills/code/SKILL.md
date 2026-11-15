@@ -57,10 +57,14 @@ How to code, in this order. The first one wins when they disagree:
    look step). This is the team's own code style. Read all of it and follow it every time,
    for code and tests. If a file is missing, the look step says `Blocked:`: ask the user to
    fix the path.
-2. **The repo's own guides:** CLAUDE.md, AGENTS.md, CONTRIBUTING.md.
-3. **The profile** at `_chopchop/repos/<repo>.md`: build, lint and test commands, how PRs are
+2. **The team guidelines for every repo** (`_chopchop/guidelines.md`, shown as `Rules:` in the
+   look step). Follow them for code and tests, like the style file. If the look step says the
+   file has only placeholders, or there is none, ignore it: the examples in its comments are
+   not rules.
+3. **The repo's own guides:** CLAUDE.md, AGENTS.md, CONTRIBUTING.md.
+4. **The profile** at `_chopchop/repos/<repo>.md`: build, lint and test commands, how PRs are
    opened, and rules learned from the code.
-4. **The code itself.** With no style file, copy how nearby code is written: structure,
+5. **The code itself.** With no style file, copy how nearby code is written: structure,
    naming, errors, logging, tests.
 
 If there is no profile, make one and keep going:

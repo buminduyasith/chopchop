@@ -30,7 +30,7 @@ if not (TASKS_SCRIPTS / "chopchoplib" / "config.py").is_file():
     sys.exit("Error: init needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from chopchoplib import helpers  # noqa: E402
+from chopchoplib import guidelines, helpers  # noqa: E402
 from chopchoplib.config import CONFIG_FILE, WORKSPACE_DIR, git_toplevel, parse_yaml  # noqa: E402
 
 BASE_CANDIDATES = ["dev", "develop", "development", "main", "master"]
@@ -335,8 +335,9 @@ def write(answers):
     text = render(answers, ws, existing)
     parse_yaml(text)  # must read back
     cfg.write_text(text, encoding="utf-8")
+    created = guidelines.ensure(ws)
     return {"config": str(cfg), "backup": str(backup) if backup else None, "gitignore": ignore_workspace(ws),
-            "text": text}
+            "guidelines": str(guidelines.path(ws, parse_yaml(text))), "guidelines_created": created, "text": text}
 
 
 # --------------------------------------------------------------------------- main
@@ -379,6 +380,8 @@ def main(argv=None):
                     print("Backup:    %s" % result["backup"])
                 if result["gitignore"]:
                     print("Updated:   %s (added _chopchop/)" % result["gitignore"])
+                print("Rules:     %s (%s)" % (result["guidelines"], "new, placeholders only: the team adds rules for "
+                                              "every repo" if result["guidelines_created"] else "kept as it was"))
                 print()
                 print(result["text"], end="")
             return 0

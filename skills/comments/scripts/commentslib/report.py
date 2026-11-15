@@ -271,7 +271,7 @@ def render_pack(store, entries, out_file, repos):
 
 
 def render_brief(store, batch, info):
-    """info: repo_path, report, check (list of commands), style, guides, profile, tasks, others (batches)."""
+    """info: repo_path, report, check (list of commands), style, guidelines, guides, profile, tasks, others (batches)."""
     threads, items = store.by_id(), store.items
     groups = [g for g in store.triage["groups"] if g["id"] in batch["groups"]]
     example = {"batch": batch["id"], "ok": True, "blocked": None, "files": ["path/of/each/file/you/changed"],
@@ -290,6 +290,8 @@ def render_brief(store, batch, info):
                  ", ".join("`%s`" % f for f in batch["files"]) or "not listed: keep the change small")]
     lines += ["- Style file (follow it first): `%s`" % s for s in info["style"]] or [
         "- Style: no style file. Follow the code next to yours."]
+    if info.get("guidelines"):
+        lines.append("- Team guidelines for every repo (follow them; the style file wins if they disagree): `%s`" % info["guidelines"])
     lines += ["- Guide: `%s`" % g for g in info["guides"]]
     if info.get("profile"):
         lines.append("- Profile (commands and rules): `%s`" % info["profile"])

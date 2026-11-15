@@ -14,7 +14,8 @@ The brief gives you the path of `pack.md`. Read it, then:
 
 1. The diff it names, all of it.
 2. The task file, if there is one: Goal, Contract, Code, Done when, Do not change.
-3. The style files, guides and profile it lists. A style file wins over everything else.
+3. The style files, team guidelines, guides and profile it lists. A style file wins over
+   everything else, then the team guidelines.
 4. The whole file around a change when the diff alone is not enough, and the code next to
    it, to see how this repo does the same thing.
 
@@ -27,7 +28,7 @@ or tests. They already passed before you were started.
    things at once, time zones, rounding, error handling, leaks, a wrong use of an API.
 2. **Tests.** Each test in Done when exists with that exact name and checks a real value.
    Failure cases are tested. No test that cannot fail.
-3. **Fit with the repo.** The style file's rules. The guides. It looks like the code next to
+3. **Fit with the repo.** The style file's rules, then the team guidelines' rules. The guides. It looks like the code next to
    it: folders, file names, class and method names, how errors and logs are done. Lint and
    format. No debug prints, dead code or code left commented out.
 4. **Safety.** No secrets in code. Who may call a new path, and where that is checked. Input

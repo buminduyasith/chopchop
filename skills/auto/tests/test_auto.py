@@ -156,6 +156,7 @@ class LoopTest(Base):
         self.assertIn("--verify --feature 1", brief)
         self.assertIn("- Do not use these names: `LegacyMoney`. New code must not use them", brief)  # from the task's forbid
         self.assertIn("A name is still fine as an object key and in a comment.", brief)
+        self.assertNotIn("Team guidelines", brief)  # no guidelines file: none named
         self.assertEqual(plain.summary_points(brief)[:3], ["What: build task T01, Money, and nothing else.",
                                                            "Where: app, on branch feature/001/build",
                                                            "Do not use: LegacyMoney"])
@@ -418,11 +419,16 @@ class PackTest(Base):
                          "caller": {"risk": "Any support agent can cancel.", "accepted_by": "Asha"}}}]}))
         (self.feature.path / "spec").mkdir()
         (self.feature.path / "spec" / "spec.json").write_text(json.dumps({"assumptions": ["Refunds are in EUR only."]}))
+        (self.ws / "guidelines.md").write_text("# Rules\n\n- Money is always in cents.\n")
         self.auto("--start", "--max", "1")
         self.auto("--next")
+        rules = "- Team guidelines for every repo (follow them; the style file wins if they disagree): `%s`" % (
+            self.ws.resolve() / "guidelines.md")
+        self.assertIn(rules, (self.work / "auto" / "T01" / "brief.md").read_text())
         self.build("T01", "app", {"src/contract/Money.java": "class Money {}\n"})
         self.auto("--review", "T01")
         pack = (self.work / "auto" / "T01" / "review-1" / "pack.md").read_text()
+        self.assertIn(rules, pack)
         self.assertIn("## Risks the design already lists, do not raise", pack)
         self.assertIn("- Design risk: Two refunds race: One open refund per payment", pack)  # the design's own table
         self.assertIn("- Flow message 1, caller: Accepted risk: Any support agent can cancel. (by Asha)", pack)

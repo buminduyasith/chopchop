@@ -211,7 +211,7 @@ def banned_places(diff, rules):
 
 def write_pack(folder, info, diff):
     """info: repo, repo_path, mode (pending or branch), base, files, round, task (rules) or None,
-    task_file, style, guides, profile, parked, fixed_last, risks, assumptions, decided.
+    task_file, style, guidelines (team rules for every repo, or None), guides, profile, parked, fixed_last, risks, assumptions, decided.
     Writes pack.md, pack.json and diff.patch."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
@@ -245,10 +245,12 @@ def render_pack(info):
             lines += ["Do not change:", "", t["do_not"], ""]
     lines += ["## How this repo codes", ""]
     lines += ["- Style file (wins over everything else): `%s`" % s for s in info.get("style") or []]
+    if info.get("guidelines"):
+        lines.append("- Team guidelines for every repo (follow them; the style file wins if they disagree): `%s`" % info["guidelines"])
     lines += ["- Guide: `%s`" % g for g in info.get("guides") or []]
     if info.get("profile"):
         lines.append("- Profile (commands and rules): `%s`" % info["profile"])
-    if not (info.get("style") or info.get("guides") or info.get("profile")):
+    if not (info.get("style") or info.get("guidelines") or info.get("guides") or info.get("profile")):
         lines.append("- No style file or guide. Judge against the code next to each change.")
     lines += ["", "## Files changed", ""]
     lines += ["- %-6s `%s`" % (f["change"], f["path"]) for f in info["files"]]

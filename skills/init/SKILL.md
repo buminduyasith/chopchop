@@ -90,6 +90,12 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_init.py --write <answers.json>
 
 If it fails, fix the answer it names (often a style path) and run it again.
 
+It also writes `_chopchop/guidelines.md` when there is none: one file of code rules for
+every repo, with headings and examples inside comments as placeholders. It never overwrites
+one. The spec writer and the developer agents follow it once the team writes real rules in
+it, and ignore it while it has only placeholders. Do not fill it in yourself: the rules are
+the team's choice.
+
 ## 6. Learn the repos (one more question)
 
 Ask: **"Learn the repos now? chopchop maps the system and each repo's build, test and PR steps."**
@@ -117,7 +123,10 @@ Keep it short:
 3. The base branch.
 4. For style files you wrote: ask the team to read them once. Suggest moving a good one into
    its repo later and pointing `style:` at it.
-5. Next step: `/chopchop:run PAY-120` with a tracker key, or `/chopchop:run <your idea in a
+5. The team guidelines file (`Rules:` in the output): when it is new, say in one line that
+   rules for every repo go there, and that it is ignored until they write some. To keep it
+   somewhere else, such as a shared repo, set `guidelines: <path>` in `chopchop.yaml`.
+6. Next step: `/chopchop:run PAY-120` with a tracker key, or `/chopchop:run <your idea in a
    sentence>`. It takes the feature from there and opens the live dashboard.
 
 ## Rules

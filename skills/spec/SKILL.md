@@ -53,7 +53,11 @@ The goal is code that looks like it was always there. For each repo the design c
 3. **Existing methods and types to reuse**, with where they live. Never plan a new helper when
    one exists.
 4. **The team's style file**, if `chopchop.yaml` sets `repos.<name>.style`, and the rules in it
-   that apply.
+   that apply. Then **the team guidelines for every repo**: `--prepare` prints them as
+   `Rules:`. When it gives a file with rules, read it, and put the rules that apply into each
+   rule's style rules and each package, like the style file's. The repo's style file wins when
+   they disagree. When it says the file has only placeholders, or there is none, ignore it:
+   never treat the examples in its comments as rules.
 5. **How tests are named and run**: the unit test command, and the e2e suite (CI files,
    package scripts, Makefile, README). Note the command and where you found it.
 6. **Traps**: code that looks reusable but is the wrong pattern (the way options.md did not
