@@ -36,7 +36,7 @@ they never show up in the change.
 
 Start one `chopchop:code-reviewer` agent. Give it only: "Review the change in `<pack.md path>`."
 If `chopchop.yaml` sets `auto.reviewer_model`, pass that as the agent's model. Wait for its one
-line reply.
+line reply. That reply only tells you it is done: do not repeat it to the user.
 
 ## 3. Sort
 
@@ -51,7 +51,8 @@ parked. Exit 1 means there is a stop finding.
 
 ## 4. Reply
 
-Short, grouped:
+Build the reply from what `--sort` printed, never from the reviewer's own words. Short,
+grouped:
 
 1. **Stop** first, if any: what and where, and that a person must decide.
 2. **Fix now**: one line each, `file:line`, what, and the fix.

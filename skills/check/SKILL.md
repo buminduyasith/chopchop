@@ -104,6 +104,11 @@ With a feature, the report goes to `_chopchop/<feature>/check.md`. Without one, 
 `--out <file>` if the user wants a file, or show the printed report. If the script says a
 finding has a problem, fix it and run it again.
 
+The report is Markdown and starts with a Summary: the result, the counts and the coverage.
+Write `problem`, `fix` and `ask` in simple English: short sentences, everyday words. A long
+dash in them is refused. Long sentences and hard words give a `Warning:` line: fix them and
+write again. The quotes stay word for word, whatever they hold.
+
 ## 5. Reply
 
 Keep it short:

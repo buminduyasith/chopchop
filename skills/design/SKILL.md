@@ -1,6 +1,6 @@
 ---
 name: design
-description: Turn an idea and the feature's stories into a short design a lead can approve, plus a page to present it. Learns the existing system, asks at most 2 short rounds of questions with answers to pick, keeps every real choice in options.md, draws a high-level design and a main flow with the diagram skill, checks every claim against the code, and writes design.md and feature.html (design, choices, slides with speaker notes, and a review message to send). Use when the user runs design, wants a design, a technical design or a solution for a feature or an idea, wants to change a choice, has feedback from a lead, or wants to record an approval. --auto does it with no design questions.
+description: Turn the approved brief, or an idea and the feature's stories, into a short design a lead can approve. Reads the brief and the grooming answers first, learns the existing system, asks at most 2 short rounds of questions with answers to pick, keeps every real choice in options.md, draws a high-level design and a main flow with the diagram skill, checks every claim against the code, and writes design.md in Markdown with a Summary on top, plus a short review message to send the lead. Use when the user runs design, wants a design, a technical design or a solution for a feature or an idea, wants to change a choice, has feedback from a lead, or wants to record an approval. --auto does it with no design questions.
 argument-hint: "<idea, file or image> [--auto] | \"lead's notes\" | --pick 2=B | --approve \"Name\" | --open"
 ---
 
@@ -9,7 +9,8 @@ argument-hint: "<idea, file or image> [--auto] | \"lead's notes\" | --pick 2=B |
 Write the design a lead approves before anyone builds. You do the thinking: what the developer
 wants, how the system works today, the real choices, the words. A script does what must be the
 same every time: it checks the files, draws the diagrams, checks every citation against the
-code, lints the text and builds the page.
+code, lints the text and prints the review message. Everything it writes is Markdown. The live
+dashboard (`/chopchop:dashboard`) shows it, so there is no page to build.
 
 The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py`. Run it with `python3` from the
 user's project folder. It needs the `tasks` skill folder next to it. The file shapes are in
@@ -20,12 +21,12 @@ diagrams follow the diagram skill (`${CLAUDE_SKILL_DIR}/../diagram/SKILL.md`).
 | User types | Do this |
 | --- | --- |
 | an idea, a file, or a pasted image | Steps 1 to 11. |
-| the same, with `--auto` | Steps 1 to 11 with no design questions: see "--auto" below. The one-time helper setup (step 2) is still asked. |
+| the same, with `--auto` | Steps 1 to 11 with no design questions: see "--auto" below. With no helper settings yet, the recommended ones are saved (step 2). |
 | nothing | Go on from where the last run stopped (`--prepare` shows it). |
 | text, when the feature already has a design | It is feedback, such as a lead's notes: see "Feedback". Say in your first line how you read it. |
 | `--pick 2=B` | `chopchop_design.py --pick 2=B`, then fix the prose the pick touches and build again. |
 | `--approve "Name"` | See "Approve". |
-| `--open` | `chopchop_design.py --open`. |
+| `--open` | `chopchop_design.py --open`. It starts the dashboard and prints its link. With no dashboard skill it prints the path of design.md. |
 
 ## 1. Load
 
@@ -40,14 +41,26 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_design.py --prepare --json
   You confirm them in round 1.
 - **More than one feature**: the script asks which one. Pick the one that matches the idea,
   or ask.
+- **A brief or grooming notes** (`brief.exists`, `grooming.exists`, the `Brief:` and
+  `Grooming:` lines): read `requirements/brief.md` and `requirements/grooming.md` first, before
+  anything else. Three rules:
+  - The brief wins on **what to build**. Something the brief puts out of scope stays out, even
+    when a story mentions it.
+  - `requirements/requirement.md` wins on **exact wording**: a limit, a message text, a name.
+  - An answer in grooming is a **decision already made**. Never ask it again, in round 1 or
+    round 2. Use it, and cite it as "grooming Q3" where the design leans on it.
+  A brief that is not approved yet: say so in one line, and go on.
 
-## 2. Helper settings (first time only, even with --auto)
+## 2. Helper settings (first time only)
 
 If `helpers.ask` is true, this team has never set them (an older `chopchop.yaml` has no
 `agents:` block). Never tell the user to run init again. Ask these three once, in one
-question call, before any helper starts, and save the answers. Ask them even with `--auto`:
-this is one-time setup that decides what helpers cost, not a design question. A helper
-started with no settings runs on the chat's own model, which can be the most expensive one.
+question call, before any helper starts, and save the answers. A helper started with no
+settings runs on the chat's own model, which can be the most expensive one.
+
+**With `--auto`, ask nothing:** save the recommended answers
+(`--helpers --max 3 --model inherit --effort inherit`), then say in one line that you did and
+how to change them (run init again, or edit `agents:` in `chopchop.yaml`).
 
 1. "How many helpers can chopchop run at the same time?" 3 (Recommended), 5, 1, "0, no helpers".
 2. "Which model should helpers use?" "Same as this chat (<name the model you run on>)
@@ -71,8 +84,9 @@ reads only what changed, so it is quick. Then read `system_map.md`.
 
 ## 4. Quick look
 
-Read the stories, the idea (text, file or image: a whiteboard photo is a first sketch), the
-area of the system map the idea touches, `team-decisions.md`, and similar past features.
+Read the brief and the grooming notes when there are any, the stories, the idea (text, file or
+image: a whiteboard photo is a first sketch), the area of the system map the idea touches,
+`team-decisions.md`, and similar past features.
 No helpers yet. Then decide the size:
 
 | Size | Signs |
@@ -87,8 +101,9 @@ of scope, what would make it wrong even if it works, and your guesses with a con
 ## 5. Round 1: intent (skip with --auto)
 
 Follow `references/questions.md`. At most 4 questions, in one question call, each with your
-guess first. Ask only what the code, the stories, the config and past decisions cannot
-answer. If you can already predict the answers, skip the round and say so. Save every
+guess first. Ask only what the brief, the grooming answers, the code, the stories, the config
+and past decisions cannot answer. After a grooming interview this round is often empty: skip
+it and say so. If you can already predict the answers, skip the round and say so. Save every
 question and answer in `work/answers.json` (shape in SCHEMA.md).
 
 ## 6. Deep read
@@ -103,13 +118,15 @@ the same time, with `model` and `effort` from `--prepare` (`helpers.calls`). Lea
 when it is null. For a small feature, read the code yourself.
 
 Each explorer gets: mode feature, the repo and path, the idea in 3 lines, the round 1 answers,
-the stories, and the report path `work/reports/<repo>.md`. It replies with a short summary.
+the stories, the paths of the brief and the grooming notes when they exist, and the report
+path `work/reports/<repo>.md`. It replies with a short summary.
 
 ## 7. options.md
 
 For medium and large features, start one `chopchop:architect` with the stories, the answers,
-the explorer report paths, the system map path and the output path `work/options.json`. For a
-small feature, write `work/options.json` yourself.
+the paths of the brief and the grooming notes when they exist, the explorer report paths, the
+system map path and the output path `work/options.json`. For a small feature, write
+`work/options.json` yourself. A question grooming already answered is never a choice.
 
 The existing pattern wins by default. A choice the code already answers is a pattern line,
 not a choice. At most 4 choices: if there are more, offer to split the feature before you go on.
@@ -140,8 +157,8 @@ Then follow the diagram skill (`${CLAUDE_SKILL_DIR}/../diagram/SKILL.md`) to wri
 `design/architecture.json` (the high-level design: parts and repos, no steps) and
 `design/flow.json` (the main flow: numbered messages and failure answers), and run its
 `--draw` until it is clean. Then write the prose of `design/design.md`, following
-`references/writing.md`. Do not edit the four generated blocks:
-the script fills them. Put speaker notes in each section as `<!-- talk: ... -->`.
+`references/writing.md`. Do not edit the four generated blocks: the script fills them.
+Section 1 is the Summary of the file: a busy reader stops there, so it must stand alone.
 
 Answer the failure questions for every message:
 
@@ -165,6 +182,10 @@ most 2 rounds, then tell the user what is left. Exit 2 means an input file is br
 citation marked `changed` means the code changed after it was read: read it again, fix the
 sentence and the citation. `moved` citations are fixed by the script.
 
+When it is ready, the build prints a `Message:` block: a few plain lines for the lead (the ask,
+the size, the key choices, the questions for the lead, who must approve). It is also in
+`work/build.json` as `message`.
+
 ## 11. Mock lead review
 
 Start one `chopchop:reviewer` with lens `mock-lead` (for large features, also `risk`). Give it
@@ -181,8 +202,10 @@ For medium and large features, then follow the check skill on this feature
 Short. The ask in one line, the picks (and any assumptions), what still needs the lead,
 and next steps:
 
-- Open the page: `/chopchop:design --open`. The Slides tab presents it with speaker notes. The
-  Send for review tab has a message to paste into chat or email.
+- The review message from the build, word for word, as a quote (each line starting with `> `),
+  never in a code block: the user copies it into chat or email for the lead.
+- Where to read it: the dashboard link (`/chopchop:design --open` prints it), Design tab. The
+  file is `design/design.md`.
 - After the review: `/chopchop:design --approve "Name"`.
 - Then `/chopchop:spec`: the full plan to build it. It can start while the lead reviews.
   Tasks are cut from the spec, not from the design.
@@ -191,9 +214,9 @@ and next steps:
 
 No design questions. Skip steps 5 and 8: take your guesses and your recommended picks, with
 `picked_by: "chopchop"` and `"assumed": true` in answers.json. Everything else runs the same,
-including the mock lead review. The approval block, slide 1 and the review message list
-every assumption for the lead to confirm. The one-time helper setup in step 2 is the only
-question `--auto` can ask, and only when the team has never answered it.
+including the mock lead review. The approval block and the review message list
+every assumption for the lead to confirm. `--auto` asks nothing at all: with no helper settings
+yet, step 2 saves the recommended ones.
 
 ## Feedback
 
@@ -221,6 +244,9 @@ waits for feedback (above).
 - Never ask what the code, the stories, the config or past decisions answer. At most 2 rounds.
 - Every sentence about today's code ends with a citation: `repo/path:line@commit`, using the
   commit you read. Explorers return them for you.
-- Plain, simple English, with no long dashes. See `references/writing.md`.
+- Plain, simple English, with no long dashes. See `references/writing.md`. This holds for the
+  files, your questions and your replies.
+- Markdown only. Never write HTML, slides or a page.
+- Never ask what the brief or the grooming answers already say.
 - Never change code, commit, push or open PRs. This skill writes only in `_chopchop/`.
 - Never ask for, store or copy secrets.

@@ -5,10 +5,10 @@ Usage (the same words you type after /chopchop:tasks)
   chopchop_tasks.py --new design.md specs/ --name refunds   new feature 00N-refunds, design copied in
   chopchop_tasks.py --new design.md --feature 1             add or refresh the design of feature 001
   chopchop_tasks.py --from-spec 1                           cut tasks from the feature's spec/spec.json
-  chopchop_tasks.py --check 1                               check the task files, refresh plan and board
+  chopchop_tasks.py --check 1                               check the task files, refresh plan.md and status.md
   chopchop_tasks.py --branch 1                              show the feature branch chopchop suggests
   chopchop_tasks.py --branch 1 --create                     create it in every repo the tasks use, and push
-  chopchop_tasks.py --status 1 [--open]                     write status.md and board.html (and open it)
+  chopchop_tasks.py --status 1 [--open]                     write status.md (--open: start the dashboard)
   chopchop_tasks.py --set T02 in-review --feature 1 [--owner dev-b] [--pr URL]
   chopchop_tasks.py --list                                  list features and their tasks
   chopchop_tasks.py --init --base dev [--repo api=../api]   create _chopchop/chopchop.yaml
@@ -26,12 +26,11 @@ import json
 import re
 import shutil
 import sys
-import webbrowser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from chopchoplib import board, cite, features, gitops, specdata, tasks  # noqa: E402
+from chopchoplib import board, cite, events, features, gitops, plain, specdata, tasks  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, git_toplevel, load_config  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 
@@ -147,6 +146,10 @@ def write_sources(feature, files):
              "# Design sources", "",
              "_Written by chopchop. These files are copies. Change the original, then run "
              "`/chopchop:tasks --new <files> --feature %03d` again._" % feature.number, "",
+             plain.summary_block([
+                 ("What", "the design files this feature was cut from, and where each copy came from."),
+                 ("Files", "%d" % len(files)),
+                 ("To change one", "change the original, then copy it in again.")]),
              "| File | Copied from | Copied at |", "| --- | --- | --- |"]
     for f in files:
         lines.append("| [%s](%s) | `%s` | %s |" % (f["file"], f["file"], f["from"], f["copied"][:16].replace("T", " ")))
@@ -219,17 +222,15 @@ def ensure_tasks_dir(feature):
 
 
 def refresh(ws, feature, cfg):
-    """Rewrite the parts chopchop owns: ## Branch in each task, plan.md, status.md, board.html."""
+    """Rewrite the parts chopchop owns: ## Branch in each task, plan.md and status.md."""
     d = ensure_tasks_dir(feature)
     found = tasks.load_tasks(d)
     plan_meta, plan_text = read_plan(feature, cfg)
     repos, _ = repos_of(cfg, ws)
     patterns = cfg.get("branches") if isinstance(cfg.get("branches"), dict) else None
     fbranch = plan_meta.get("feature_branch")
-    branches = {}
     for t in found:
         branch = tasks.task_branch_name(feature, t, patterns)
-        branches[t.id] = branch
         section = tasks.branch_section(t, fbranch, branch, repos.get(t.get("repo"), None))
         t.body = tasks.replace_section(t.body, "Branch", section)
         t.save()
@@ -237,16 +238,16 @@ def refresh(ws, feature, cfg):
     base = plan_meta.get("base_branch") or cfg.get("base_branch")
     board.write_if_changed(d / tasks.PLAN_FILE, board.render_plan(
         feature, found, plan_meta, read_sources(feature), board.read_notes(plan_text), base))
-    board.write_if_changed(d / tasks.STATUS_FILE, board.render_status(feature, found))
-    template = (SKILL_DIR / "templates" / "board.html").read_text(encoding="utf-8")
-    changelog = tasks.read_changelog(d / tasks.CHANGELOG_FILE)
-    data = board.board_data(feature, found, plan_meta, changelog, branches, base, auto_view(feature))
-    (d / tasks.BOARD_FILE).write_text(board.render_board(template, data), encoding="utf-8")
+    board.write_if_changed(d / tasks.STATUS_FILE, board.render_status(feature, found, auto_view(feature)))
+    log = d / tasks.CHANGELOG_FILE
+    text = log.read_text(encoding="utf-8")
+    if tasks.find_section(text, "Summary"):  # keep its count right when a person adds an entry by hand
+        board.write_if_changed(log, tasks.changelog_with_summary(text))
     return found, plan_meta
 
 
 def auto_view(feature):
-    """What /chopchop:auto did to each task, for the board."""
+    """What /chopchop:auto did to each task, for status.md."""
     f = feature.path / "work" / "auto.json"
     try:
         st = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
@@ -361,6 +362,13 @@ def cmd_from_spec(args, ws):
         built = None
     if not built or not built.get("ready"):
         raise UsageError("The spec is not ready: run /chopchop:spec --build %s until it says ready." % feature.number)
+    smeta = features.read_front_matter(feature.path / specdata.SPEC_DIR / specdata.SPEC_MD)
+    notes = []
+    if not smeta.get("approved_by"):
+        notes.append("the spec is not approved yet. A person says yes with /chopchop:spec --approve \"Name\".")
+    elif smeta.get("changed_since_approval"):
+        notes.append("the spec changed after %s approved it. A person approves it again with "
+                     "/chopchop:spec --approve \"Name\"." % smeta.get("approved_by"))
     d = ensure_tasks_dir(feature)
     repos, _ = repos_of(cfg, ws)
     dirs = {name: repo_dir(ws, path) for name, path in repos.items()}
@@ -380,7 +388,8 @@ def cmd_from_spec(args, ws):
         if new:
             lines.append("Not cut:  %s are in the spec but have no task. Ask the user before adding them."
                          % ", ".join(data["not_cut"]))
-        emit(args, data, lines)
+        lines += ["Warning:  %s" % w for w in notes]
+        emit(args, dict(data, warnings=notes), lines)
         return 1 if new else 0
     plan_path = d / tasks.PLAN_FILE
     if not plan_path.exists():
@@ -393,6 +402,8 @@ def cmd_from_spec(args, ws):
     found, _ = refresh(ws, feature, cfg)
     repos, configured = repos_of(cfg, ws)
     errors, warnings = tasks.check(found, list(repos) if configured else None)
+    warnings = notes + warnings + tasks.lint(found)
+    events.log(feature, "tasks", "%d tasks cut from the spec: %s" % (len(written), ", ".join(t.id for t in found)))
     data = {"feature": feature.name, "written": written, "errors": errors, "warnings": warnings,
             "tasks": [{"id": t.id, "title": t.get("title"), "repo": t.get("repo"), "wave": t.get("wave"),
                        "size": t.get("size"), "depends_on": t.get("depends_on"),
@@ -405,6 +416,8 @@ def cmd_from_spec(args, ws):
             "  after %s" % ", ".join(t.get("depends_on")) if t.get("depends_on") else ""))
     lines += ["Error:    %s" % e for e in errors]
     lines += ["Warning:  %s" % w for w in warnings]
+    if not errors:
+        lines.append("Next:     show the plan and the branch: --branch %03d" % feature.number)
     emit(args, data, lines)
     return 0 if not errors else 1
 
@@ -415,6 +428,7 @@ def cmd_check(args, ws):
     found, _ = refresh(ws, feature, cfg)
     repos, configured = repos_of(cfg, ws)
     errors, warnings = tasks.check(found, list(repos) if configured else None)
+    warnings += tasks.lint(found)
     if not found:
         errors.append("No task files yet in %s" % rel(ws, tasks_dir(feature)))
     waves = sorted({t.get("wave") for t in found if isinstance(t.get("wave"), int)})
@@ -483,6 +497,9 @@ def cmd_branch(args, ws):
         tasks_dir(feature).mkdir(parents=True, exist_ok=True)
         plan_path.write_text(render_front_matter(plan_meta) + body, encoding="utf-8")
         refresh(ws, feature, cfg)
+        made = [r["repo"] for r in results if r["status"] == "created"]
+        if made:
+            events.log(feature, "tasks", "Feature branch %s created from %s in %s" % (name, base, ", ".join(made)))
 
     data = {"feature": feature.name, "branch": name, "base": base, "created": bool(args.create),
             "ok": ok, "repos": results, "repos_configured": configured}
@@ -503,9 +520,9 @@ def cmd_status(args, ws):
     feature = features.resolve(ws, args.status)
     found, plan_meta = refresh(ws, feature, cfg)
     by_id = {t.id: t for t in found}
-    path = tasks_dir(feature) / tasks.BOARD_FILE
+    path = tasks_dir(feature) / tasks.STATUS_FILE
     columns = {s: [t for t in found if t.get("status") == s] for s in tasks.STATUSES}
-    data = {"feature": feature.name, "board": str(path), "status_md": str(tasks_dir(feature) / tasks.STATUS_FILE),
+    data = {"feature": feature.name, "status_md": str(path),
             "feature_branch": plan_meta.get("feature_branch"),
             "columns": {s: [{"id": t.id, "title": t.get("title"), "owner": t.get("owner"),
                              "waiting_on": tasks.waiting_on(t, by_id)} for t in ts] for s, ts in columns.items()}}
@@ -514,10 +531,11 @@ def cmd_status(args, ws):
         items = ["%s%s" % (t.id, " (waiting on %s)" % ", ".join(tasks.waiting_on(t, by_id))
                            if s == "todo" and tasks.waiting_on(t, by_id) else "") for t in columns[s]]
         lines.append("%-13s%s" % (tasks.STATUS_TITLES[s] + ":", ", ".join(items) or "-"))
-    lines.append("Board:       %s" % rel(ws, path))
-    emit(args, data, lines)
+    lines.append("File:        %s" % rel(ws, path))
     if args.open:
-        webbrowser.open(path.resolve().as_uri())
+        data["dashboard"] = board.open_dashboard(ws)
+        lines.append(data["dashboard"] or "Read:        %s (no dashboard skill next to this one)" % path)
+    emit(args, data, lines)
     return 0
 
 
@@ -541,6 +559,9 @@ def cmd_set(args, ws):
         t.meta["pr"] = args.pr or None
     t.save()
     refresh(ws, feature, cfg)
+    if old != status:
+        events.log(feature, "done" if status == "done" else "tasks", "%s set to %s (was %s)" % (task_id, status, old),
+                   task=task_id, repo=t.get("repo"))
     by_id = {x.id: x for x in tasks.load_tasks(tasks_dir(feature))}
     waiting = tasks.waiting_on(by_id[task_id], by_id)
     data = {"feature": feature.name, "task": task_id, "from": old, "to": status, "waiting_on": waiting}
@@ -634,8 +655,8 @@ def build_parser():
     p.add_argument("--create", action="store_true", help="with --branch: create and push it")
     p.add_argument("--branch-name", help="with --branch: use this name instead of the suggested one")
     p.add_argument("--no-push", action="store_true", help="with --branch --create: do not push")
-    p.add_argument("--status", nargs="?", const="", metavar="REF", help="write status.md and board.html")
-    p.add_argument("--open", action="store_true", help="with --status: open the board in the browser")
+    p.add_argument("--status", nargs="?", const="", metavar="REF", help="write status.md and say where each task stands")
+    p.add_argument("--open", action="store_true", help="with --status: start the live dashboard and open it")
     p.add_argument("--set", nargs=2, metavar=("TASK", "STATUS"), help="set a task's status")
     p.add_argument("--owner", help="with --set: who owns the task")
     p.add_argument("--pr", help="with --set: link to the PR")

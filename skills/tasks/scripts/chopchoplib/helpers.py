@@ -93,6 +93,15 @@ def describe(s):
     return text
 
 
+def known_repos(given, known):
+    """The repo names from --repos (a,b or a b). A name that is not in chopchop.yaml is refused."""
+    names = [r.strip() for x in (given or []) for r in str(x).split(",") if r.strip()]
+    unknown = [n for n in names if known and n not in known]
+    if unknown:
+        raise ValueError("Not in chopchop.yaml: %s. Repos: %s." % (", ".join(unknown), ", ".join(sorted(known))))
+    return names
+
+
 def plan(size, repos, s, choices=True):
     """How many helpers of each role a job gets. max is a ceiling, not a target.
 

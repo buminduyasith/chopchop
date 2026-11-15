@@ -11,17 +11,17 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
 import chopchop_tasks  # noqa: E402
-from chopchoplib import features, tasks  # noqa: E402
+from chopchoplib import board, events, features, plain, tasks  # noqa: E402
 from chopchoplib.config import load_config  # noqa: E402
 
 
 def task_text(tid, slug, repo="api", wave=1, deps=(), touches=("src/x/**",), size="M", status="todo",
-              done="- [ ] Unit test `does_the_thing`: it works."):
+              done="- [ ] Unit test `does_the_thing`: it works.", summary=None):
     meta = {"id": tid, "title": slug.replace("-", " ").title(), "repo": repo, "wave": wave, "size": size,
             "status": status, "owner": None, "depends_on": list(deps), "touches": list(touches),
             "stories": [], "pr": None}
-    body = ("# %s\n\n## Goal\n\nIt works.\n\n## Context\n\n> From the design.\n\n## Done when\n\n%s\n\n"
-            "## Branch\n\n_Written by chopchop._\n" % (tid, done))
+    body = ("# %s\n\n%s## Goal\n\nIt works.\n\n## Context\n\n> From the design.\n\n## Done when\n\n%s\n\n"
+            "## Branch\n\n_Written by chopchop._\n" % (tid, "## Summary\n\n%s\n\n" % summary if summary else "", done))
     return features.render_front_matter(meta) + body
 
 
@@ -103,8 +103,12 @@ class NewTest(Base):
         self.assertFalse((f / "design" / ".hidden").exists())
         sources = features.read_front_matter(f / "design" / "SOURCES.md")["files"]
         self.assertEqual([s["file"] for s in sources], ["api/refunds.yaml", "design.md"])
-        for name in ("plan.md", "status.md", "board.html", "changelog.md"):
+        for name in ("plan.md", "status.md", "changelog.md"):
             self.assertTrue((f / "tasks" / name).is_file(), name)
+            self.assertTrue(plain.has_summary((f / "tasks" / name).read_text()), "%s has no Summary" % name)
+        self.assertTrue(plain.has_summary((f / "design" / "SOURCES.md").read_text()))
+        self.assertEqual(list(f.rglob("*.html")), [])  # Markdown only: the dashboard shows it
+        self.assertEqual(plain.summary_points((f / "tasks" / "changelog.md").read_text())[1], "Entries: none yet.")
         self.assertEqual(features.read_front_matter(f / "tasks" / "plan.md")["title"], "Refunds for customers")
 
     def test_rerun_reports_unchanged_and_changed(self):
@@ -197,6 +201,35 @@ class CheckTest(Base):
     def test_no_tasks_is_an_error(self):
         self.assertIn("No task files yet", self.cli("--check", "1", code=1))
 
+    def test_a_task_with_no_summary_is_a_warning_not_an_error(self):
+        self.write(self.tdir,
+                   ("T01", "contracts", {"wave": 0, "touches": ["src/contract/**"],
+                                         "summary": "- **What:** the shared refund types.\n- **Repo:** api, wave 0."}),
+                   ("T02", "refund-api", {"deps": ["T01"], "touches": ["src/refunds/api/**"]}))  # cut before the rule
+        out = self.cli("--check", "1")  # exit 0: an old task file keeps working
+        self.assertIn("Result:   OK", out)
+        self.assertIn('Warning:  T02: T02-refund-api.md has no "## Summary" near the top.', out)
+        self.assertNotIn("T01: T01-contracts.md has no", out)
+        self.assertEqual(plain.summary_points((self.tdir / "T01-contracts.md").read_text())[0],
+                         "What: the shared refund types.")
+
+    def test_simple_english_in_a_hand_written_task(self):
+        long = " ".join(["word"] * 30) + "."
+        p = self.tdir / "T01-contracts.md"
+        p.write_text(task_text("T01", "contracts", wave=0, touches=["src/contract/**"], summary="- **What:** types.")
+                     .replace("It works.", "We utilize the helper \u2014 always. %s" % long))
+        out = self.cli("--check", "1")
+        self.assertIn("Warning:  T01: line", out)
+        self.assertIn("has a long dash", out)
+        self.assertIn('Warning:  T01: "utilize": use "use"', out)
+        self.assertIn("Warning:  T01: long sentence, 30 words", out)
+        # a task cut from a spec carries the spec's words: no word warnings for it
+        meta, body = features.parse_front_matter(p.read_text())
+        p.write_text(features.render_front_matter(dict(meta, package="P1")) + body)
+        out = self.cli("--check", "1")
+        self.assertNotIn("utilize", out)
+        self.assertIn("has a long dash", out)
+
 
 class BranchTest(Base):
     def setUp(self):
@@ -237,6 +270,9 @@ class BranchTest(Base):
         plan = features.read_front_matter(self.tdir / "plan.md")
         self.assertEqual(plan["feature_branch"], "feature/001-refunds")
         self.assertEqual(plan["branch_repos"], ["app"])
+        self.assertIn("- **Feature branch:** `feature/001-refunds`", (self.tdir / "plan.md").read_text())
+        self.assertEqual([(e["kind"], e["text"]) for e in events.read(self.tdir.parent)],
+                         [("tasks", "Feature branch feature/001-refunds created from dev in app")])
 
         self.assertIn("exists", self.cli("--branch", "1", "--create"))
         self.assertIn("does not rename", self.cli("--branch", "1", "--branch-name", "feature/other", code=2))
@@ -264,44 +300,93 @@ class StatusTest(Base):
             (self.tdir / "changelog.md").read_text() +
             "\n## C-001 · T01 · 2026-10-28\nChange: amounts are cents.\nWhy: exact values.\nAffects: T02\n")
 
-    def board_data(self):
-        html = (self.tdir / "board.html").read_text()
-        start = html.index('<script id="chopchop-data" type="application/json">') + len(
-            '<script id="chopchop-data" type="application/json">')
-        return json.loads(html[start:html.index("</script>", start)])
+    def status_md(self):
+        return (self.tdir / "status.md").read_text()
 
-    def test_status_writes_board_and_markdown(self):
+    def test_status_writes_markdown_with_a_summary(self):
         out = self.cli("--status", "1")
         self.assertIn("Todo:        T01, T02 (waiting on T01)", out)
-        data = self.board_data()
-        self.assertEqual([t["id"] for t in data["tasks"]], ["T01", "T02"])
-        self.assertEqual(data["tasks"][1]["waiting_on"], ["T01"])
-        self.assertEqual(data["tasks"][1]["changes"], ["C-001"])
-        self.assertEqual(data["changelog"][0]["affects"], ["T02"])
-        self.assertIn("Todo **2**", (self.tdir / "status.md").read_text())
+        self.assertIn("File:        _chopchop/001-refunds/tasks/status.md", out)
+        md = self.status_md()
+        self.assertEqual(plain.summary_points(md), [
+            "Done: 0 of 2 tasks", "Counts: Todo 2 · In progress 0 · In review 0 · Done 0", "Ready to start: T01"])
+        self.assertIn("Todo **2**", md)
+        self.assertIn("| [T02](T02-refund-api.md) | Refund Api | api | 1 | - | T01 | - |", md)
+        self.assertNotIn("| Build |", md)  # no auto run, so no build column
+        plan = (self.tdir / "plan.md").read_text()
+        self.assertEqual(plain.summary_points(plan, 5)[1:3], ["Tasks: 2 in 2 wave(s), 0 done", "Repos: api"])
+        self.assertFalse((self.tdir / "board.html").exists())
+
+    def test_status_shows_the_auto_run(self):
+        work = self.tdir.parent / "work"
+        work.mkdir()
+        (work / "auto.json").write_text(json.dumps({
+            "repos": {"api": {"build_branch": "feature/001/build"}},
+            "tasks": {"T01": {"repo": "api", "state": "committed", "commit": "a1b2c3d", "round": 1},
+                      "T02": {"repo": "api", "state": "stopped", "why": "the checks still fail", "round": 2}}}))
+        self.cli("--status", "1")
+        md = self.status_md()
+        self.assertIn("- **Build run:** 1 committed, 1 stopped. A person decides on T02", md)
+        self.assertIn("| committed `a1b2c3d` |", md)
+        self.assertIn("| stopped: the checks still fail |", md)
 
     def test_set_moves_a_task(self):
         out = self.cli("--set", "t01", "done", "--feature", "1", "--owner", "dev-a", "--pr", "https://x/pr/1")
         self.assertIn("T01 Contracts: todo -> done", out)
         meta = features.read_front_matter(self.tdir / "T01-contracts.md")
         self.assertEqual((meta["status"], meta["owner"], meta["pr"]), ("done", "dev-a", "https://x/pr/1"))
-        self.assertEqual(self.board_data()["tasks"][1]["waiting_on"], [])
-        self.assertIn("## Done\n\n| Task |", (self.tdir / "status.md").read_text())
+        self.assertIn("- **Ready to start:** T02", self.status_md())
+        self.assertIn("## Done\n\n| Task |", self.status_md())
+        log = events.read(self.tdir.parent)
+        self.assertEqual([(e["kind"], e["text"], e["task"]) for e in log], [("done", "T01 set to done (was todo)", "T01")])
+        self.cli("--set", "T01", "done", "--feature", "1")  # nothing changed: nothing logged
+        self.assertEqual(len(events.read(self.tdir.parent)), 1)
 
     def test_set_rejects_unknown_status_and_task(self):
         self.assertIn("Status must be one of", self.cli("--set", "T01", "blocked", code=2))
         self.assertIn("No task T09", self.cli("--set", "T09", "done", code=2))
 
-    def test_board_data_cannot_close_the_script_tag(self):
-        p = self.tdir / "T01-contracts.md"
-        p.write_text(p.read_text().replace("It works.", "Watch out for </script><b>x</b>."))
-        self.cli("--status", "1")
-        html = (self.tdir / "board.html").read_text()
-        self.assertEqual(html.count("</script>"), 2)
-        self.assertIn("</script><b>x</b>", self.board_data()["tasks"][0]["body"])
+    def test_open_starts_the_dashboard_or_names_the_file(self):
+        fake = self.root / "fake_dashboard.py"
+        fake.write_text("import sys\nassert sys.argv[1:3] == ['--start', '--workspace'], sys.argv\n"
+                        "print('Dashboard: http://127.0.0.1:4599/')\n")
+        real = board.DASHBOARD
+        try:
+            board.DASHBOARD = fake
+            self.assertIn("Dashboard: http://127.0.0.1:4599/", self.cli("--status", "1", "--open"))
+            fake.write_text("import sys\nsys.exit(3)\n")  # it did not start: say where the Markdown is
+            self.assertIn("status.md (no dashboard skill next to this one)", self.cli("--status", "1", "--open"))
+            board.DASHBOARD = self.root / "nope" / "chopchop_dashboard.py"
+            out = self.cli("--status", "1", "--open")
+            self.assertRegex(out, r"Read:        /\S+/001-refunds/tasks/status\.md \(no dashboard skill next to this one\)")
+            self.assertNotIn("Dashboard:", out)
+        finally:
+            board.DASHBOARD = real
 
     def test_list(self):
         self.assertIn("001  -          001-refunds", self.cli("--list"))
+
+
+class SummaryTest(unittest.TestCase):
+    def test_put_summary_adds_then_refreshes(self):
+        text = "# Title\n\nSome words.\n\n## Rules\n\n- one\n"
+        out = tasks.put_summary(text, [("What", "a thing"), ("Status", "draft")])
+        self.assertEqual(out, "# Title\n\n## Summary\n\n- **What:** a thing\n- **Status:** draft\n\nSome words.\n\n## Rules\n\n- one\n")
+        again = tasks.put_summary(out.replace("Some words.\n\n", ""), [("What", "a thing"), ("Status", "confirmed")])
+        self.assertEqual(again, "# Title\n\n## Summary\n\n- **What:** a thing\n- **Status:** confirmed\n\n## Rules\n\n- one\n")
+
+    def test_an_old_changelog_gets_a_summary_and_keeps_its_entries(self):
+        old = ("# Changelog · 001-refunds\n\nChanges found while building the tasks.\n\n<!--\nAdd one entry per change, like this:\n\n"
+               "## C-001 · T02 · 2026-10-28\nChange: an example.\n-->\n\n"
+               "## C-002 · T03 · 2026-11-02\nChange: seconds, not minutes.\nAffects: T04\n\n"
+               "## C-001 · T01 · 2026-11-01\nChange: amounts are cents.\nAffects: none\n")
+        new = tasks.changelog_with_summary(old)
+        self.assertEqual(plain.summary_points(new), ["What: changes found while building the tasks, newest first.",
+                                                     "Entries: 2. The newest is C-002 (T03, 2026-11-02).",
+                                                     "Read it: before you start any task."])
+        self.assertEqual([c["id"] for c in tasks.parse_changelog(new)], ["C-002", "C-001"])
+        self.assertIn("\n## Entries\n\nChanges found while building the tasks.", new)
+        self.assertEqual(tasks.changelog_with_summary(new), new)  # the same again
 
 
 class SectionTest(unittest.TestCase):

@@ -55,3 +55,5 @@ A short list in the format of the lens. No preamble, no summary of the design.
 - Read only. No edits, no builds, no pushes.
 - A finding must point at the text or the code it is about. Leave out style opinions.
 - Do not start other helpers.
+- Simple English: short sentences, everyday words, no long dashes.
+- Say only what the files and the code say. Never claim a file said something it did not.

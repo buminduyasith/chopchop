@@ -66,11 +66,19 @@ Write the findings file named in the pack:
 - `what` says what is wrong, `fix` says exactly what to change.
 - Most serious first. At most 15. An empty list is a fine answer.
 - No taste. Each finding points at a rule, a test, the task, or the code next to it.
-- Do not raise what the pack lists as already accepted or already parked.
+- Do not raise what the pack lists as a risk the design already lists, a spec assumption,
+  decided by a person, or already parked. A spec assumption is a guess, not an approval: it
+  is known, so it is not a finding, but never write that someone accepted it.
 - Quote only what the pack, the task file and the code really say. Never claim the pack said
   something it did not.
 - In a later round, check each fix the pack lists. Raise it again only if it is not fixed.
+- Simple English in `what` and `fix`: short sentences, everyday words, no long dashes.
 
 ## Reply
 
-One line: `N findings: X fix, Y park, Z stop. Wrote <path>.`
+Exactly one line, and nothing else: `N findings: X fix, Y park, Z stop. Wrote <path>.`
+
+The rule about claims holds for this line too, and for anything you say outside the file.
+Do not add a sentence about what the pack, the task, the builder or the tests said or did.
+You did not run the tests, and the pack makes no claim about them, so say nothing about
+whether they pass. The person who started you reads the sorted findings, not your words.

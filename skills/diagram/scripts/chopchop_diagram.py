@@ -3,7 +3,7 @@
 
 Usage
   chopchop_diagram.py --check [REF] [--json]       check design/architecture.json and design/flow.json
-  chopchop_diagram.py --draw [REF] [--open]        check, then write work/diagrams.html to look at
+  chopchop_diagram.py --draw [REF] [--open]        check, then write work/diagrams.md (--open: start the dashboard)
   chopchop_diagram.py --mermaid [REF]              print the Mermaid copies that go in design.md
   chopchop_diagram.py --check --arch FILE [--flow FILE]   any files, no feature needed
 
@@ -14,16 +14,15 @@ The two pictures:
   flow.json          the main flow in time order, with a failure answer for every message
 
 --check and --draw exit 0 when both pictures are clean, 1 when a picture has a problem to fix
-(each problem says the fix), and 2 when a file is missing or broken.
+(each problem says the fix), and 2 when a file is missing or broken. --draw writes Markdown with
+the two pictures as Mermaid. The dashboard draws the same two files as pictures.
 
 Needs the tasks skill next to it. Standard library only. Python 3.8+.
 """
 
 import argparse
-import html
 import json
 import sys
-import webbrowser
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -32,12 +31,12 @@ if not (TASKS_SCRIPTS / "chopchoplib" / "diagrams.py").is_file():
     sys.exit("Error: diagram needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from chopchoplib import diagrams, features  # noqa: E402
+from chopchoplib import board, diagrams, features, plain  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError  # noqa: E402
 from chopchoplib.requirements import requirement_items, story_ids  # noqa: E402
 
-PREVIEW = "diagrams.html"
+PREVIEW = "diagrams.md"
 
 
 class UsageError(Exception):
@@ -63,7 +62,7 @@ def sources(args):
     if args.arch or args.flow:
         out = Path(args.out).expanduser() if args.out else Path(args.arch or args.flow).resolve().parent
         return {"arch": Path(args.arch) if args.arch else None, "flow": Path(args.flow) if args.flow else None,
-                "repos": None, "stories": None, "known": None, "out": out}
+                "repos": None, "stories": None, "known": None, "out": out, "ws": None}
     ws = find_workspace(args.workspace)
     cfg = load_config(ws)
     feature = features.resolve(ws, args.ref)
@@ -71,7 +70,7 @@ def sources(args):
     repos = cfg.get("repos")
     return {"arch": feature.path / "design" / "architecture.json", "flow": feature.path / "design" / "flow.json",
             "repos": set(repos) if isinstance(repos, dict) else None, "stories": story_ids(items) if items else None,
-            "known": {r["id"] for r in items} if items else None, "out": feature.path / "work"}
+            "known": {r["id"] for r in items} if items else None, "out": feature.path / "work", "ws": ws}
 
 
 # --------------------------------------------------------------------------- check
@@ -121,46 +120,41 @@ def report(res):
 # --------------------------------------------------------------------------- draw
 
 
-PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Diagrams</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700&display=swap" rel="stylesheet">
-<style>
-:root { --bg: #f3f6fb; --card: #fff; --ink: #0b1220; --muted: #556072; --line: #dde4ef; --blue: #1d4ed8; --bad: #b42318; --warn: #9a4b00; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 Inter, "Segoe UI", system-ui, sans-serif; }
-main { max-width: 1320px; margin: 0 auto; padding: 28px 16px 48px; }
-h1 { font: 700 26px/1.25 "Plus Jakarta Sans", Inter, sans-serif; margin: 0 0 18px; }
-section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 0 0 20px; }
-h2 { font: 700 19px/1.3 "Plus Jakarta Sans", Inter, sans-serif; margin: 0 0 12px; }
-.pic { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: #fcfdff; padding: 16px; }
-.pic svg { display: block; margin: 0 auto; }
-ul { margin: 12px 0 0; padding-left: 20px; color: var(--muted); }
-li.e { color: var(--bad); } li.w { color: var(--warn); }
-</style></head><body><main><h1>%(title)s</h1>%(body)s</main></body></html>
-"""
-
-
-def section(title, svg, r):
-    items = ["<li class=\"e\">%s</li>" % html.escape(e) for e in r["errors"]]
-    items += ["<li class=\"w\">%s</li>" % html.escape(w) for w in r["warnings"]]
-    items += ["<li>Missing answer: %s</li>" % html.escape(u) for u in r.get("unanswered") or []]
-    return "<section><h2>%s</h2>%s%s</section>" % (
-        html.escape(title), "<div class=\"pic\">%s</div>" % svg if svg else "",
-        "<ul>%s</ul>" % "".join(items) if items else "")
+def section(title, picture, r):
+    lines = ["## %s" % title, ""]
+    if picture:
+        lines += ["```mermaid", picture, "```", ""]
+    lines += ["- Problem: %s" % e for e in r["errors"]]
+    lines += ["- Warning: %s" % w for w in r["warnings"]]
+    lines += ["- Missing answer: %s" % u for u in r.get("unanswered") or []]
+    if not picture and not r["errors"]:
+        lines.append("Not drawn yet.")
+    return lines + [""]
 
 
 def draw(arch, flow, res, out):
-    body = []
-    a_ok = arch is not None and not res["architecture"]["errors"]
-    body.append(section("High-level design", diagrams.architecture_svg(arch) if a_ok else "", res["architecture"]))
-    if res["flow"]["path"]:
-        f_ok = flow is not None and not res["flow"]["errors"]
-        body.append(section("Main flow", diagrams.flow_svg(flow, arch if a_ok else None) if f_ok else "", res["flow"]))
+    """Write diagrams.md: both pictures as Mermaid, with what is still wrong under each."""
+    a, f = res["architecture"], res["flow"]
+    a_ok = arch is not None and not a["errors"]
+    f_ok = flow is not None and not f["errors"]
     title = (arch or {}).get("title") or (flow or {}).get("title") or "Diagrams"
+    problems = len(a["errors"]) + len(f["errors"])
+    lines = ["# Diagrams · %s" % title, "",
+             "_Written by chopchop from architecture.json and flow.json. Change those files, then draw again._", "",
+             plain.summary_block([
+                 ("What", "the two pictures of the design: the parts, and the main flow."),
+                 ("High-level design", "%d parts, %d links" % (len(arch.get("nodes") or []), len(arch.get("links") or []))
+                  if a_ok else "not drawn: %d problem(s)" % len(a["errors"])),
+                 ("Main flow", ("%d messages" % len(flow.get("messages") or []) if f_ok
+                                else "not drawn: %d problem(s)" % len(f["errors"])) if f["path"] else None),
+                 ("Still open", "%d problem(s) to fix, %d failure answer(s) missing" % (problems, len(f.get("unanswered") or []))
+                  if problems or f.get("unanswered") else "nothing")])]
+    lines += section("High-level design", diagrams.architecture_mermaid(arch) if a_ok else "", a)
+    if f["path"]:
+        lines += section("Main flow", diagrams.flow_mermaid(flow, arch if a_ok else None) if f_ok else "", f)
     out.mkdir(parents=True, exist_ok=True)
     path = out / PREVIEW
-    path.write_text(PAGE % {"title": html.escape(title), "body": "".join(body)}, encoding="utf-8")
+    path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
     return path
 
 
@@ -174,12 +168,12 @@ def main(argv=None):
     p.add_argument("ref", nargs="?", help="feature: number, epic key or part of the name")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--check", action="store_true", help="check both pictures")
-    g.add_argument("--draw", action="store_true", help="check, then write work/diagrams.html")
+    g.add_argument("--draw", action="store_true", help="check, then write work/diagrams.md")
     g.add_argument("--mermaid", action="store_true", help="print the Mermaid copies")
     p.add_argument("--arch", help="an architecture.json outside a feature")
     p.add_argument("--flow", help="a flow.json outside a feature")
-    p.add_argument("--out", help="where --draw writes diagrams.html when there is no feature")
-    p.add_argument("--open", action="store_true", help="open diagrams.html after --draw")
+    p.add_argument("--out", help="where --draw writes diagrams.md when there is no feature")
+    p.add_argument("--open", action="store_true", help="after --draw: start the live dashboard and open it")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--workspace", help="path to the _chopchop folder")
     args = p.parse_args(argv)
@@ -198,13 +192,15 @@ def main(argv=None):
             path = draw(arch, flow, res, src["out"])
             res["preview"] = str(path)
             if args.open:
-                webbrowser.open(path.resolve().as_uri())
+                res["dashboard"] = board.open_dashboard(src["ws"]) if src["ws"] else None
         if args.json:
             print(json.dumps(res, indent=2))
         else:
             print(report(res))
             if res.get("preview"):
                 print("Preview: %s" % res["preview"])
+            if args.draw and args.open:
+                print(res["dashboard"] or "Read:    %s (no dashboard here: this is the Markdown file)" % res["preview"])
         if (src["arch"] is not None and arch is None) or (src["flow"] is not None and flow is None):
             return 2
         return 0 if clean(res) else 1

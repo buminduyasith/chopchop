@@ -4,17 +4,16 @@ status: "draft"
 # Design · {{title}}
 
 <!-- For leads. About 10 minutes to read. Keep the 12 headings, in this order. A section with
-nothing to say keeps its heading and says "None." Comments like this one never show. Write
-speaker notes for a slide as a talk comment inside the section. -->
+nothing to say keeps its heading and says "None." Comments like this one never show. Simple
+English: short sentences, everyday words, no long dashes. -->
 
 ## 1. Summary and the ask
 
-<!-- 3 to 5 lines: what we build, for whom, why now. Then these two lines, exactly. -->
+<!-- The Summary of this file: a busy reader stops here. 3 to 5 lines: what we build, for whom,
+why now. Then these two lines, exactly. -->
 
 **The ask:** 
 **Size:** 
-
-<!-- talk: Start with the ask. Then the size. -->
 
 ## 2. High-level design
 

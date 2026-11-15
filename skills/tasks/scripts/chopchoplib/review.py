@@ -11,6 +11,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from . import plain
 from . import tasks as tasklib
 
 GROUPS = ["fix", "park", "stop"]
@@ -126,6 +127,37 @@ def added_lines(diff):
     return [l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++")]
 
 
+HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+
+def added_places(diff):
+    """[(file, line number, text)] for every line the diff adds. The line number is in the new file."""
+    out, path, old_left, new_left, line = [], None, 0, 0, 0
+    for l in diff.splitlines():
+        if old_left <= 0 and new_left <= 0:  # between hunks: file headers and hunk headers
+            if l.startswith("+++ "):
+                name = l[4:].split("\t")[0].strip()
+                path = None if name == "/dev/null" else re.sub(r"^b/", "", name)
+                continue
+            m = HUNK.match(l)
+            if m:
+                old_left = int(m.group(1)) if m.group(1) is not None else 1
+                line = int(m.group(2))
+                new_left = int(m.group(3)) if m.group(3) is not None else 1
+            continue
+        if l.startswith("+"):
+            out.append((path or "", line, l[1:]))
+            line += 1
+            new_left -= 1
+        elif l.startswith("-"):
+            old_left -= 1
+        elif not l.startswith("\\"):  # a context line ("\ No newline at end of file" is neither)
+            line += 1
+            old_left -= 1
+            new_left -= 1
+    return out
+
+
 # --------------------------------------------------------------------------- the task's limits
 
 
@@ -159,12 +191,28 @@ def banned_uses(diff, rules):
     return uses("\n".join(added_lines(diff)), rules["banned_names"])
 
 
+def banned_places(diff, rules):
+    """Where the change adds a forbidden name: [{"name", "file", "line", "text"}], for the fix list.
+
+    banned_uses() decides. This says where, so the builder changes those lines and no others:
+    a name is still fine as an object key (`{ refundStatus: 1 }`) and in a comment."""
+    from .specdata import use_lines
+    names = rules["banned_names"]
+    if not names:
+        return []
+    places = added_places(diff)
+    hits = use_lines("\n".join(text for _, _, text in places), names)
+    return [{"name": name, "file": places[n - 1][0], "line": places[n - 1][1], "text": places[n - 1][2].strip()}
+            for name, n in hits if 0 < n <= len(places)]
+
+
 # --------------------------------------------------------------------------- the pack
 
 
 def write_pack(folder, info, diff):
     """info: repo, repo_path, mode (pending or branch), base, files, round, task (rules) or None,
-    task_file, style, guides, profile, parked, fixed_last. Writes pack.md, pack.json and diff.patch."""
+    task_file, style, guides, profile, parked, fixed_last, risks, assumptions, decided.
+    Writes pack.md, pack.json and diff.patch."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     (folder / DIFF).write_text(diff, encoding="utf-8")
@@ -180,6 +228,12 @@ def render_pack(info):
     what = "pending changes (not committed)" if info["mode"] == "pending" else "this branch against %s" % info["base"]
     head = "# Review pack · %s · round %d" % ("%s %s" % (t["id"], t["title"]) if t else info["repo"], info.get("round") or 1)
     lines = [head, "",
+             plain.summary_block([
+                 ("What", "one code change to review: %d file%s in %s, %s." % (
+                     len(info["files"]), "" if len(info["files"]) == 1 else "s", info["repo"], what)),
+                 ("Task", "%s %s" % (t["id"], t["title"]) if t else None),
+                 ("Round", info.get("round") or 1),
+                 ("Findings go to", "`%s`" % info["findings"])]),
              "- Repo: %s at `%s`, %s." % (info["repo"], info["repo_path"], what),
              "- Diff: `%s` (%d lines). Read all of it." % (info["diff"], info["diff_lines"]),
              "- Write your findings to `%s`." % info["findings"], ""]
@@ -198,9 +252,18 @@ def render_pack(info):
         lines.append("- No style file or guide. Judge against the code next to each change.")
     lines += ["", "## Files changed", ""]
     lines += ["- %-6s `%s`" % (f["change"], f["path"]) for f in info["files"]]
-    if info.get("accepted"):
-        lines += ["", "## Already accepted by the lead, do not raise", ""]
-        lines += ["- %s" % a for a in info["accepted"]]
+    if info.get("risks"):
+        lines += ["", "## Risks the design already lists, do not raise", "",
+                  "The lead read these in the design. They are known, so they are not findings.", ""]
+        lines += ["- %s" % a for a in info["risks"]]
+    if info.get("assumptions"):
+        lines += ["", "## Spec assumptions, do not raise as new", "",
+                  "Guesses the spec made, for a person to confirm. Nobody has accepted them yet. "
+                  "They are already written down, so they are not findings.", ""]
+        lines += ["- %s" % a for a in info["assumptions"]]
+    if info.get("decided"):
+        lines += ["", "## Decided by a person, do not raise again", ""]
+        lines += ["- %s" % a for a in info["decided"]]
     if info.get("parked"):
         lines += ["", "## Already parked, do not raise again", ""]
         lines += ["- %s" % p for p in info["parked"]]

@@ -1,6 +1,6 @@
 ---
 name: diagram
-description: Draw a feature's two design diagrams well, the same way every time. The high-level design shows the parts, the repo each lives in and what talks to what (a structure, never steps). The main flow shows the numbered messages in time order, with a failure answer for each. Writes design/architecture.json and design/flow.json, checks the layout (no line through a box, no shared cells, no part inside another repo's group, no step numbers on the structure), and draws a static SVG for feature.html plus Mermaid for design.md. Use when the design skill reaches its write step, or when the user asks to draw, fix, redo or explain an architecture diagram, a high-level design, a sequence diagram or a flow diagram.
+description: Draw a feature's two design diagrams well, the same way every time. The high-level design shows the parts, the repo each lives in and what talks to what (a structure, never steps). The main flow shows the numbered messages in time order, with a failure answer for each. Writes design/architecture.json and design/flow.json, checks the layout (no line through a box, no shared cells, no part inside another repo's group, no step numbers on the structure), and writes them as Mermaid for design.md. The dashboard draws the same two files as pictures. Use when the design skill reaches its write step, or when the user asks to draw, fix, redo or explain an architecture diagram, a high-level design, a sequence diagram or a flow diagram.
 argument-hint: "[feature] [--arch FILE] [--flow FILE]"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "[feature] [--arch FILE] [--flow FILE]"
 
 Two pictures carry a design. You decide what is in them and where each part sits. A script
 checks the placement, routes the lines and draws them. Never draw either picture by hand, in
-SVG or in Mermaid: the page and design.md must show the same thing.
+SVG or in Mermaid: the dashboard and design.md must show the same thing.
 
 | Picture | File | Answers | Looks like |
 | --- | --- | --- | --- |
@@ -85,8 +85,8 @@ rules it already uses. When the code does not say, write your suggestion as
 python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_diagram.py --draw [REF]
 ```
 
-It checks both files, then writes `work/diagrams.html` with both pictures. Exit 0 is clean.
-Exit 1 lists problems, each with its fix:
+It checks both files, then writes `work/diagrams.md`: a Summary, both pictures as Mermaid,
+and what is still wrong under each. Exit 0 is clean. Exit 1 lists problems, each with its fix:
 
 | Problem | Fix |
 | --- | --- |
@@ -100,8 +100,9 @@ Exit 1 lists problems, each with its fix:
 Fix and run it again, at most 3 rounds. Then fix the warnings that are cheap to fix. Missing
 failure answers do not stop the drawing, but they block the design's approval request.
 
-Do not open the preview in a browser just to look: the checks cover lines through parts,
-crossings, overlaps and width. Open it (`--open`) only when the user asks to see it.
+You do not need to look at the pictures: the checks cover lines through parts, crossings,
+overlaps and width. When the user asks to see them, add `--open`: it starts the dashboard and
+prints its link (Design tab). With no dashboard skill it prints the path of `diagrams.md`.
 
 `--mermaid` prints the Mermaid copies. You rarely need it: the design build writes them into
 design.md by itself.
@@ -117,4 +118,4 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_diagram.py --draw --arch path/archi
 ## 6. Reply
 
 Three lines at most: what each picture shows, what is still missing (failure answers,
-warnings you left), and the preview path.
+warnings you left), and where to see them (the dashboard link, or `work/diagrams.md`).

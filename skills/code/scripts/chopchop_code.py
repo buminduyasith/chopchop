@@ -3,7 +3,7 @@
 
 Usage
   chopchop_code.py                          tasks you can start now (same as --ready)
-  chopchop_code.py T02 -p                   preview: everything about T02, changes nothing (also: T02 alone)
+  chopchop_code.py T02 --preview            look: everything about T02, changes nothing (also: T02 alone)
   chopchop_code.py T02 --start              claim T02 (in-progress) and create or resume its branch
   chopchop_code.py T02 --verify             run the repo's build, lint and test commands
   chopchop_code.py T02 --log --change "amounts are cents" [--why "..."] [--affects T03,T05]
@@ -37,7 +37,7 @@ sys.path.insert(0, str(TASKS_SCRIPTS))
 
 import chopchop_tasks  # noqa: E402
 from codelib import changes, profile  # noqa: E402
-from chopchoplib import features, gitops  # noqa: E402
+from chopchoplib import events, features, gitops  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError  # noqa: E402
@@ -359,6 +359,8 @@ def cmd_start(args, ws):
     status = "in-progress" if ctx["status"] == "todo" else KEEP
     old = set_status(ws, cfg, feature, task.id, status=status, owner=owner)
     ctx = context(ws, cfg, feature, reload(feature, task.id))
+    events.log(feature, "build", "%s started by %s on %s." % (task.id, ctx["owner"] or ctx["me"], tb),
+               task=task.id, repo=ctx["repo"], by=ctx["owner"] or ctx["me"])
     lines = ["Branch:   %s %s (in %s)" % (action, tb, ctx["repo"])]
     if merged:
         lines.append("Merged:   the latest %s into it" % merged)
@@ -412,6 +414,10 @@ def cmd_verify(args, ws):
         lines.append("Warning:  the profile is a draft. Confirm the commands with the user.")
     lines.append("Result:   %s" % ("all passed" if ok else "FAILED. Fix it and run --verify again."))
     save_verify(feature, task, path, ok, results)
+    failed = [r["step"] for r in results if r["ok"] is False]
+    events.log(feature, "build", "%s checks passed (%s)." % (task.id, ", ".join(r["step"] for r in results)) if ok
+               else "%s checks failed: %s." % (task.id, ", ".join(failed) or "a step was skipped"),
+               task=task.id, repo=str(task.get("repo")))
     emit(args, {"task": task.id, "ok": ok, "results": results}, lines)
     return 0 if ok else 1
 
@@ -437,6 +443,8 @@ def cmd_log(args, ws):
     except ValueError as e:
         raise UsageError(str(e))
     chopchop_tasks.refresh(ws, feature, cfg)
+    events.log(feature, "note", "%s logged from %s: %s" % (report["id"], task.id, changes.one_line(args.change)),
+               task=task.id, repo=str(task.get("repo")))
     lines = ["Logged:   %s in %s" % (report["id"], rel(ws, feature.path / tasklib.TASKS_DIR / tasklib.CHANGELOG_FILE))]
     if report["updated"]:
         lines.append("Updated:  %s (todo: a heads-up was added to the task file)" % ", ".join(report["updated"]))
@@ -455,6 +463,7 @@ def cmd_done(args, ws):
     cfg = load_config(ws)
     feature, task = find_task(ws, args.task, args.feature)
     old = set_status(ws, cfg, feature, task.id, status="done")
+    events.log(feature, "done", "%s set to done (was %s)." % (task.id, old), task=task.id, repo=str(task.get("repo")))
     by_id = {t.id: t for t in tasklib.load_tasks(feature.path / tasklib.TASKS_DIR)}
     unblocked = [t.id for t in by_id.values() if t.get("status") == "todo"
                  and task.id in tasklib.as_list(t.get("depends_on")) and not tasklib.waiting_on(t, by_id)]
@@ -514,7 +523,7 @@ def build_parser():
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog="\n".join(__doc__.split("\n")[2:]))
     p.add_argument("task", nargs="?", help="task id, e.g. T02")
-    p.add_argument("-p", "--preview", action="store_true", help="show everything about the task, change nothing")
+    p.add_argument("-p", "--preview", action="store_true", help="look: show everything about the task, change nothing")
     p.add_argument("--start", action="store_true", help="claim the task and create or resume its branch")
     p.add_argument("--verify", action="store_true", help="run the repo's build, lint and test commands")
     p.add_argument("--log", action="store_true", help="log a change in changelog.md")

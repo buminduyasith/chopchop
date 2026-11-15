@@ -33,7 +33,7 @@ if not (TASKS_SCRIPTS / "chopchoplib" / "features.py").is_file():
     sys.exit("Error: check needs the tasks skill next to it (%s not found)." % TASKS_SCRIPTS)
 sys.path.insert(0, str(TASKS_SCRIPTS))
 
-from chopchoplib import features  # noqa: E402
+from chopchoplib import events, features, plain  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 from chopchoplib.requirements import STORY_RE, requirement_items, section, split_items  # noqa: E402,F401
@@ -152,9 +152,27 @@ def validate(data, known_ids):
             problems.append("coverage %s: status must be one of %s" % (c.get("req"), ", ".join(STATUSES)))
         if ids and c.get("req") not in ids:
             problems.append("coverage: '%s' is not a known requirement id" % c.get("req"))
+    problems += [p for p, blocks in words(data) if blocks]
     if problems:
         raise UsageError("findings.json has problems:\n  " + "\n  ".join(problems))
     return data
+
+
+WRITTEN = ("problem", "fix", "ask")  # the words you wrote. The quotes are someone else's, so they are left alone.
+
+
+def words(data):
+    """Simple English for the words in the findings: [(message, blocks)]. Only a long dash blocks."""
+    out = []
+    for i, f in enumerate(data.get("findings") or [], 1):
+        for key in WRITTEN:
+            text = str(f.get(key) or "")
+            if plain.DASHES.search(text):
+                out.append(("finding %d: '%s' has a long dash. Use a comma, a full stop or a colon." % (i, key), True))
+            if plain.PLACEHOLDER.search(text):
+                out.append(("finding %d: '%s' still has placeholder text" % (i, key), False))
+            out += [("finding %d, %s: %s" % (i, key, w), False) for w in plain.lint_text(text)[1]]
+    return out
 
 
 def quote(text):
@@ -188,8 +206,22 @@ def render(title, req_files, design_files, data, previous, base):
 
     meta = {"checked": today, "result": result, "conflicts": counts["conflict"], "missing": counts["missing"],
             "extra": counts["extra"], "questions": counts["question"], "requirements": len(cov) or None}
+    if result == "not ready":
+        short = "not ready. Fix the conflicts and the important gaps before cutting tasks."
+    elif result == "ready with gaps":
+        short = "ready with gaps. No conflicts, but %d medium gap%s to settle or accept." % (medium, "" if medium == 1 else "s")
+    else:
+        short = "ready. No conflicts and nothing important missing."
     lines = [render_front_matter(meta).rstrip(), "", "# Check · %s" % title, "",
              "_Written by chopchop on %s. Run `/chopchop:check` again after fixing things._" % today, "",
+             plain.summary_block([
+                 ("What", "where the design and the requirements do not agree."),
+                 ("Result", short),
+                 ("Found", "%d conflict%s, %d missing, %d extra, %d question%s" % (
+                     counts["conflict"], "" if counts["conflict"] == 1 else "s", counts["missing"], counts["extra"],
+                     counts["question"], "" if counts["question"] == 1 else "s")),
+                 ("Coverage", "%d of %d requirements covered, %d partly, %d missing" % (
+                     cov_counts["covered"], len(cov), cov_counts["partly"], cov_counts["missing"]) if cov else None)]),
              "- **Requirements:** %s" % ", ".join("`%s`" % rel(p) for p in req_files),
              "- **Design:** %s" % ", ".join("`%s`" % rel(p) for p in design_files), ""]
     if result == "ready with gaps":
@@ -304,14 +336,22 @@ def cmd_write(args, ws):
     base = Path(ws).parent if feature else Path.cwd()
     title = feature.name if feature else "design vs requirements"
     text, summary = render(title, req_files, design_files, data, read_previous(target) if target else None, base)
+    summary["warnings"] = [w for w, blocks in words(data) if not blocks]
+    if not plain.has_summary(text):
+        raise UsageError("The report came out with no Summary. That is a bug in this script: nothing was written.")
     if target:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
+    c = summary["counts"]
+    if feature and target:
+        events.log(feature, "note", "Check written: %s. %d conflict(s), %d missing, %d extra, %d question(s)." % (
+            summary["result"], c["conflict"], c["missing"], c["extra"], c["question"]))
     if args.json:
         print(json.dumps(dict(summary, report=str(target) if target else None), indent=2))
     elif target:
-        c = summary["counts"]
         print("Report:   %s" % target)
+        for w in summary["warnings"]:
+            print("Warning:  %s" % w)
         print("Result:   %s · %d conflict(s), %d missing, %d extra, %d question(s)" % (
             summary["result"], c["conflict"], c["missing"], c["extra"], c["question"]))
         if summary["coverage"] and sum(summary["coverage"].values()):

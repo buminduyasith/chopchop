@@ -15,6 +15,7 @@ PLUGIN = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
 import chopchop_learn  # noqa: E402
+from chopchoplib import plain  # noqa: E402
 
 SETUP = PLUGIN / "evals" / "sample-project" / "setup.py"
 
@@ -73,6 +74,9 @@ class LearnTest(Base):
         md = (Path(self.ws) / "system" / "system-map.md").read_text()
         self.assertIn("```mermaid", md)
         self.assertIn("| payments-api | service | @pay-team |", md)
+        self.assertEqual(plain.summary_points(md)[:3], [
+            "What: the parts of the system, who owns each, and what talks to what.",
+            "Size: 1 repo, 3 parts, 1 link", "Repos: payments-api"])
         status = json.loads(self.learn("--status", "--json"))
         self.assertEqual({r["repo"]: r["mode"] for r in status["repos"]}["payments-api"], "fresh")
         # a person fixes one node; the next helper update keeps it

@@ -102,6 +102,18 @@ A person signs each one with `--sign M1 --by NAME`.
 `questions`: `[{"text", "owner", "blocking", "answer"}]`. A blocking question with no answer
 stops the build. `assumptions`: plain lines, each a guess someone should confirm.
 
+## spec.md front matter
+
+The script writes it. Do not edit it by hand.
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `draft` (something blocks it), `ready`, `building` (tasks exist) or `done` (a person set it). |
+| `approved_by`, `approved_on` | The person who approved the spec, and the date. Set by `--approve "Name"`. |
+| `approved_note` | The note that person gave, or null. |
+| `changed_since_approval` | `true` when spec.json or the words of spec.md changed after the approval. The spec needs a new yes. |
+| `approved_hash` | How the script tells: a hash of spec.json and the words of spec.md at approval time. |
+
 ## What the script writes
 
 | spec.md section | From |

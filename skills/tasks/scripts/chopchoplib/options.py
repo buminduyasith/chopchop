@@ -24,7 +24,7 @@ picked_by "chopchop" means nobody picked it (--auto, or "you decide"): it is an 
 
 import re
 
-from . import diagrams
+from . import diagrams, plain
 from .cite import CITE_RE
 
 KINDS = ["conflict", "decision"]
@@ -210,12 +210,33 @@ def _choice_md(c):
     return lines + [""]
 
 
+def summary_points(data):
+    """The Summary of options.md: how many choices, how many are picked, and by whom."""
+    choices = ordered(data)
+    conflicts = sum(1 for c in choices if c.get("kind") == "conflict")
+    picked = [c for c in choices if c.get("picked")]
+    guessed = sum(1 for c in picked if c.get("picked_by") == "chopchop")
+    if not choices:
+        what, state = "no real choice. The code already answers every one.", None
+    else:
+        what = "%d choice%s before the design: %d conflict%s in the code, %d decision%s." % (
+            len(choices), "" if len(choices) == 1 else "s", conflicts, "" if conflicts == 1 else "s",
+            len(choices) - conflicts, "" if len(choices) - conflicts == 1 else "s")
+        state = "%d of %d%s" % (len(picked), len(choices),
+                                ", %d by chopchop for a person to confirm" % guessed if guessed else "")
+    return [("What", what), ("Picked", state),
+            ("For the lead", "%d point%s" % (len(lead_items(data)), "" if len(lead_items(data)) == 1 else "s")),
+            ("Parked", "%d idea%s, kept for later" % (len(data.get("parked") or []),
+                                                     "" if len(data.get("parked") or []) == 1 else "s"))]
+
+
 def render(data, feature_name):
     choices = ordered(data)
     conf = (data.get("understood") or {}).get("confidence")
     lines = ["# Options · %s" % feature_name, "",
              "_Written by chopchop from work/options.json. Change a pick with "
              "`/chopchop:design --pick 2=B`, or say it in chat. Options not picked stay here._", "",
+             plain.summary_block(summary_points(data)),
              "## 1. What I understood", ""]
     if conf:
         lines += ["Confidence: %s" % conf, ""]

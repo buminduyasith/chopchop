@@ -1,6 +1,6 @@
 """The two design diagrams: the high-level design and the main flow.
 
-One JSON source each, two outputs: a static SVG for feature.html (drawn here, no browser and no
+One JSON source each, two outputs: a static SVG for the dashboard (drawn here, no browser and no
 library), and Mermaid for design.md, so GitHub and editors still show it.
 
 design/architecture.json  the high-level design: parts, the repo each lives in, what talks to what.

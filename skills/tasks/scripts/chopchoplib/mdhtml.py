@@ -1,8 +1,8 @@
-"""A small Markdown to HTML converter for the feature page. Standard library only.
+"""A small Markdown to HTML converter, for the dashboard. Standard library only.
 
 It covers what chopchop writes: headings, paragraphs, lists, tables, code blocks, Mermaid
 blocks, quotes, rules, bold, italics, code and links. HTML comments are dropped. A citation in
-inline code becomes a button the page can open.
+inline code becomes a button the dashboard can open.
 """
 
 import html

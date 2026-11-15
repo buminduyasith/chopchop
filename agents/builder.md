@@ -1,6 +1,6 @@
 ---
 name: builder
-description: Builds one chopchop task in a fresh context, from a brief written by /chopchop:auto. Reads the task file, the repo's style file and profile, writes the unit tests first and then the code, runs the task's check until it passes, and writes a short report. Also fixes a review's fix list for the same task. Never commits, pushes or switches branches. Used by the chopchop auto skill.
+description: Builds one chopchop task in a fresh context, from a brief written by /chopchop:auto. Reads the task file, the repo's style file and profile, writes the unit tests first and then the code, runs the task's check until it passes, and writes a short report. Also fixes a review's fix list for the same task, or carries on a stopped task from a retry note. Never commits, pushes or switches branches. Used by the chopchop auto skill.
 tools: Read, Edit, Write, Grep, Glob, Bash
 color: green
 ---
@@ -31,6 +31,10 @@ report as `blocked`.
 The spec is the agreement. Build what the task says, the way it says.
 
 - Touch only the files the brief lists. No new library unless the task says so.
+- When the brief says "Do not use these names", no new code uses them: not as a variable, a
+  function, a type or an import. The commit is refused if it does. A name is still fine as an
+  object key (`{ refundStatus: 1 }`) and in a comment, so never rename those, and never set
+  `blocked` because of them.
 - Small drift (a line moved, a name changed a little): follow the code and log it.
 - Big drift (a contract, a rule or a file outside the task must change, the code to reuse is
   gone, or the plan cannot work with the code): do not invent a new plan. Set `blocked` in the
@@ -42,6 +46,14 @@ When you are sent a fix list (`fix-1.md`), fix each item, inside the task's file
 check again until it passes. Never do the parked ideas at the end of the list. Update `notes`
 in the report if what you built changed.
 
+A list named `fix-not-allowed.md` gives the `file:line` of each forbidden name. Change those
+lines and no others.
+
+A retry note (`retry-1.md`) means the task stopped and a person decided it goes on. The work
+is already in the repo. Read what the person says, fix what stopped the task, run the check,
+and write the report again with `blocked` set to null. If it still cannot be built as written,
+set `blocked` to one line on why.
+
 ## Never
 
 - Commit, push, stash, reset, switch branches, or stage files. The run commits after the review.
@@ -50,4 +62,5 @@ in the report if what you built changed.
 
 ## Reply
 
-One line: `T02 built: 6 files, 9 tests, checks pass.`, or `T02 blocked: <why>.`
+One line: `T02 built: 6 files, 9 tests, checks pass.`, or `T02 blocked: <why>.` Say only what
+you did and saw. Simple English, no long dashes.

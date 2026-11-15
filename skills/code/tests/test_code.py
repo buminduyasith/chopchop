@@ -13,7 +13,8 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 import chopchop_code  # noqa: E402  (puts tasks' scripts on the path too)
 import chopchop_tasks  # noqa: E402
 from codelib import changes, profile  # noqa: E402
-from chopchoplib import features  # noqa: E402
+from chopchoplib import events, features, plain  # noqa: E402
+from chopchoplib import tasks as tasklib  # noqa: E402
 
 def git(path, *args):
     out = subprocess.run(["git"] + list(args), cwd=str(path), capture_output=True, text=True)
@@ -78,6 +79,10 @@ class Base(unittest.TestCase):
     def meta(self, tid):
         return features.read_front_matter(next(self.tdir.glob("%s-*.md" % tid)))
 
+    def log(self):
+        """The activity log of this test (setUp adds one line of its own: the feature branch)."""
+        return [e for e in events.read(self.tdir.parent) if e["kind"] != "tasks"]
+
     def commit_file(self, name, text, msg="T01 work"):
         p = self.repo / name
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +127,9 @@ class StartTest(Base):
         self.assertEqual((meta["status"], meta["owner"]), ("in-progress", "dev-a"))
         self.assertIn("In progress **1**", (self.tdir / "status.md").read_text())
         self.assertIn("already on", self.cli("T01", "--start"))
+        first = self.log()[0]
+        self.assertEqual((first["kind"], first["text"], first["task"], first["repo"], first["by"]),
+                         ("build", "T01 started by dev-a on feature/001/T01-contracts.", "T01", "app", "dev-a"))
 
     def test_start_blockers(self):
         self.assertIn("Waiting on T01", self.cli("T02", "--start", code=2))
@@ -175,6 +183,16 @@ class WorkTest(Base):
         out = self.cli("T01", "--verify", code=1)
         self.assertIn("test   FAIL", out)
         self.assertIn("boom", out)
+        self.assertEqual([(e["kind"], e["text"], e["task"]) for e in self.log()],
+                         [("build", "T01 checks passed (lint, test).", "T01"), ("build", "T01 checks failed: test.", "T01")])
+
+    def test_a_broken_log_never_changes_the_exit_code(self):
+        self.write_profile(test="true")
+        log = self.tdir.parent / "work" / "events.jsonl"
+        log.unlink()
+        log.mkdir()  # a folder where the log file should be: writing it fails
+        self.assertIn("Result:   all passed", self.cli("T01", "--verify"))
+        self.assertIn("todo -> done", self.cli("--done", "T01"))
 
     def test_verify_skips_after_build_fails(self):
         self.write_profile(build="exit 1", test="true")
@@ -194,6 +212,11 @@ class WorkTest(Base):
         log = log[log.index("-->"):]  # skip the format example at the top
         self.assertLess(log.index("## C-002"), log.index("## C-001"))
         self.assertIn("Affects: T02, T03", log)
+        full = (self.tdir / "changelog.md").read_text()  # the Summary follows every new entry
+        self.assertEqual(plain.summary_points(full)[1], "Entries: 2. The newest is C-002 (T01, %s)." % log.split(" · ")[2].split("\n")[0])
+        self.assertLess(full.index("## Summary"), full.index("## Entries"))
+        self.assertEqual([c["id"] for c in tasklib.read_changelog(self.tdir / "changelog.md")], ["C-002", "C-001"])
+        self.assertIn(("note", "C-001 logged from T01: Amounts are cents."), [(e["kind"], e["text"]) for e in self.log()])
         t3 = next(self.tdir.glob("T03-*.md")).read_text()
         self.assertEqual(t3.count("## Heads-up"), 1)
         self.assertIn("C-002 from T01", t3)
@@ -204,6 +227,7 @@ class WorkTest(Base):
         self.assertIn("T01 Contracts: todo -> done", out)
         self.assertIn("Ready:    T02, T03 can start now", out)
         self.assertEqual(self.meta("T01")["status"], "done")
+        self.assertEqual([(e["kind"], e["text"]) for e in self.log()], [("done", "T01 set to done (was todo).")])
 
 
 # --------------------------------------------------------------------------- style
@@ -263,14 +287,26 @@ class ProfileTest(Base):
         self.assertIn("- `src/a.test.ts`", text)
         self.assertIn("pr: null", text)
         self.assertIn("## Pull requests", text)
-        out = self.cli("T01", "-p")
+        self.assertEqual(plain.summary_points(text), [
+            "What: how to build, lint and test app, and the rules its code follows.",
+            "Commands: build yarn run build, lint yarn run lint, test yarn test",
+            "Pull requests: not set yet", "Status: a draft. A person checks it, then confirms it."])
+        out = self.cli("T01", "--preview")  # the look step: still there for the skill, no longer offered to the user
         self.assertIn("DRAFT", out)
         self.assertIn("PRs:      not set in the profile", out)
         self.cli("--profile", "app", "--confirm")
         text = profile.path_for(self.ws, "app").read_text()
         self.assertIn("confirmed: true", text)
         self.assertNotIn("Draft written", text)
+        self.assertEqual(plain.summary_points(text)[3], "Status: confirmed by a person.")
+        self.assertEqual(text.count("## Summary"), 1)
         self.assertIn("(confirmed)", self.cli("--profile", "app"))
+
+    def test_confirm_gives_an_old_profile_a_summary(self):
+        self.write_profile(test="make test", pr="by hand")  # written before the Summary rule
+        self.cli("--profile", "app", "--confirm")
+        text = profile.path_for(self.ws, "app").read_text()
+        self.assertEqual(plain.summary_points(text)[1:3], ["Commands: test make test", "Pull requests: by hand"])
 
     def test_detect_other_stacks(self):
         d = self.root / "gradle"

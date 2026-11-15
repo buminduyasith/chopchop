@@ -13,6 +13,13 @@ pr: null
 ---
 # T02 · Refund API endpoint
 
+## Summary
+
+- **What:** one line on what this task adds.
+- **Repo:** payments-api, wave 1, size M.
+- **Tests:** 2 unit tests.
+- **Depends on:** T01.
+
 ## Goal
 
 One or two sentences. What works when this PR is merged.

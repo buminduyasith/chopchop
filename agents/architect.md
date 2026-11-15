@@ -48,3 +48,7 @@ At most 5 lines: the path, the number of choices, and your picks in one line eac
 
 - Read only, except the output file. No builds, no installs, no pushes.
 - Do not start other helpers.
+- Simple English in every text field: short sentences, everyday words, no long dashes. The
+  script writes options.md from your file, with a Summary on top.
+- When the brief names a `brief.md` or `grooming.md`, read them first. The brief wins on what
+  to build, and an answer in grooming is a decision already made: it is never a choice.

@@ -3,19 +3,21 @@
 
 Usage
   chopchop_auto.py --plan [REF] [--max N] [--only T01,T02] [--repo NAME]   what a run would do, changes nothing
-  chopchop_auto.py --start [REF] [same options] [--step] [--new]          make the build branches and the run
+  chopchop_auto.py --start [REF] [same options] [--step | --wave] [--new]   make the build branches and the run
   chopchop_auto.py --next                       pick the next task and write the builder's brief
   chopchop_auto.py --review T02                 check the build, then write the review pack
   chopchop_auto.py --sort T02                   sort the review: another fix round, commit, or stop
   chopchop_auto.py --commit T02 [--message M] [--outside a,b]   commit the task on the build branch
   chopchop_auto.py --stop T02 --why "..."       stop a task: its repo waits for a person, the others go on
+  chopchop_auto.py --retry T02 [--why "..."]    a person decided: start a stopped task again
   chopchop_auto.py --finish                     push each build branch and write its PR text
   chopchop_auto.py --pr REPO URL                record a repo's PR: its tasks go to in-review
   chopchop_auto.py --status                     where the run is, and the next step
 
 One build branch per repo, cut from the feature branch, one commit per task. One PR per repo
 into the feature branch, never into the base branch. The run lives in work/auto.json, so a new
-chat carries on with --status. Options: --feature REF, --json, --workspace PATH.
+chat carries on with --status. --step pauses after each task, --wave (or auto.pause: wave in
+chopchop.yaml) after each wave. Options: --feature REF, --json, --workspace PATH.
 
 Needs the code and tasks skills next to this one. Standard library only. Python 3.8+.
 """
@@ -38,7 +40,7 @@ sys.path.insert(0, str(CODE_SCRIPTS))
 import chopchop_code  # noqa: E402  (puts the tasks scripts on the path)
 import chopchop_tasks  # noqa: E402
 from codelib import profile  # noqa: E402
-from chopchoplib import features, gitops, review  # noqa: E402
+from chopchoplib import designdoc, events, features, gitops, plain, review  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError  # noqa: E402
@@ -48,6 +50,7 @@ RUN_DIR = "auto"
 REPORT = "report.json"
 ACTIVE = ("building", "reviewing", "fixing", "ready")
 PR_MODES = ("draft", "ready", "push")
+PAUSES = ("wave",)
 CONVENTIONAL = re.compile(r"^[a-z]+(\([^)]*\))?!?: \S")
 UsageError = chopchop_code.UsageError
 KEEP = chopchop_code.KEEP
@@ -68,8 +71,9 @@ def settings(cfg):
     except (TypeError, ValueError):
         rounds = 2
     pr = str(raw.get("pr") or "draft").lower()
+    pause = str(raw.get("pause") or "").lower()
     return {"rounds": max(1, min(3, rounds)), "pr": pr if pr in PR_MODES else "draft",
-            "reviewer_model": raw.get("reviewer_model") or None}
+            "reviewer_model": raw.get("reviewer_model") or None, "pause": pause if pause in PAUSES else None}
 
 
 def ids(text):
@@ -95,7 +99,7 @@ class Run:
         tmp = self.file.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         tmp.replace(self.file)
-        chopchop_tasks.refresh(self.ws, self.feature, self.cfg)  # the board shows the run
+        chopchop_tasks.refresh(self.ws, self.feature, self.cfg)  # status.md shows the run
 
     def dir(self, tid):
         d = self.work / RUN_DIR / tid
@@ -108,6 +112,9 @@ class Run:
         if t is None:
             raise UsageError("%s is not in this run. Runs: %s" % (tid, ", ".join(self.state["queue"])))
         if states and t["state"] not in states:
+            if t["state"] == "stopped":
+                raise UsageError("%s is stopped: %s. When a person has decided to go on, start it again with "
+                                 "--retry %s." % (tid, t.get("why") or "no reason given", tid))
             raise UsageError("%s is %s, not %s. Next: %s" % (tid, t["state"], " or ".join(states), next_step(self)))
         return tid, t
 
@@ -149,22 +156,33 @@ def own_pending(path, ws):
     return [x for x in items if not (x["path"] + "/").startswith(prefix)]
 
 
-def accepted(feature):
-    """Risks the lead accepted and the spec's assumptions, so the reviewer does not raise them as new."""
+def known_risks(feature):
+    """Risks the design already lists: section 10 of design.md, and the failure answers a person accepted."""
     out = []
     try:
-        spec = json.loads((feature.path / "spec" / "spec.json").read_text(encoding="utf-8"))
-        out += [str(a) for a in spec.get("assumptions") or []]
-    except (OSError, ValueError, AttributeError):
+        text = (feature.path / "design" / "design.md").read_text(encoding="utf-8")
+        _, body = features.parse_front_matter(text)
+        out += ["Design risk: %s" % line for line in designdoc.bullets(designdoc.section_text(body, 10), 10, 300)
+                if line.strip().rstrip(".").lower() != "none"]
+    except (OSError, ValueError):
         pass
     try:
         from chopchoplib import diagrams
         flow = json.loads((feature.path / "design" / "flow.json").read_text(encoding="utf-8"))
-        out += ["Accepted risk, message %s (%s): %s" % (r["n"], r["question"], r["answer"])
+        out += ["Flow message %s, %s: %s" % (r["n"], r["question"], r["answer"])
                 for r in diagrams.failures(flow) if r.get("state") == "risk"]
     except (OSError, ValueError, KeyError, AttributeError):
         pass
     return out
+
+
+def assumptions(feature):
+    """The spec's assumptions: guesses a person should still confirm. Known, so not review findings."""
+    try:
+        spec = json.loads((feature.path / "spec" / "spec.json").read_text(encoding="utf-8"))
+        return [str(a) for a in spec.get("assumptions") or []]
+    except (OSError, ValueError, AttributeError):
+        return []
 
 
 def read_verify(feature, tid):
@@ -291,9 +309,12 @@ def make_plan(ws, cfg, feature, args):
         missing = [s["file"] for s in chopchop_code.style_files(path, options, ws) if not s["exists"]]
         if missing:
             blockers.append("Style file %s (repos.%s.style) is not there. Fix the path." % (", ".join(missing), name))
+    s = settings(cfg)
+    pause = "step" if args.step else "wave" if (args.wave or s["pause"] == "wave") else None
     return {"feature": feature.name, "queue": queue, "left_out": left_out, "repos": repos, "titles":
             {tid: by_id[tid].get("title") for tid in queue}, "task_repo": {tid: by_id[tid].get("repo") for tid in queue},
-            "feature_branch": fb, "base_branch": base, "build_branch": build, "settings": settings(cfg),
+            "waves": {tid: by_id[tid].get("wave") for tid in queue},
+            "feature_branch": fb, "base_branch": base, "build_branch": build, "settings": s, "pause": pause,
             "blockers": blockers, "warnings": warnings}
 
 
@@ -311,6 +332,8 @@ def plan_lines(ws, plan):
                                                             if s["reviewer_model"] else ""))
     lines.append("PRs:      %s, into %s. Never into %s." % (pr, plan["feature_branch"] or "the feature branch",
                                                          plan["base_branch"] or "the base branch"))
+    if plan.get("pause"):
+        lines.append("Pause:    after each %s, the run waits for a go" % ("task" if plan["pause"] == "step" else "wave"))
     lines += ["Blocked:  %s" % b for b in plan["blockers"]]
     lines += ["Warning:  %s" % w for w in plan["warnings"]]
     return lines
@@ -381,16 +404,20 @@ def cmd_start(args, ws):
         "version": 1, "feature": feature.name, "started": now(), "by": chopchop_code.me(None), "finished": None,
         "feature_branch": plan["feature_branch"], "base_branch": plan["base_branch"],
         "options": {"rounds": s["rounds"], "pr": s["pr"], "reviewer_model": s["reviewer_model"],
-                    "step": bool(args.step), "max": args.max, "only": ids(args.only), "repo": args.repo},
+                    "step": plan["pause"] == "step", "wave": plan["pause"] == "wave",
+                    "max": args.max, "only": ids(args.only), "repo": args.repo},
         "repos": {n: {"path": r["path"], "build_branch": r["build_branch"], "online": r["online"],
                       "paused": None, "pushed": None, "pr": None, "was_on": r.get("was_on")}
                   for n, r in plan["repos"].items()},
         "queue": plan["queue"], "current": None,
-        "tasks": {tid: {"title": plan["titles"][tid], "repo": plan["task_repo"][tid], "state": "queued", "round": 0,
-                        "asked": [], "asked_total": 0, "parked": [], "left": [], "fixed": 0} for tid in plan["queue"]},
+        "tasks": {tid: {"title": plan["titles"][tid], "repo": plan["task_repo"][tid], "wave": plan["waves"][tid],
+                        "state": "queued", "round": 0, "asked": [], "asked_total": 0, "parked": [], "left": [],
+                        "fixed": 0} for tid in plan["queue"]},
         "left_out": plan["left_out"],
     }
     run.save()
+    events.log(feature, "run", "Build run started: %d tasks (%s)." % (len(plan["queue"]), ", ".join(plan["queue"])),
+               by=run.state["by"])
     lines += ["Run:      %d tasks: %s" % (len(plan["queue"]), ", ".join(plan["queue"])),
               "Saved:    %s" % run.file, "Next:     --next"]
     emit(args, run.state, lines)
@@ -400,8 +427,9 @@ def cmd_start(args, ws):
 # --------------------------------------------------------------------------- the loop
 
 
-def skip(t, why):
-    t.update(state="skipped", why=why, ended=now())
+def skip(t, why, because=None):
+    """because: the task that made this one wait. A retry of that task brings this one back."""
+    t.update(state="skipped", why=why, ended=now(), because=because)
 
 
 def pick_next(run, by_id):
@@ -415,29 +443,37 @@ def pick_next(run, by_id):
             continue
         paused = run.repo(t).get("paused")
         if paused:
-            skip(t, "%s waits for %s" % (t["repo"], paused["task"]))
+            skip(t, "%s waits for %s" % (t["repo"], paused["task"]), paused["task"])
             continue
         deps = [d for d in tasklib.as_list(by_id[tid].get("depends_on")) if d in st["tasks"]]
         bad = [d for d in deps if st["tasks"][d]["state"] in ("stopped", "skipped")]
         if bad:
-            skip(t, "needs %s, which %s" % (bad[0], st["tasks"][bad[0]]["state"]))
+            skip(t, "needs %s, which %s" % (bad[0], st["tasks"][bad[0]]["state"]), bad[0])
             continue
         if all(st["tasks"][d]["state"] == "committed" for d in deps):
             return tid
     return None
 
 
-def write_brief(run, tid, ctx):
+def write_brief(run, tid, ctx, forbid=()):
     d = run.dir(tid)
     st = run.state
     r = run.repo(st["tasks"][tid])
     log = 'python3 %s %s --log --change "<what changed>" --why "<why>" --feature %d --workspace %s' % (
         q(CODE_SCRIPTS / "chopchop_code.py"), tid, run.feature.number, q(run.ws))
     lines = ["# Build %s · %s" % (tid, ctx["title"]), "",
+             plain.summary_block([
+                 ("What", "build task %s, %s, and nothing else." % (tid, ctx["title"])),
+                 ("Where", "%s, on branch `%s`" % (ctx["repo"], r["build_branch"])),
+                 ("Do not use", ", ".join("`%s`" % n for n in forbid) if forbid else None),
+                 ("When done", "write the report at `%s`." % (d / REPORT))]),
              "Build this one task. This brief and the task file are all you need.", "",
              "- Repo: %s at `%s`, on branch `%s`. It is checked out. Stay on it." % (ctx["repo"], ctx["repo_path"], r["build_branch"]),
              "- Task file: `%s`. Read all of it, the `## Code` part first." % ctx["task_file"],
              "- Files you may touch: %s" % (", ".join("`%s`" % p for p in ctx["touches"]) or "not listed: keep the change small")]
+    if forbid:
+        lines.append("- Do not use these names: %s. New code must not use them: the commit is refused if it does. "
+                     "A name is still fine as an object key and in a comment." % ", ".join("`%s`" % n for n in forbid))
     lines += ["- Style file (follow it first): `%s`" % s["path"] for s in ctx["style"]] or [
         "- Style: no style file. Follow the code next to yours, then the profile rules."]
     lines += ["- Guide: `%s`" % (Path(ctx["repo_path"]) / g) for g in ctx["guides"]]
@@ -503,8 +539,9 @@ def cmd_next(args, ws):
                              owner=ctx["me"] if not task.get("owner") else KEEP)
     t.update(state="building", since=now(), started=now())
     st["current"] = tid
-    brief = write_brief(run, tid, ctx)
+    brief = write_brief(run, tid, ctx, tasklib.as_list(task.get("forbid")))
     run.save()
+    events.log(run.feature, "build", "%s picked: %s. A builder starts." % (tid, t["title"]), task=tid, repo=t["repo"])
     data = {"task": tid, "repo": t["repo"], "brief": str(brief), "report": str(run.dir(tid) / REPORT)}
     lines = ["Task:     %s %s (%s)" % (tid, t["title"], t["repo"]),
              "Brief:    %s" % brief,
@@ -522,11 +559,13 @@ def stop(run, tid, why, args):
     if st.get("current") == tid:
         st["current"] = None
     run.save()
+    events.log(run.feature, "stop", "%s stopped: %s" % (tid, why), task=tid, repo=t["repo"])
     lines = ["Stopped:  %s: %s" % (tid, why),
              "Waits:    %s. Its changes stay uncommitted on %s for a person. The other repos go on."
              % (t["repo"], r["build_branch"]),
+             "Retry:    when a person has decided to go on: --retry %s" % tid,
              "Next:     %s" % next_step(run)]
-    emit(args, {"task": tid, "state": "stopped", "why": why}, lines)
+    emit(args, {"task": tid, "state": "stopped", "why": why, "retry": "--retry %s" % tid}, lines)
     return 1
 
 
@@ -555,7 +594,9 @@ def cmd_review(args, ws):
             "guides": [str(path / g) for g in ctx["guides"]],
             "profile": ctx["profile"]["path"] if ctx["profile"]["exists"] else None,
             "parked": [review.one_line(p) for p in t["parked"]], "fixed_last": t["asked"],
-            "accepted": accepted(run.feature)}
+            "risks": known_risks(run.feature), "assumptions": assumptions(run.feature),
+            "decided": ["It stopped on: %s. A person decided: %s" % (x["stopped"].rstrip("."), x.get("note") or "go on.")
+                        for x in t.get("retries") or []]}
     pack = review.write_pack(run.dir(tid) / ("review-%d" % t["round"]), info, review.pending_diff(path, files))
     t.update(state="reviewing", pack=str(pack))
     run.save()
@@ -570,9 +611,16 @@ def cmd_review(args, ws):
     return 0
 
 
-def write_fix(path, tid, round_no, fixes, parked, verify):
+def write_fix(path, tid, round_no, fixes, parked, verify, note=None):
     lines = ["# Fix %s · review round %d" % (tid, round_no), "",
+             plain.summary_block([
+                 ("What", "%d thing%s to fix in %s, inside the task's files." % (len(fixes), "" if len(fixes) == 1 else "s", tid)),
+                 ("Parked", "%d idea%s at the end. Do not do them." % (len(parked), "" if len(parked) == 1 else "s")
+                  if parked else None),
+                 ("Then", "run the check again until it passes.")]),
              "Fix each item, inside the task's files. Then run the check again:", "", "`%s`" % verify, ""]
+    if note:
+        lines += [note, ""]
     lines += ["%d. %s" % (n, review.one_line(f)) for n, f in enumerate(fixes, 1)]
     if parked:
         lines += ["", "## Parked, do not do", "", "These change the direction. The spec decides, so leave them.", ""]
@@ -581,9 +629,9 @@ def write_fix(path, tid, round_no, fixes, parked, verify):
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def ask_fix(run, tid, t, fixes, name):
+def ask_fix(run, tid, t, fixes, name, note=None):
     fix_file = run.dir(tid) / name
-    write_fix(fix_file, tid, t["round"], fixes, t["parked"], run.verify_cmd(tid))
+    write_fix(fix_file, tid, t["round"], fixes, t["parked"], run.verify_cmd(tid), note)
     t.update(state="fixing", since=now(), fix=str(fix_file), asked=[review.one_line(f) for f in fixes])
     t["asked_total"] += len(fixes)
     return fix_file
@@ -602,16 +650,20 @@ def cmd_sort(args, ws):
         if (p.get("file"), p["what"]) not in seen:
             t["parked"].append(dict(p, round=t["round"]))
     head = "Sorted:   %d fix, %d park, %d stop" % (len(result["fix"]), len(result["park"]), len(result["stop"]))
+    events.log(run.feature, "review", "%s review round %d sorted: %d fix, %d park, %d stop." % (
+        tid, t["round"], len(result["fix"]), len(result["park"]), len(result["stop"])), task=tid, repo=t["repo"])
     if result["stop"]:
         if not args.json:
             print(head)
         return stop(run, tid, "the review found something a person must decide: %s" % review.one_line(result["stop"][0]), args)
     fixes = result["fix"]
-    rounds = run.state["options"]["rounds"]
+    rounds = run.state["options"]["rounds"] + t.get("bonus", 0)  # a retry gives the task its rounds again
     data = {"task": tid, "round": t["round"], "fix": len(fixes), "park": len(result["park"])}
     if fixes and t["round"] < rounds:
         fix_file = ask_fix(run, tid, t, fixes, "fix-%d.md" % t["round"])
         run.save()
+        events.log(run.feature, "fix", "%s fix round %d: %d item(s) go back to the builder." % (tid, t["round"], len(fixes)),
+                   task=tid, repo=t["repo"])
         lines = [head, "Fix:      %s" % fix_file,
                  "Next:     send the fix list to the same builder, or a new one with the brief. When it is back: --review %s" % tid]
         emit(args, dict(data, action="fix", fix_file=str(fix_file)), lines)
@@ -646,17 +698,29 @@ def cmd_commit(args, ws):
                  "--log, then --commit %s --outside %s" % (tid, ",".join(stray))]
         emit(args, {"task": tid, "outside": stray}, lines)
         return 1
-    banned = review.banned_uses(review.pending_diff(path, files), rules)
+    diff = review.pending_diff(path, files)
+    banned = review.banned_uses(diff, rules)
     if banned:
-        fixes = [{"file": "", "line": None, "kind": "scope", "severity": "medium",
-                  "what": "The change uses %s, which the task says not to use" % n,
-                  "fix": "Use what the task's Code part says instead."} for n in banned]
-        fix_file = ask_fix(run, tid, t, fixes, "fix-not-allowed.md")
+        places = review.banned_places(diff, rules)
+        fixes = [{"file": x["file"], "line": x["line"], "kind": "scope", "severity": "medium",
+                  "what": "This line uses `%s`, which the task says not to use: `%s`" % (x["name"], x["text"][:120]),
+                  "fix": "Use what the task's Code part says instead, or another name."} for x in places]
+        fixes += [{"file": "", "line": None, "kind": "scope", "severity": "medium",
+                   "what": "The change uses `%s`, which the task says not to use" % n,
+                   "fix": "Use what the task's Code part says instead."}
+                  for n in banned if n not in {x["name"] for x in places}]
+        fix_file = ask_fix(run, tid, t, fixes, "fix-not-allowed.md",
+                           "Only the lines listed here must change. A forbidden name is still allowed as an object "
+                           "key (`{ %s: 1 }`) and in a comment, so leave those as they are." % banned[0])
         run.save()
-        lines = ["Not allowed: the change uses %s, which the task says not to use." % ", ".join(banned),
+        events.log(run.feature, "fix", "%s uses a name its task does not allow (%s): back to the builder." % (
+            tid, ", ".join(banned)), task=tid, repo=t["repo"])
+        where = ", ".join("%s:%s" % (x["file"], x["line"]) for x in places[:5]) or "a place the diff does not show"
+        lines = ["Not allowed: the change uses %s, which the task says not to use, at %s%s. Object keys and "
+                 "comments are allowed." % (", ".join(banned), where, " and %d more" % (len(places) - 5) if len(places) > 5 else ""),
                  "Fix:      %s" % fix_file,
                  "Next:     send the fix list to the builder. When it is back: --review %s" % tid]
-        emit(args, {"task": tid, "banned": banned, "fix_file": str(fix_file)}, lines)
+        emit(args, {"task": tid, "banned": banned, "places": places, "fix_file": str(fix_file)}, lines)
         return 1
     report = read_report(run, tid)
     subject = (args.message or report.get("commit") or "%s %s" % (tid, t["title"])).strip().splitlines()[0]
@@ -673,15 +737,50 @@ def cmd_commit(args, ws):
     t.update(state="committed", commit=sha, subject=subject, note=str(report.get("notes") or "").strip(),
              tests=report.get("tests") or [], ended=now(), fixed=max(0, t["asked_total"] - len(t["left"])))
     run.state["current"] = None
+    if (r.get("paused") or {}).get("task") == tid:
+        r["paused"] = None  # the task this repo waited for is in: the repo goes on, and --finish pushes it
     run.save()
+    events.log(run.feature, "commit", "%s committed %s on %s: %s" % (tid, sha, r["build_branch"], subject),
+               task=tid, repo=t["repo"])
     lines = ["Commit:   %s %s on %s · %s" % (tid, sha, r["build_branch"], subject),
              "Review:   %d fixed, %d parked, %d left" % (t["fixed"], len(t["parked"]), len(t["left"]))]
+    pause = None
     if run.state["options"].get("step"):
+        pause = "step"
         lines.append("Pause:    --step is on. Show the user what %s did and wait for a go." % tid)
+    elif run.state["options"].get("wave"):
+        ended = wave_ended(run, tid)
+        if ended:
+            pause = "wave"
+            lines.append("Pause:    wave %s is done (%s committed%s). Show the user what it built and wait for a go. "
+                         "To go on: --next" % (ended["wave"], ", ".join(ended["built"]),
+                                               ", %s not built" % ", ".join(ended["not_built"]) if ended["not_built"] else ""))
     lines.append("Next:     %s" % next_step(run))
     emit(args, {"task": tid, "commit": sha, "subject": subject, "fixed": t["fixed"], "parked": len(t["parked"]),
-                "left": len(t["left"])}, lines)
+                "left": len(t["left"]), "pause": pause}, lines)
     return 0
+
+
+def waves(run):
+    """{task id: wave} for the run. An older run did not save it, so the task files fill the gaps."""
+    out = {tid: t.get("wave") for tid, t in run.state["tasks"].items()}
+    if any(w is None for w in out.values()):
+        files = {t.id: t.get("wave") for t in tasklib.load_tasks(run.feature.path / tasklib.TASKS_DIR)}
+        out = {tid: files.get(tid) if w is None else w for tid, w in out.items()}
+    return out
+
+
+def wave_ended(run, tid):
+    """When tid was the last open task of its wave and more tasks wait: {"wave", "built", "not_built"}."""
+    st = run.state
+    of = waves(run)
+    same = [x for x in st["queue"] if of.get(x) == of.get(tid)]
+    if any(st["tasks"][x]["state"] in ACTIVE + ("queued",) for x in same):
+        return None
+    if not any(t["state"] == "queued" for t in st["tasks"].values()):
+        return None  # nothing left to wait for: the run goes straight to --finish
+    return {"wave": of.get(tid), "built": [x for x in same if st["tasks"][x]["state"] == "committed"],
+            "not_built": [x for x in same if st["tasks"][x]["state"] in ("stopped", "skipped")]}
 
 
 def task_subject(tid, subject):
@@ -710,6 +809,109 @@ def cmd_stop(args, ws):
     return stop(run, tid, args.why.strip(), args)
 
 
+def revive(st, tid):
+    """Queue again every task that was skipped only because tid stopped. Returns their ids."""
+    back, causes, grew = [], {tid}, True
+    while grew:
+        grew = False
+        for x in st["queue"]:
+            t = st["tasks"][x]
+            if t["state"] != "skipped" or x in causes:
+                continue
+            cause = t.get("because")
+            if "because" not in t:  # a run saved before "because" existed: read it from the reason
+                m = re.search(r"(?:waits for|needs) (T\d+)", t.get("why") or "")
+                cause = m.group(1) if m else None
+            if cause in causes:
+                for key in ("why", "ended", "because"):
+                    t.pop(key, None)
+                t["state"] = "queued"
+                back.append(x)
+                causes.add(x)
+                grew = True
+    return back
+
+
+def write_retry(path, tid, why, note, verify, report):
+    lines = ["# Retry %s" % tid, "",
+             plain.summary_block([
+                 ("What", "%s stopped. A person looked and decided to go on." % tid),
+                 ("It stopped because", why),
+                 ("The person says", note or None),
+                 ("The work so far", "is in the repo, not committed.")]),
+             "Read the task file again, then check the work that is there. Fix what stopped the task, inside the "
+             "task's files. Then run the check:", "", "`%s`" % verify, "",
+             "When it passes, write `%s` again: `blocked` is null, `ok` is true, and `notes` says what you built. "
+             "If the task still cannot be built as written, set `blocked` to one line on why, and stop." % report]
+    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def cmd_retry(args, ws):
+    """A person decided a stopped task goes on: back to fixing when its work is there, else back in the queue."""
+    run = open_run(ws, args)
+    st = run.state
+    tid, t = run.task(args.retry)
+    if t["state"] != "stopped":
+        raise UsageError("%s is %s, not stopped. Only a stopped task is retried. Next: %s" % (tid, t["state"], next_step(run)))
+    cur = st.get("current")
+    if cur and cur != tid:
+        raise UsageError("%s is still %s. Finish it or --stop it first, then --retry %s."
+                         % (cur, st["tasks"][cur]["state"], tid))
+    r = run.repo(t)
+    path = Path(r["path"])
+    has_work = gitops.is_repo(path) and bool(own_pending(path, ws))
+    if has_work and chopchop_code.current_branch(path) != r["build_branch"]:
+        raise UsageError("%s has uncommitted changes, but it is not on %s. A person must look first."
+                         % (t["repo"], r["build_branch"]))
+    why = t.get("why") or "no reason given"
+    note = (args.why or "").strip()
+    t.setdefault("retries", []).append({"at": now(), "stopped": why, "note": note or None})
+    n = len(t["retries"])
+    for key in ("why", "ended"):
+        t.pop(key, None)
+    if (r.get("paused") or {}).get("task") == tid:
+        r["paused"] = None
+    back = revive(st, tid)
+    st["finished"] = None
+    t["bonus"] = t["round"]
+    d = run.dir(tid)
+    old = d / REPORT
+    if old.is_file():  # keep the report of the stop, and never read it as the new one
+        (d / ("report-stop-%d.json" % n)).write_text(old.read_text(encoding="utf-8"), encoding="utf-8")
+    if has_work:
+        if old.is_file():
+            try:
+                report = json.loads(old.read_text(encoding="utf-8"))
+            except ValueError:
+                report = None
+            if isinstance(report, dict):  # the person's yes ends the stop, so the report must not say blocked
+                report.update(blocked=None, ok=True)
+                old.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        fix_file = d / ("retry-%d.md" % n)
+        write_retry(fix_file, tid, why, note, run.verify_cmd(tid), old)
+        t.update(state="fixing", since=now(), fix=str(fix_file))
+        st["current"] = tid
+        lines = ["Retry:    %s goes on. Its work is still in %s, on %s." % (tid, t["repo"], r["build_branch"]),
+                 "Fix:      %s" % fix_file]
+    else:
+        if old.is_file():
+            old.unlink()
+        t.update(state="queued")
+        lines = ["Retry:    %s is back in the queue. Nothing was built, so it starts again." % tid]
+    run.save()
+    events.log(run.feature, "run", "%s retried: a person decided to go on. It had stopped because: %s" % (tid, why),
+               task=tid, repo=t["repo"])
+    if back:
+        lines.append("Back:     %s queued again, they only waited for %s" % (", ".join(back), tid))
+    if has_work:
+        lines.append("Next:     send the retry note to a builder (a new one, with the brief), then --review %s. "
+                     "Already fixed by hand: run the check, then --review %s" % (tid, tid))
+    else:
+        lines.append("Next:     %s" % next_step(run))
+    emit(args, {"task": tid, "state": t["state"], "back": back, "fix_file": t.get("fix") if has_work else None}, lines)
+    return 0
+
+
 # --------------------------------------------------------------------------- finish
 
 
@@ -722,6 +924,13 @@ def pr_text(run, name, done):
     title = "%s: %s (%s)" % (feature.epic or "%03d" % feature.number, feature_title(feature), name)
     tasks = st["tasks"]
     lines = ["# %s" % title, "",
+             plain.summary_block([
+                 ("What", "%d task%s of %s, in %s." % (len(done), "" if len(done) == 1 else "s", feature_title(feature), name)),
+                 ("Tasks", ", ".join(done)),
+                 ("Review", "%d fixed, %d parked for the lead, %d left for a person" % (
+                     sum(tasks[x]["fixed"] for x in done), sum(len(tasks[x]["parked"]) for x in done),
+                     sum(len(tasks[x]["left"]) for x in done))),
+                 ("Into", "`%s`, never the base branch" % st["feature_branch"])]),
              "Built by /chopchop:auto from the task files, one commit per task. Each task passed its checks and a "
              "review before its commit.", "", "## Tasks", ""]
     for tid in done:
@@ -793,6 +1002,8 @@ def cmd_finish(args, ws):
                 else:
                     r["pushed"] = now()
                     row["result"] = "pushed"
+                    events.log(run.feature, "push", "%s pushed %s (%d commits)." % (name, r["build_branch"], len(done)),
+                               repo=name)
         back = r.get("was_on")
         if back and not r.get("paused") and back != r["build_branch"] and not own_pending(Path(r["path"]), ws):
             if chopchop_code.git(Path(r["path"]), "checkout", "-q", back)[0] == 0:
@@ -825,6 +1036,8 @@ def cmd_pr(args, ws):
     for tid in done:
         chopchop_code.set_status(ws, run.cfg, run.feature, tid, status="in-review", pr=url)
     run.save()
+    events.log(run.feature, "pr", "PR recorded for %s: %s (%s in review)." % (name, url, ", ".join(done) or "no task"),
+               repo=name)
     emit(args, {"repo": name, "pr": url, "tasks": done},
          ["PR:       %s · %s" % (name, url), "Review:   %s now in review" % (", ".join(done) or "no task"),
           "Next:     %s" % next_step(run)])
@@ -862,7 +1075,7 @@ def next_step(run):
         return "open the PR for %s, then --pr <repo> <url>" % ", ".join(no_pr)
     paused = [r["paused"]["task"] for r in st["repos"].values() if r.get("paused")]
     if paused:
-        return "a person decides on %s. Then plan a new run." % ", ".join(paused)
+        return "a person decides on %s. Then --retry %s to go on, or plan a new run." % (", ".join(paused), paused[0])
     return "nothing. The run is done. A person reviews and merges the PRs."
 
 
@@ -871,7 +1084,8 @@ def cmd_status(args, ws):
     st = run.state
     o = st["options"]
     lines = ["Run:      %s · started %s · up to %d review rounds · PR %s%s" % (
-        st["feature"], st["started"], o["rounds"], o["pr"], " · step" if o.get("step") else "")]
+        st["feature"], st["started"], o["rounds"], o["pr"],
+        " · step" if o.get("step") else " · pause after each wave" if o.get("wave") else "")]
     for name, r in st["repos"].items():
         n = sum(1 for t in st["tasks"].values() if t["repo"] == name and t["state"] == "committed")
         extra = " · waits for %s" % r["paused"]["task"] if r.get("paused") else ""
@@ -898,7 +1112,7 @@ def cmd_status(args, ws):
 # --------------------------------------------------------------------------- main
 
 
-ACTIONS = ["plan", "start", "next", "review", "sort", "commit", "stop", "finish", "pr", "status"]
+ACTIONS = ["plan", "start", "next", "review", "sort", "commit", "stop", "retry", "finish", "pr", "status"]
 
 
 def build_parser():
@@ -911,6 +1125,7 @@ def build_parser():
     p.add_argument("--sort", metavar="TASK", help="sort the review into fix, park and stop")
     p.add_argument("--commit", metavar="TASK", help="commit the task on its build branch")
     p.add_argument("--stop", metavar="TASK", help="stop a task (with --why)")
+    p.add_argument("--retry", metavar="TASK", help="start a stopped task again, when a person decided to go on")
     p.add_argument("--finish", action="store_true", help="push the build branches and write the PR texts")
     p.add_argument("--pr", nargs=2, metavar=("REPO", "URL"), help="record a repo's PR")
     p.add_argument("--status", action="store_true", help="where the run is, and the next step")
@@ -918,8 +1133,9 @@ def build_parser():
     p.add_argument("--only", metavar="IDS", help="with --plan or --start: only these tasks, e.g. T01,T02")
     p.add_argument("--repo", metavar="NAME", help="with --plan or --start: only this repo's tasks")
     p.add_argument("--step", action="store_true", help="with --start: pause after each task")
+    p.add_argument("--wave", action="store_true", help="with --start: pause after each wave")
     p.add_argument("--new", action="store_true", help="with --start: drop an open run and start again")
-    p.add_argument("--why", help="with --stop: the reason")
+    p.add_argument("--why", help="with --stop: the reason. With --retry: what the person decided")
     p.add_argument("--message", help="with --commit: the commit subject")
     p.add_argument("--outside", metavar="FILES", help="with --commit: files outside the task that it may commit")
     p.add_argument("--feature", metavar="REF", help="feature number, epic key or name")

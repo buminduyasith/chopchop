@@ -22,7 +22,7 @@ new to the repo, a QA engineer and a lead should all find their part fast.
 
 | # | Section | What goes in |
 | --- | --- | --- |
-| 1 | Summary | What we build, for whom, what done looks like. A link to the design. |
+| 1 | Summary | The Summary of the file: a busy reader stops here. What we build, for whom, what done looks like. A link to the design. |
 | 2 | Words we use | A table: Word, What it means here. |
 | 3 | What changes | Added, Changed, Removed, compared with today. Behavior, not code. |
 | 5 | How it works today | Today's nearest flow, step by step, each fact cited. The closest feature to copy. |
@@ -39,3 +39,10 @@ The other sections are generated from spec.json. Change spec.json and build agai
 > 3. The API checks the 30 day window and saves the refund as pending.
 > `RefundService.request` in `payments-api/src/refunds/RefundService.java` does both; it calls
 > the existing `orders.findOwned` first, so a stranger gets 403.
+
+## No plain text boxes
+
+A code block is only for real code or a command, always with its language: ```js, ```bash, ```json.
+Never put a list, a tree, a message, a quote or a note in a code block. It shows as a grey box that is hard
+to read. Use a list (nested for a tree), a table, or a quote (`> `) instead. The checks warn about a code
+block with no language or with `text`.

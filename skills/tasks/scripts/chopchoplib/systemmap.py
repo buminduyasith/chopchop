@@ -25,6 +25,7 @@ from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 
+from . import plain
 from .cite import CITE_RE
 
 SYSTEM_DIR = "system"
@@ -353,6 +354,14 @@ def render_md(m):
     lines = ["# System map", "",
              "_Written by chopchop from system-map.json. Fix entries in the JSON and mark them "
              '`"source": "person"`, so chopchop never overwrites them._', "",
+             plain.summary_block([
+                 ("What", "the parts of the system, who owns each, and what talks to what."),
+                 ("Size", "%d repo%s, %d part%s, %d link%s" % (
+                     len(repos), "" if len(repos) == 1 else "s", len(m.get("nodes") or []),
+                     "" if len(m.get("nodes") or []) == 1 else "s", len(m.get("links") or []),
+                     "" if len(m.get("links") or []) == 1 else "s")),
+                 ("Repos", ", ".join(sorted(repos)) or "none yet"),
+                 ("Updated", m.get("updated") or "never")]),
              "Updated: %s" % (m.get("updated") or "never"), "", "## Repos", "",
              "| Repo | Kind | Owners | Layers | Read at | Learned |", "| --- | --- | --- | --- | --- | --- |"]
     for name in sorted(repos):

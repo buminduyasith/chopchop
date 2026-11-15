@@ -10,6 +10,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
 import chopchop_diagram  # noqa: E402
+from chopchoplib import board, plain  # noqa: E402
 
 ARCH = {"title": "Refunds", "nodes": [
     {"id": "customer", "name": "Customer", "kind": "person", "row": 0, "col": 0},
@@ -49,9 +50,29 @@ class DiagramTest(unittest.TestCase):
         code, out = run("--draw", *self.write())
         self.assertEqual(code, 0, out)
         self.assertIn("message 2 (saves pending): Runs twice", out)  # a missing answer does not stop the drawing
-        page = (self.dir / "diagrams.html").read_text()
-        self.assertIn('class="cc-arch"', page)
-        self.assertIn('class="cc-flow"', page)
+        self.assertIn("Preview: %s" % (self.dir / "diagrams.md").resolve(), out)
+        md = (self.dir / "diagrams.md").read_text()  # Markdown, never a page
+        self.assertEqual(plain.summary_points(md), [
+            "What: the two pictures of the design: the parts, and the main flow.",
+            "High-level design: 3 parts, 2 links", "Main flow: 3 messages",
+            "Still open: 0 problem(s) to fix, 1 failure answer(s) missing"])
+        self.assertIn("## High-level design\n\n```mermaid\nflowchart LR", md)
+        self.assertIn("## Main flow\n\n```mermaid\nsequenceDiagram", md)
+        self.assertIn("- Missing answer: message 2 (saves pending): Runs twice", md)
+        self.assertEqual(list(self.dir.glob("*.html")), [])
+
+    def test_draw_says_what_is_wrong_and_open_names_the_file(self):
+        arch = json.loads(json.dumps(ARCH))
+        arch["links"][0]["label"] = "1. asks"
+        code, out = run("--draw", "--open", *self.write(arch=arch))
+        self.assertEqual(code, 1)
+        md = (self.dir / "diagrams.md").read_text()
+        self.assertIn("- **High-level design:** not drawn: 1 problem(s)", md)
+        self.assertIn("- Problem: ", md)
+        self.assertNotIn("flowchart LR", md)
+        # outside a feature there is no workspace, so no dashboard: it names the Markdown file
+        self.assertIn("Read:    %s (no dashboard here: this is the Markdown file)" % (self.dir / "diagrams.md").resolve(), out)
+        self.assertEqual(board.open_dashboard(self.dir, self.dir / "no-dashboard.py"), None)
 
     def test_steps_on_the_structure_are_refused(self):
         arch = json.loads(json.dumps(ARCH))

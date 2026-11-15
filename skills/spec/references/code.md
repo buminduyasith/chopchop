@@ -12,6 +12,9 @@ the way the repo already writes code.
   `RefundService`. `V41__order_cancellations.sql` gives `V42__refunds.sql`.
 - **test_example**: one real test name from the repo, so new tests are named the same way.
 - **style**: the rules from the team's style file that this feature touches, quoted.
+- **limits**: what the lint or CI enforces, with the numbers (file length, function length,
+  banned names). Plan the files so every one still passes: when new tests would push a test
+  file over its length limit, put them in a new test file next to it and list that file.
 - **do_not**: the traps, in plain words. **forbid**: the code names of those traps (`["orderHelpers"]`). The
   script checks no sketch uses them, and auto checks no commit adds them. Only list names that are
   wrong everywhere: never a safe name like the feature's own field.
@@ -19,7 +22,7 @@ the way the repo already writes code.
 ## Per package
 
 - **copy**: the closest existing code, as a citation (at most about 20 lines), with why it is
-  the one to copy and what to change. The page and the task show the real lines.
+  the one to copy and what to change. spec.md and the task show the real lines.
 - **reuse**: every existing method or type the new code calls, with the citation where it
   lives. The script checks the name is in the cited lines.
 - **makes**: the new names this package creates, so later packages and sketches can use them.

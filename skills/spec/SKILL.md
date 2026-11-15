@@ -1,7 +1,7 @@
 ---
 name: spec
 description: Turn an approved design into the full plan to build, test and finish a feature, written for people and for agents. Reads the code in each repo, then writes spec.md (21 sections in 4 parts, simple English, no length cap) and spec.json (rules with examples, every file, code to copy, existing methods to reuse, sketches of new code in the repo's own style, contracts, unit tests by name, end-to-end journeys, manual checks, and work packages that become tasks). Checks it against the code, and tracks each proof to done. Use when the user runs spec, wants a spec, a technical spec, an implementation plan or a build plan for a feature, wants to see what is built and proved, signs a manual check, or sets a feature to done. --auto asks nothing.
-argument-hint: "[feature] [--auto] | --status | --sign M1 --by NAME | --done --by NAME | --open"
+argument-hint: "[feature] [--auto] | --approve \"Name\" | --status | --sign M1 --by NAME | --done --by NAME | --open"
 ---
 
 # Spec
@@ -23,10 +23,11 @@ fits the repo) and `references/writing.md` (words people can read).
 | nothing, or a feature | The whole run, steps 1 to 9. |
 | `--auto` | The same, with no questions. Every guess goes in `assumptions`. |
 | `"notes"` on an existing spec | Change the spec from the notes, build, and say what changed. |
-| `--status` | `--status <ref>`: what is planned, built, proved. |
+| `--approve "Asha"` | Only when the user says that person read the spec and said yes. See "Approve". |
+| `--status` | `--status <ref>`: what is planned, built, proved, and who approved the spec. |
 | `--sign M1 --by "Asha"` | Only when the user says that person checked it. Then `--status`. |
 | `--done --by "Asha"` | Only when the user says to. A person sets done, never you. |
-| `--open` | `--open <ref>`. |
+| `--open` | `--open <ref>`. It starts the dashboard and prints its link. With no dashboard skill it prints the path of spec.md. |
 
 ## 1. Prepare
 
@@ -38,8 +39,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_spec.py --prepare <ref> --json
 - Design not approved: say so in one line, and go on. The lead can approve while you write.
 - A repo with no profile (`_chopchop/repos/<repo>.md`): its tests have no run command. Offer
   to make it with `/chopchop:code --profile <repo>`, and use the commands it finds.
-- Helper settings not set: ask the 3 helper questions once, the way the design skill does,
-  even with `--auto`. Then `--plan <size> --repos <repo1,repo2>` and say its line.
+- Helper settings not set: ask the 3 helper questions once, the way the design skill does.
+  With `--auto`, save the recommended ones without asking, as its step 2 says. Then `--plan <size> --repos <repo1,repo2>` and say its line. It refuses
+  a repo name that is not in `chopchop.yaml`: use the names `--prepare` lists.
 
 ## 2. Read the code
 
@@ -120,10 +122,13 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_spec.py --build <ref>
 ```
 
 It checks spec.json against the stories, the design's failure answers and the code (every
-citation, every reused name, every file path), fills the 13 generated blocks, lints spec.md
-and adds the Spec tab to feature.html. Exit 0 means ready. Exit 1 lists what blocks it: fix
-each one and build again, at most 3 rounds, then tell the user what is left. Exit 2 means an
-input file is broken.
+citation, every reused name, every file path), fills the 13 generated blocks and lints
+spec.md. Exit 0 means ready. Exit 1 lists what blocks it: fix each one and build again, at
+most 3 rounds, then tell the user what is left. Exit 2 means an input file is broken.
+
+Section 1 is the Summary of the file: the build fails when it is missing or empty. The
+`Approved:` line says who approved the spec. When spec.json or the words of spec.md changed
+after that yes, the build says so and sets `changed_since_approval`: the spec needs a new yes.
 
 ## 7. Cold read
 
@@ -140,8 +145,25 @@ Keep it short:
 
 1. One line: rules, packages, repos, tests, journeys.
 2. What is still open: questions, warnings you left, a design that is not approved yet.
-3. The page: `feature.html`, Spec tab.
-4. Next: `/chopchop:tasks <ref>` cuts one task per package, and one prove task per journey.
+3. Where to read it: the dashboard link (`--open` prints it), Spec tab. The file is
+   `spec/spec.md`.
+4. Next: a person reads the spec and approves it (`/chopchop:spec --approve "Name"`). Then
+   `/chopchop:tasks <ref>` cuts one task per package, and one prove task per journey.
+
+## Approve
+
+A person approves the spec, never you. Run this only when the user says who read it and said
+yes:
+
+```
+python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_spec.py --approve "Name" [--note "..."] <ref>
+```
+
+It builds the spec once more and refuses when something still blocks it. Then it writes
+`approved_by` and `approved_on` in the front matter of spec.md and clears
+`changed_since_approval`. A later change to spec.json or to the words of spec.md sets
+`changed_since_approval: true` at the next build, and `--status` shows it. `/chopchop:tasks`
+warns, and does not stop, when it cuts tasks from a spec nobody approved.
 
 ## Later
 
@@ -156,4 +178,6 @@ Keep it short:
 - Read only in the repos. Never change code, never run their tests, never push.
 - Never ask for, store or put secrets in the spec. Code you copy is masked if it looks like a
   key or a password.
-- Never sign a check or set done for a person.
+- Never sign a check, approve the spec or set done for a person.
+- Markdown only, in simple English, with no long dashes. This holds for the files, your
+  questions and your replies.

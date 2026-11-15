@@ -59,7 +59,8 @@ def add_entry(changelog_path, entry):
         first = re.search(r"(?m)^## C-\d+", text)
         pos = first.start() if first else len(text)
     head, tail = text[:pos].rstrip("\n"), text[pos:].lstrip("\n")
-    path.write_text(head + "\n\n" + entry + ("\n" + tail if tail.strip() else ""), encoding="utf-8")
+    text = head + "\n\n" + entry + ("\n" + tail if tail.strip() else "")
+    path.write_text(tasklib.changelog_with_summary(text), encoding="utf-8")
 
 
 def add_heads_up(task, line):

@@ -68,7 +68,7 @@ the user only asks "what changed?" without wanting the file updated.
 ## 3. Reply
 
 **New feature:** one or two lines. The folder, the file path, how many stories, and the
-next step ("read it through, then run the design skill").
+next step ("read it through, then `/chopchop:run <number>` checks it against the code").
 
 **Resync with no changes:** one line. "Nothing changed in the tracker since <date>. The
 file is the same."

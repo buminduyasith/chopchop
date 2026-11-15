@@ -161,6 +161,8 @@ def style_skeleton(name, facts):
         "# Code style · %s" % name, "",
         "_chopchop follows this file for every task in %s. Started by init from the code; "
         "keep it short, real and checked by the team._" % name, "",
+        "## Summary", "",
+        "- **What:** how code is written in %s. chopchop follows it for every task." % name,
         "- **Languages:** %s" % (", ".join(facts["languages"]) or "?"),
         "- **Formatters and linters:** %s (their config wins on formatting)" % (", ".join(facts["tools"]) or "none found"),
         "- **Top folders:** %s" % (", ".join("`%s/`" % f for f in facts["top_folders"]) or "-"), "",

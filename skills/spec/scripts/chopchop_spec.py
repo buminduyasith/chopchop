@@ -5,11 +5,12 @@ Usage
   chopchop_spec.py --prepare [REF] [--json]          everything the run needs, and what is missing
   chopchop_spec.py --plan SIZE --repos a,b           how many helpers this job gets
   chopchop_spec.py --scaffold [REF]                  start spec/spec.md and spec/spec.json
-  chopchop_spec.py --build [REF] [--json]            check, fill the generated sections, lint, update the page
-  chopchop_spec.py --status [REF] [--json]           what is planned, built and proved
+  chopchop_spec.py --build [REF] [--json]            check, fill the generated sections, lint
+  chopchop_spec.py --approve NAME [--note TEXT] [REF]   a person approves the spec, when the build is ready
+  chopchop_spec.py --status [REF] [--json]           what is planned, built and proved, and who approved it
   chopchop_spec.py --sign M1 --by NAME [REF]         a person signs a manual check or a manual journey
   chopchop_spec.py --done --by NAME [REF]            a person sets the feature to done, when everything is proved
-  chopchop_spec.py --open [REF]                      open feature.html
+  chopchop_spec.py --open [REF]                      start the live dashboard and open it
 
 REF is a feature (number, epic key or part of the name). With one feature it can be left out.
 
@@ -20,16 +21,17 @@ Files, in _chopchop/<feature>/:
   work/verify/      test results /chopchop:code saves for each task
 
 --build exits 0 when the spec is ready to cut tasks, 1 when something blocks it (it says what),
-and 2 when an input file is broken.
+and 2 when an input file is broken. A build after an approval says so when spec.json or the
+words of spec.md changed since: the spec then needs a new yes.
 
 Needs the tasks skill next to it. Standard library only. Python 3.8+.
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
-import webbrowser
 from datetime import date
 from pathlib import Path
 
@@ -39,14 +41,13 @@ if not (TASKS / "scripts" / "chopchoplib" / "specdata.py").is_file():
     sys.exit("Error: spec needs the tasks skill next to it (%s not found)." % TASKS)
 sys.path.insert(0, str(TASKS / "scripts"))
 
-from chopchoplib import cite, designdoc, diagrams, features, helpers, mdhtml, page, specdata  # noqa: E402
+from chopchoplib import board, cite, designdoc, events, features, helpers, specdata  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 from chopchoplib.requirements import requirement_items, story_ids  # noqa: E402
 
 SPEC_TEMPLATE = HERE.parent / "templates" / "spec.md"
-PAGE_TEMPLATE = TASKS / "templates" / "feature.html"
 SKELETON = {"version": 1, "title": "", "rules": [], "out_of_scope": [], "repos": {}, "contracts": [],
             "packages": [], "journeys": [], "checks": [], "questions": [], "assumptions": []}
 
@@ -77,7 +78,6 @@ class Paths:
         self.arch = feature.path / "design" / "architecture.json"
         self.options = self.work / "options.json"
         self.tasks = feature.path / tasklib.TASKS_DIR
-        self.page = feature.path / page.PAGE_FILE
 
     def as_dict(self):
         return {k: str(v) for k, v in vars(self).items() if isinstance(v, Path)}
@@ -255,21 +255,22 @@ def fill_blocks(body, spec, ctx, results, st, meta):
     return body
 
 
-def update_page(ctx, spec, body, st, meta, results):
-    paths = ctx["paths"]
-    data = page.read_data(paths.page)
-    if data is None:
+def content_hash(spec, body):
+    """One hash for what a person approves: the facts in spec.json and the words of spec.md.
+
+    The generated blocks are left out (they repeat spec.json, and two of them move with the task
+    statuses), and so is white space, so only a real change gives a new hash."""
+    facts = json.dumps(spec, sort_keys=True, ensure_ascii=False)
+    words = re.sub(r"\s+", " ", specdata.without_blocks(body or "")).strip()
+    return hashlib.sha256((facts + "\n" + words).encode("utf-8")).hexdigest()[:16]
+
+
+def approval(meta):
+    """{"by", "on", "note", "changed"} for an approved spec, or None."""
+    if not meta or not meta.get("approved_by"):
         return None
-    html = mdhtml.convert(body)
-    svg = diagrams.file_map_svg(spec)
-    if svg:
-        html = page._swap(html, diagrams.file_map_mermaid(spec), svg)
-    data["spec"] = page.spec_part(html, specdata.counts(spec), st, meta)
-    data.setdefault("cites", {}).update(page.cite_data(results))
-    data["stages"] = page.spec_stages(data.get("stages") or [], st, meta)
-    data["generated"] = page.now()
-    paths.page.write_text(page.render(PAGE_TEMPLATE.read_text(encoding="utf-8"), data), encoding="utf-8")
-    return str(paths.page)
+    return {"by": meta.get("approved_by"), "on": meta.get("approved_on"), "note": meta.get("approved_note"),
+            "changed": bool(meta.get("changed_since_approval"))}
 
 
 def build(ws, cfg, ref):
@@ -279,6 +280,7 @@ def build(ws, cfg, ref):
     meta, body = read_md(paths.md)
     if meta is None:
         raise UsageError("No spec/spec.md yet. Run --scaffold first.")
+    before = content_hash(spec, body)
     errors, warnings = specdata.validate(spec, ctx["stories"], ctx["known"], set(ctx["repos"]) or None, ctx["flow"])
     dmeta, _ = read_md(paths.design)
     if dmeta is None:
@@ -329,14 +331,20 @@ def build(ws, cfg, ref):
         meta["status"] = "building" if ctx["tasks"] and not errors else ("ready" if not errors else "draft")
     meta["updated"] = date.today().isoformat()
     meta["design_version"] = meta.get("design_version") or (dmeta or {}).get("version")
+    if meta.get("approved_by"):
+        if before != meta.get("approved_hash"):
+            meta["changed_since_approval"] = True
+            warnings.append("the spec changed after %s approved it on %s. A person approves it again: --approve \"Name\"."
+                            % (meta["approved_by"], meta.get("approved_on")))
+        else:
+            meta["changed_since_approval"] = False
+            if moved:  # the script moved a citation to its new lines: the same spec, so the same yes
+                meta["approved_hash"] = content_hash(spec, body)
     write_md(paths.md, meta, body)
-    pg = update_page(ctx, spec, body, st, meta, results)
-    if pg is None:
-        warnings.append("no feature.html yet, so the Spec tab was not added. Build the design page first.")
     report = {"feature": feature.name, "ready": not errors, "status": meta["status"], "errors": errors,
               "warnings": warnings, "counts": specdata.counts(spec), "cites": cite.summary(results),
               "moved_fixed": moved, "proof": {"proved": st["proved"], "total": st["total"]},
-              "spec": str(paths.md), "data": str(paths.json), "page": pg}
+              "spec": str(paths.md), "data": str(paths.json), "approval": approval(meta)}
     paths.work.mkdir(parents=True, exist_ok=True)
     paths.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
@@ -352,15 +360,25 @@ def print_report(r):
     if r["moved_fixed"]:
         print("Fixed:    %d citations that moved" % r["moved_fixed"])
     print("Proof:    %d of %d proved" % (r["proof"]["proved"], r["proof"]["total"]))
-    if r["page"]:
-        print("Page:     %s (Spec tab)" % r["page"])
+    print("Approved: %s" % approval_text(r.get("approval")))
     for e in r["errors"]:
         print("Error:    %s" % e)
     for w in r["warnings"]:
         print("Warning:  %s" % w)
-    print("Result:   %s" % ("ready (the structure checks pass). Next: the cold read (step 7), then /chopchop:tasks"
+    ok = r.get("approval") and not r["approval"]["changed"]
+    print("Result:   %s" % ("ready (the structure checks pass). Next: the cold read (step 7), then %s/chopchop:tasks"
+                            % ("" if ok else "a person approves it (--approve \"Name\"), then ")
                             if r["ready"] else
                             "%d thing(s) block it. Fix them and build again." % len(r["errors"])))
+
+
+def approval_text(a):
+    if not a:
+        return "not yet. A person says yes with --approve \"Name\"."
+    text = "by %s on %s" % (a["by"], a["on"])
+    if a.get("note"):
+        text += " (%s)" % a["note"]
+    return text + (". It changed since: approve it again." if a["changed"] else "")
 
 
 # --------------------------------------------------------------------------- status, sign, done
@@ -375,18 +393,13 @@ def status(ws, cfg, ref):
         body, _ = designdoc.fill(body, "done", specdata.render_done(st, meta))
         body, _ = designdoc.fill(body, "trace", specdata.render_trace(ctx["spec"], st))
         write_md(ctx["paths"].md, meta, body)
-        data = page.read_data(ctx["paths"].page)
-        if data is not None and data.get("spec"):
-            data["spec"] = page.spec_part(page._swap(mdhtml.convert(body), diagrams.file_map_mermaid(ctx["spec"]),
-                                                     diagrams.file_map_svg(ctx["spec"])), specdata.counts(ctx["spec"]), st, meta)
-            data["stages"] = page.spec_stages(data.get("stages") or [], st, meta)
-            ctx["paths"].page.write_text(page.render(PAGE_TEMPLATE.read_text(encoding="utf-8"), data), encoding="utf-8")
     st.pop("task_of", None)
-    return dict(st, feature=feature.name, status=(meta or {}).get("status"))
+    return dict(st, feature=feature.name, status=(meta or {}).get("status"), approval=approval(meta))
 
 
 def print_status(st):
     print("Feature:  %s · spec %s" % (st["feature"], st["status"] or "not started"))
+    print("Approved: %s" % approval_text(st.get("approval")))
     print("Tasks:    %d of %d done" % (st["tasks"]["done"], st["tasks"]["total"]))
     print("Proof:    %d of %d proved" % (st["proved"], st["total"]))
     for i in st["items"]:
@@ -412,7 +425,28 @@ def sign(ws, cfg, ref, item, by):
     proof.setdefault("signed", {})[item] = {"by": by, "on": date.today().isoformat()}
     ctx["paths"].work.mkdir(parents=True, exist_ok=True)
     ctx["paths"].proof.write_text(json.dumps(proof, indent=2) + "\n", encoding="utf-8")
+    events.log(feature, "spec", "%s signed by %s." % (item, by), by=by)
     return status(ws, cfg, ref)
+
+
+def approve(ws, cfg, ref, name, notes):
+    """A person's yes for the spec. Only when a fresh build is ready, so the yes is for what was checked."""
+    name = (name or "").strip()
+    if not name:
+        raise UsageError("--approve needs the name of the person who said yes.")
+    report = build(ws, cfg, ref)
+    if not report["ready"]:
+        raise UsageError("The spec is not ready, so it cannot be approved yet:\n  - " + "\n  - ".join(report["errors"]))
+    feature = features.resolve(ws, ref)
+    paths = Paths(feature)
+    meta, body = read_md(paths.md)
+    spec = load_json(paths.json, "spec/spec.json")
+    note = " ".join(n.strip() for n in notes or [] if n and n.strip()) or None
+    meta.update(approved_by=name, approved_on=date.today().isoformat(), approved_note=note,
+                approved_hash=content_hash(spec, body), changed_since_approval=False)
+    write_md(paths.md, meta, body)
+    events.log(feature, "approve", "Spec approved by %s.%s" % (name, " Note: %s" % note if note else ""), by=name)
+    return {"feature": feature.name, "spec": str(paths.md), "status": meta.get("status"), "approval": approval(meta)}
 
 
 def done(ws, cfg, ref, by):
@@ -427,6 +461,7 @@ def done(ws, cfg, ref, by):
     meta, body = read_md(ctx["paths"].md)
     meta.update(status="done", done_by=by, done_on=date.today().isoformat())
     write_md(ctx["paths"].md, meta, body)
+    events.log(feature, "done", "Feature set to done by %s." % by, by=by)
     return status(ws, cfg, ref)
 
 
@@ -443,6 +478,8 @@ def main(argv=None):
     p.add_argument("--repos", nargs="+", help="repos the feature changes, with --plan: a,b or a b")
     p.add_argument("--scaffold", action="store_true")
     p.add_argument("--build", action="store_true")
+    p.add_argument("--approve", metavar="NAME", help="the person who approves the spec")
+    p.add_argument("--note", action="append", help="with --approve: a short note from that person")
     p.add_argument("--status", action="store_true")
     p.add_argument("--sign", metavar="ID", help="a manual check (M1) or manual journey (J2)")
     p.add_argument("--done", action="store_true")
@@ -460,8 +497,8 @@ def main(argv=None):
                 print_prepare(out)
                 return 0
         elif args.plan:
-            names = [r.strip() for x in (args.repos or []) for r in x.split(",") if r.strip()]
             try:
+                names = helpers.known_repos(args.repos, repo_dirs(cfg, ws))
                 out = helpers.plan(args.plan, names, helpers.settings(cfg), choices=False)
             except ValueError as e:
                 raise UsageError(str(e))
@@ -479,11 +516,20 @@ def main(argv=None):
                 return 0
         elif args.build:
             out = build(ws, cfg, args.ref)
+            events.log(features.resolve(ws, args.ref), "spec", "Spec built: ready." if out["ready"] else
+                       "Spec built: %d thing(s) block it." % len(out["errors"]))
             if args.json:
                 print(json.dumps(out, indent=2))
             else:
                 print_report(out)
             return 0 if out["ready"] else 1
+        elif args.approve is not None:
+            out = approve(ws, cfg, args.ref, args.approve, args.note)
+            if not args.json:
+                print("Spec:     %s" % out["spec"])
+                print("Approved: %s" % approval_text(out["approval"]))
+                print("Next:     /chopchop:tasks cuts the spec into tasks")
+                return 0
         elif args.status or args.sign or args.done:
             if args.sign:
                 out = sign(ws, cfg, args.ref, args.sign, args.by)
@@ -495,14 +541,13 @@ def main(argv=None):
                 print_status(out)
                 return 0
         elif args.open:
-            pg = Paths(features.resolve(ws, args.ref)).page
-            if not pg.exists():
-                raise UsageError("No feature.html yet. Build the design first.")
-            webbrowser.open(pg.resolve().as_uri())
-            print("Opened:   %s" % pg)
+            paths = Paths(features.resolve(ws, args.ref))
+            if not paths.md.is_file():
+                raise UsageError("No spec/spec.md yet. Run --scaffold, write it, then --build.")
+            print(board.open_dashboard(ws) or "Read:     %s (no dashboard skill next to this one)" % paths.md)
             return 0
         else:
-            raise UsageError("Use --prepare, --scaffold, --build, --status, --sign, --done or --open. See --help.")
+            raise UsageError("Use --prepare, --scaffold, --build, --approve, --status, --sign, --done or --open. See --help.")
         print(json.dumps(out, indent=2, default=str))
         return 0
     except Inputs as e:

@@ -14,7 +14,7 @@ PLUGIN = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
 import chopchop_design  # noqa: E402  (puts the tasks scripts on the path)
-from chopchoplib import features  # noqa: E402
+from chopchoplib import board, events, features, plain  # noqa: E402
 
 SETUP = PLUGIN / "evals" / "sample-project" / "setup.py"
 
@@ -108,7 +108,7 @@ Customers can ask for a refund of a card payment from the order page. A support 
 **The ask:** approve refunds that start as pending and use a new refunds table.
 **Size:** 2 repos, about 6 tasks in 3 waves.
 
-<!-- talk: Start with the ask. Two repos change. -->
+<!-- talk: an old speaker note. Slides are gone, and a comment like this one is simply ignored. -->
 
 ## 2. High-level design
 
@@ -248,6 +248,27 @@ class PrepareTest(Base):
         line = self.design("--plan", "medium", "--repos", "web-app")
         self.assertIn("Helper settings are not saved yet: ask the 3 helper questions before starting any helper.", line)
 
+    def test_plan_refuses_a_repo_that_is_not_in_the_config(self):
+        out = self.design("--plan", "medium", "--repos", "web-app", "nosuch", code=2)
+        self.assertIn("Error: Not in chopchop.yaml: nosuch. Repos: ledger-service, notify-service, payments-api, web-app.", out)
+        self.assertIn("Not in chopchop.yaml: nosuch, other.", self.design("--plan", "small", "--repos", "nosuch,other", code=2))
+
+    def test_prepare_names_the_brief_and_the_grooming(self):
+        text = self.design("--prepare")
+        self.assertNotIn("Brief:", text)
+        self.assertNotIn("Grooming:", text)
+        req = self.feature.path / "requirements"
+        (req / "brief.md").write_text(features.render_front_matter(
+            {"title": "Refunds", "status": "approved", "approved_by": "Dana", "approved_on": "2026-11-14",
+             "changed_since_approval": False}) + "# Brief\n\n## Summary\n\n- Refunds for card payments.\n")
+        (req / "grooming.md").write_text("# Grooming\n\n## Summary\n\n- 3 questions, all answered.\n")
+        text = self.design("--prepare")
+        self.assertIn("Brief:    %s (approved by Dana). Read it first: it wins on what to build." % (req / "brief.md"), text)
+        self.assertIn("Grooming: %s. Its answers are decisions already made: do not ask them again." % (req / "grooming.md"), text)
+        d = json.loads(self.design("--prepare", "--json"))
+        self.assertEqual((d["brief"]["exists"], d["brief"]["approved_by"], d["grooming"]["exists"]), (True, "Dana", True))
+        self.assertEqual(d["files"]["brief"], str(req / "brief.md"))
+
 
 class BuildTest(Base):
     def test_build_blocks_then_passes(self):
@@ -283,37 +304,30 @@ class BuildTest(Base):
         self.paths.design.write_text(body)
         out = self.design("--pick", "1=A")
         self.assertIn("Result:   ready for review", out)
-        page = self.paths.page.read_text()
-        self.assertNotIn("/*__CHOPCHOP_FEATURE__*/null", page)
-        data = json.loads(page.split('type="application/json">', 1)[1].split("</script>", 1)[0])
-        self.assertEqual(data["feature"]["title"], "Refunds for card payments")
-        self.assertTrue(data["report"]["ready"])
-        titles = [s["title"] for s in data["slides"]]
-        self.assertEqual(titles[0], "Refunds for card payments")
-        self.assertEqual(len(titles), 12)  # 11 slides and 1 backup, never one slide per option or question
-        why_not = data["slides"][titles.index("Options we did not pick")]["qa"]
-        self.assertIn(["Why not A status column on payments?", "We picked A new refunds table. payments has no status columns today"],
-                      why_not)
-        backup = data["slides"][-1]
-        self.assertEqual((backup["title"], backup["backup"]), ("Backup: likely questions", True))
-        self.assertEqual(backup["qa"][0][0], "Why not a status column on payments?")
-        flow = data["slides"][titles.index("Main flow and errors")]
-        self.assertTrue(flow["svg"].startswith("<svg"))
-        self.assertEqual(flow["bullets"], [])  # a diagram slide shows only the diagram
-        self.assertIn("1. The customer clicks Refund on the order page.", flow["say"])  # what to say: every message
-        hld = data["slides"][1]
-        self.assertEqual(hld["title"], "High-level design")
-        self.assertIn('class="cc-arch"', hld["svg"])
-        self.assertIn("Refund API is new (payments-api).", hld["say"])
-        self.assertTrue(all(s["say"] for s in data["slides"]))
-        self.assertEqual(data["design"]["html"].count('class="diagram drawn"'), 2)  # the page shows its own drawings
-        self.assertNotIn("subgraph g_payments_api", data["design"]["html"])
-        self.assertNotIn("map", data)
-        self.assertEqual(data["slides"][0]["ask"], "approve refunds that start as pending and use a new refunds table.")
-        self.assertIn("The ask: approve refunds", data["message"])
-        self.assertIn("For @ledger-team: Should the ledger hear refund.done", data["message"])
-        self.assertIn('class="cite"', data["design"]["html"])
-        self.assertEqual(data["stages"][0]["text"], "2 stories, 5 ACs")
+        # the review message is in the build report now: there is no page to put it on
+        self.assertIn("Message:  send this to the lead with the design", out)
+        self.assertIn("  Design for review: Refunds for card payments (PAY-120)", out)
+        self.assertIn("  The ask: approve refunds that start as pending and use a new refunds table.", out)
+        self.assertIn("  Key choices: ApiError; A new refunds table.", out)
+        self.assertIn("  For @ledger-team: Should the ledger hear refund.done", out)
+        self.assertIn("  Who must approve: @pay-team; @web-team; @ledger-team", out)
+        self.assertIn("  Read: design/design.md in 001-PAY-120-refunds-for-card-payments", out)
+        report = json.loads(self.paths.build.read_text())
+        self.assertTrue(report["ready"])
+        self.assertIn("The ask: approve refunds", report["message"])
+        self.assertNotIn("page", report)
+        self.assertEqual(list(self.feature.path.rglob("*.html")), [])  # Markdown only
+        # every Markdown file it writes starts with a Summary
+        self.assertEqual(plain.summary_points(self.paths.options_md.read_text()), [
+            "What: 2 choices before the design: 1 conflict in the code, 1 decision.", "Picked: 2 of 2",
+            "For the lead: 1 point", "Parked: 1 idea, kept for later"])
+        self.assertTrue(plain.has_summary(self.paths.design.read_text()))  # section 1 is the Summary
+        self.assertNotIn("speaker notes", out)
+        log = [(e["kind"], e["text"]) for e in events.read(self.feature)]
+        self.assertEqual(log[0][0], "design")
+        self.assertIn("block the approval request", log[0][1])
+        self.assertEqual(log[1:], [("design", "Choice 1 is now A, picked by you."),
+                                   ("design", "Design built: ready for review.")])
 
     def test_missing_failure_answer_blocks(self):
         self.write_inputs(fl=flow(answer_all=False))
@@ -346,6 +360,29 @@ class BuildTest(Base):
         self.assertIn("story PAY-122 is not in section 4 (Scope)", out)
         self.assertIn("has a long dash", out)
         self.assertIn("Missing: 7. Contract changes", out)
+        self.assertNotIn("Message:", out)  # nothing to send while something blocks it
+
+    def test_no_summary_section_blocks(self):
+        self.write_inputs(body=DESIGN_BODY.replace("## 1. Summary and the ask", "## 1. The ask")
+                          .replace("LegacyRefundNote.java:3", "OrderCancelService.java:12-17"))
+        out = self.design("--build", code=1)
+        self.assertIn("Missing: 1. Summary and the ask", out)
+        self.assertFalse(plain.has_summary(self.paths.design.read_text()))
+
+    def test_open_starts_the_dashboard_or_names_the_file(self):
+        self.assertIn("No design.md yet", self.design("--open", code=2))
+        self.write_inputs()
+        fake = self.root / "fake_dashboard.py"
+        fake.write_text("print('Dashboard: http://127.0.0.1:4599/')\n")
+        real = board.DASHBOARD
+        try:
+            board.DASHBOARD = fake
+            self.assertEqual(self.design("--open").strip(), "Dashboard: http://127.0.0.1:4599/")
+            board.DASHBOARD = self.root / "no-dashboard.py"
+            self.assertEqual(self.design("--open").strip(),
+                             "Read:     %s (no dashboard skill next to this one)" % self.paths.design)
+        finally:
+            board.DASHBOARD = real
 
 
 class PickAndApproveTest(Base):
@@ -375,10 +412,19 @@ class PickAndApproveTest(Base):
         self.assertTrue(meta["changed_since_approval"])
         self.assertIn("Changed since the last approval", body)
         self.assertIn("| 2 | Where does refund status live? | B. A status column on payments | Picked by the lead.", body)
-        self.design("--approve", "Asha", "--result", "approved")
+        out = self.design("--approve", "Asha", "--result", "approved")
+        self.assertIn("File:     %s" % self.paths.design, out)
+        self.assertIn("Next:     /chopchop:spec", out)
         meta, _ = chopchop_design.read_design(self.paths)
         self.assertEqual((meta["status"], meta["version"], meta["changed_since_approval"]), ("approved", 2, False))
         self.assertTrue((self.paths.approved / "design-v2.md").is_file())
+        log = [(e["kind"], e["text"], e.get("by")) for e in events.read(self.feature)]
+        self.assertEqual(log, [
+            ("design", "Design built: ready for review.", None),
+            ("approve", "Design approved with conditions by Asha (version 1).", "Asha"),
+            ("design", "Choice 2 is now B, picked by lead.", "lead"),
+            ("design", "Design built: ready for review.", None),
+            ("approve", "Design approved by Asha (version 2).", "Asha")])
 
     def test_changes_needed_and_not_ready(self):
         self.write_inputs()
@@ -388,6 +434,9 @@ class PickAndApproveTest(Base):
         self.assertEqual(meta["status"], "changes-needed")
         self.assertIn("- Use cents, not decimals.", body)
         self.assertIn("Design:   changes-needed", self.design("--status"))
+        last = events.read(self.feature)[-1]
+        self.assertEqual((last["kind"], last["text"], last["by"]),
+                         ("design", "Asha asked for changes to the design: Use cents, not decimals.", "Asha"))
 
 
 if __name__ == "__main__":

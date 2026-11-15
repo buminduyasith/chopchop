@@ -7,8 +7,8 @@ Both design diagrams come from the diagram skill (`../diagram/SKILL.md`):
 - **Section 5, main flow** from `design/flow.json`: the numbered messages in time order, the
   error paths, and a failure answer for every message.
 
-The build draws both as pictures on feature.html and as Mermaid in design.md, so GitHub and
-editors show the same thing. Do not write either one by hand.
+The build writes both as Mermaid in design.md, so GitHub and editors show them. The dashboard
+draws the same two files as pictures. Do not write either one by hand.
 
 ## Other diagrams
 

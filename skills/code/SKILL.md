@@ -1,7 +1,7 @@
 ---
 name: code
-description: Build one chopchop task end to end in one go. Claim it, cut its branch from the feature branch, learn how the repo codes and tests, write the unit tests and code, run all the checks, push, and open a PR into the feature branch with the tools the team already uses. Use when the user gives a task id (T02) or asks to build, code or implement a task; -p or --preview only explains the plan; --done marks a task done. Also use to fix review comments on a task's PR, or when the user asks what to work on next.
-argument-hint: "<task-id> [-p] | --done <task-id>"
+description: Build one chopchop task end to end in one go. Claim it, cut its branch from the feature branch, learn how the repo codes and tests, write the unit tests and code, run all the checks, push, and open a PR into the feature branch with the tools the team already uses. Use when the user gives a task id (T02) or asks to build, code or implement a task; --done marks a task done. Also use to fix review comments on a task's PR, or when the user asks what to work on next.
+argument-hint: "<task-id> | --done <task-id>"
 ---
 
 # Code
@@ -12,18 +12,18 @@ Take one task file from `_chopchop/<feature>/tasks/` and turn it into an open PR
 
 | User types | What happens |
 | --- | --- |
-| `T02` | The whole job, in one go: start, code, unit tests, checks, push, PR. |
-| `T02 -p` | Preview: explain what you will do, change nothing, wait. |
+| `T02` | The whole job, in one go: look, start, code, unit tests, checks, push, PR. |
 | `--done T02` | Mark it done: `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py --done T02`. |
 | nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py --ready`, then ask which task. |
 
-That is all the user needs. Everything below is steps you run yourself.
+That is all the user needs. Everything below is steps you run yourself. There is no preview
+to offer: the dashboard (`/chopchop:dashboard`) shows every task, its file and where it stands.
 
 To build every task of a feature one by one, each reviewed before its commit, the user runs
 `/chopchop:auto`. To review pending changes in any repo, `/chopchop:review`.
 
 For `T02`, do not stop between steps. Stop and ask only when:
-- the preview shows a `Blocked:` line
+- the look step shows a `Blocked:` line
 - the task is unclear or conflicts with the code
 - the same check still fails after three tries
 - there is no way to open the PR (step 7)
@@ -39,7 +39,9 @@ says the task id is in more than one feature.
 python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_code.py T02 --preview
 ```
 
-Read all of it. For a `Blocked:` line, stop and tell the user the fix in one line:
+This is your own first step, not something to offer the user. It changes nothing: it prints
+everything about the task, the repo, the branch and the profile. Read all of it. For a
+`Blocked:` line, stop and tell the user the fix in one line:
 
 - Waiting on another task: ask if they want to build against its contract now. If yes,
   add `--force` in step 4.
@@ -52,9 +54,9 @@ Read all of it. For a `Blocked:` line, stop and tell the user the fix in one lin
 How to code, in this order. The first one wins when they disagree:
 
 1. **The style file(s) from `chopchop.yaml`** (`repos.<name>.style`, shown as `Style:` in the
-   preview). This is the team's own code style. Read all of it and follow it every time,
-   for code and tests. If a file is missing, the preview is blocked: ask the user to fix
-   the path.
+   look step). This is the team's own code style. Read all of it and follow it every time,
+   for code and tests. If a file is missing, the look step says `Blocked:`: ask the user to
+   fix the path.
 2. **The repo's own guides:** CLAUDE.md, AGENTS.md, CONTRIBUTING.md.
 3. **The profile** at `_chopchop/repos/<repo>.md`: build, lint and test commands, how PRs are
    opened, and rules learned from the code.
@@ -74,25 +76,17 @@ Use the draft for this task. At the end, ask the user once to check it (step 7).
 
 ## 3. Read the task
 
-- The task file: Goal, Context, Contract, Code, Files, Done when, Do not change, Heads-up.
+- The task file: Summary, Goal, Context, Contract, Code, Files, Done when, Do not change,
+  Heads-up.
 - `## Code` (tasks cut from a spec): the folders, names, code to copy, existing methods to
   reuse and a sketch of the new code. Start from it. Check the cited code still looks the
   same; if it changed, follow the code and log the difference with `--log`.
-- The `Change:` lines in the preview. They win over the task text.
+- The `Change:` lines from the look step. They win over the task text.
 - The files in `touches`, the contracts from the tasks it depends on, and nearby code.
 - The design files only when the task's Context is not enough.
 
-**Preview (`-p`) stops here.** Reply with:
-
-1. What you will build, in one or two sentences.
-2. The files you will add or change.
-3. The unit tests you will write, one line each.
-4. The commands you will run to check it.
-5. Which style you will follow (the style file, or "the existing code").
-6. How the PR will be opened.
-7. Risks or questions, if any.
-
-If the user then says go, carry on from step 4.
+If the task is unclear or conflicts with the code, stop here and ask, with what you found.
+Otherwise go straight on.
 
 ## 4. Start and build
 

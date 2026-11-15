@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Design: options.md, design.md and feature.html for one feature, ready for a lead to approve.
+"""Design: options.md and design.md for one feature, ready for a lead to approve.
 
 Usage
   chopchop_design.py --prepare [REF] [--json]        everything the run needs, and what is missing
@@ -8,11 +8,11 @@ Usage
   chopchop_design.py --scaffold [REF] [--size medium] [--title "..."]     start design.md
   chopchop_design.py --options [REF]                 check work/options.json and write options.md
   chopchop_design.py --failures [REF] [--json]       the failure questions each arrow must answer
-  chopchop_design.py --build [REF] [--json]          check, draw, lint and write the page
+  chopchop_design.py --build [REF] [--json]          check, draw, lint, and print the review message
   chopchop_design.py --pick 2=B [REF] [--by you|lead|chopchop]   change one choice, then build
   chopchop_design.py --approve NAME --result approved|conditions|changes [--note TEXT ...] [REF]
   chopchop_design.py --status [REF]                  where the design stands
-  chopchop_design.py --open [REF]                    open feature.html
+  chopchop_design.py --open [REF]                    start the live dashboard and open it
 
 REF is a feature (number, epic key or part of the name). With one feature it can be left out.
 
@@ -23,7 +23,10 @@ Files, in _chopchop/<feature>/:
   design/flow.json          the main flow, with failure answers (written with the diagram skill)
   work/options.json         the choices as data (the architect helper writes it)
   work/answers.json         the questions asked and the answers
-  feature.html              the page: design, choices and slides
+  requirements/brief.md     what to build, approved by a person (from grooming, when there is one)
+  requirements/grooming.md  the questions already asked, and their answers (when there is one)
+
+Everything is Markdown. The dashboard skill shows it: --open starts it.
 
 --build exits 0 when the design is ready for review, 1 when something blocks the approval
 request (it says what), and 2 when an input file is broken.
@@ -33,9 +36,9 @@ Needs the tasks skill next to it. Standard library only. Python 3.8+.
 
 import argparse
 import json
+import re
 import shutil
 import sys
-import webbrowser
 from datetime import date
 from pathlib import Path
 
@@ -45,13 +48,12 @@ if not (TASKS / "scripts" / "chopchoplib" / "designdoc.py").is_file():
     sys.exit("Error: design needs the tasks skill next to it (%s not found)." % TASKS)
 sys.path.insert(0, str(TASKS / "scripts"))
 
-from chopchoplib import cite, designdoc, diagrams, features, helpers, options, page, systemmap  # noqa: E402
+from chopchoplib import board, cite, designdoc, diagrams, events, features, helpers, options, systemmap  # noqa: E402
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
 from chopchoplib.features import FeatureError, parse_front_matter, render_front_matter  # noqa: E402
 from chopchoplib.requirements import requirement_items, story_ids  # noqa: E402
 
 DESIGN_TEMPLATE = HERE.parent / "templates" / "design.md"
-PAGE_TEMPLATE = TASKS / "templates" / "feature.html"
 TEAM_DECISIONS = "team-decisions.md"
 RESULTS = {"approved": "approved", "conditions": "approved-with-conditions", "changes": "changes-needed"}
 
@@ -81,7 +83,8 @@ class Paths:
         self.reports = self.work / "reports"
         self.build = self.work / "build.json"
         self.approved = self.work / "approved"
-        self.page = feature.path / page.PAGE_FILE
+        self.brief = feature.path / features.REQUIREMENTS_DIR / "brief.md"
+        self.grooming = feature.path / features.REQUIREMENTS_DIR / "grooming.md"
 
     def as_dict(self):
         return {k: str(v) for k, v in vars(self).items() if isinstance(v, Path)}
@@ -143,11 +146,16 @@ def prepare(ws, cfg, ref):
     meta, _ = read_design(paths)
     opts = load_json(paths.options, "work/options.json")
     team = Path(ws) / TEAM_DECISIONS
+    bmeta = features.read_front_matter(paths.brief)
     return {
         "feature": feature.as_dict(),
         "workspace": str(ws),
         "requirements": {"file": str(feature.file) if feature.file.is_file() else None, "stories": stories,
                          "items": [{"id": r["id"], "kind": r["kind"], "text": r["text"][:300]} for r in items]},
+        "brief": {"file": str(paths.brief), "exists": paths.brief.is_file(), "status": bmeta.get("status"),
+                  "approved_by": bmeta.get("approved_by"),
+                  "changed_since_approval": bool(bmeta.get("changed_since_approval"))},
+        "grooming": {"file": str(paths.grooming), "exists": paths.grooming.is_file()},
         "repos": {k: str(v) for k, v in repos.items()},
         "helpers": dict(s, ask=not s["set"],
                         calls={r: helpers.for_role(s, r) for r in helpers.ROLES}),
@@ -172,6 +180,14 @@ def print_prepare(d):
     req = d["requirements"]
     print("Stories:  %s" % (", ".join(req["stories"]) if req["stories"] else
                             "none. Write the rules you understood as stories (R1, R2) and ingest them first."))
+    b = d["brief"]
+    if b["exists"]:
+        state = "approved by %s" % b["approved_by"] if b["approved_by"] else (b["status"] or "draft") + ", not approved yet"
+        if b["approved_by"] and b["changed_since_approval"]:
+            state += ", changed since"
+        print("Brief:    %s (%s). Read it first: it wins on what to build." % (b["file"], state))
+    if d["grooming"]["exists"]:
+        print("Grooming: %s. Its answers are decisions already made: do not ask them again." % d["grooming"]["file"])
     h = d["helpers"]
     print("Helpers:  %s" % ("not set yet: ask the 3 helper questions once" if h["ask"] else
                             "max %d, model %s, effort %s" % (h["max"], h["model"], h["effort"])))
@@ -229,6 +245,49 @@ def write_options(ws, ref):
     return {"options": str(paths.options_md), "warnings": w, "unpicked": options.unpicked(opts)}
 
 
+def approvers(arch, smap, lead, repos=None):
+    """Who must say yes: the owners of each repo the feature changes, and the owners named for the lead.
+
+    Owners come from the system map, or straight from the repo's CODEOWNERS when the map has none."""
+    out = []
+    for repo in diagrams.repos_touched(arch or {}):
+        owners = systemmap.owners_of(smap, repo)
+        if not owners and repos and repo in repos:
+            owners = systemmap.owners(repos[repo])["repo"]
+        out.append({"who": ", ".join(owners) if owners else "%s owners (no CODEOWNERS found)" % repo,
+                    "why": "%s changes" % repo})
+    for item in lead or []:
+        owner = item.get("owner")
+        if owner and not any(a["who"] == owner for a in out):
+            out.append({"who": owner, "why": "a question for the lead"})
+    return out
+
+
+def review_message(feature, meta, body, opts, who, lead, assumed):
+    """The short message the developer sends the lead with the design: a few plain lines."""
+    sec1 = designdoc.section_text(body, 1)
+    lines = ["Design for review: %s%s" % (meta.get("title") or "", " (%s)" % feature.epic if feature.epic else "")]
+    if designdoc.ask_line(sec1):
+        lines.append("The ask: %s" % designdoc.ask_line(sec1))
+    if designdoc.size_line(sec1):
+        lines.append("Size: %s" % designdoc.size_line(sec1))
+    picks = []
+    for c in options.ordered(opts or {}):
+        o = options.option(c, c.get("picked") or c.get("recommended")) or {}
+        picks.append(o.get("title") or str(c.get("picked") or c.get("recommended")))
+    if picks:
+        lines.append("Key choices: %s." % "; ".join(picks))
+    for item in lead or []:
+        lines.append("For %s: %s" % (item.get("owner") or "the lead", item["text"]))
+    if assumed:
+        lines.append("Picked by chopchop, please confirm: %d choice%s." % (len(assumed), "" if len(assumed) == 1 else "s"))
+    if who:
+        lines.append("Who must approve: %s" % "; ".join(a["who"] for a in who))
+    lines += ["Read: design/design.md in %s (about 10 minutes). The choices are in design/options.md." % feature.name,
+              "Please reply: approved, approved with conditions, or changes needed."]
+    return "\n".join(lines)
+
+
 def lead_and_assumptions(opts, answers):
     lead = options.lead_items(opts) if opts else []
     assumed = options.assumptions(opts) if opts else []
@@ -275,6 +334,7 @@ def flow_block(flow, arch):
 def collect_cites(*texts):
     seen, out = set(), []
     for t in texts:
+        t = re.sub(r"(?s)<!--.*?-->", "", t or "")  # instructions and examples in comments are not claims
         for c in cite.find(t):
             if c["raw"] not in seen:
                 seen.add(c["raw"])
@@ -321,7 +381,7 @@ def build(ws, cfg, ref):
     answers = load_json(paths.answers, "work/answers.json")
     smap = systemmap.load(ws)
 
-    # citations: fix what moved, then check again for the page
+    # citations: fix what moved, then check again
     opt_text = json.dumps(opts) if opts else ""
     results = cite.check_all(collect_cites(body, opt_text), repos)
     body, fixed_design = cite.fix_text(body, results)
@@ -345,7 +405,7 @@ def build(ws, cfg, ref):
             continue
 
     lead, assumed = lead_and_assumptions(opts, answers)
-    who = page.approvers(arch, smap, lead, repos)
+    who = approvers(arch, smap, lead, repos)
     if opts is not None:
         paths.options_md.write_text(options.render(opts, feature.name), encoding="utf-8")
     missing_blocks = []
@@ -373,16 +433,11 @@ def build(ws, cfg, ref):
               "failures": {"answered": len(diagrams.failures(flow)) - len(gaps) if flow else 0, "missing": len(gaps)},
               "words": designdoc.words(body.split("\n## " + designdoc.APPENDIX)[0]),
               "budget": designdoc.BUDGETS.get(meta.get("size") or "medium"),
-              "status": meta.get("status"), "page": str(paths.page), "design": str(paths.design),
-              "options": str(paths.options_md) if opts is not None else None}
+              "status": meta.get("status"), "feature": feature.name, "design": str(paths.design),
+              "options": str(paths.options_md) if opts is not None else None,
+              "message": review_message(feature, meta, body, opts, who, lead, assumed)}
     paths.work.mkdir(parents=True, exist_ok=True)
     paths.build.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    options_md = paths.options_md.read_text(encoding="utf-8") if paths.options_md.is_file() else ""
-    counts = (len(stories), len([r for r in items if r["kind"] == "ac"])) if items else None
-    data = page.build(feature, meta, body, options_md, opts, arch, flow, results,
-                      diagrams.failures(flow) if flow else [], report, counts, who, lead, assumed)
-    data = page.carry_over(data, page.read_data(paths.page))
-    paths.page.write_text(page.render(PAGE_TEMPLATE.read_text(encoding="utf-8"), data), encoding="utf-8")
     return report
 
 
@@ -394,12 +449,22 @@ def print_report(r):
     print("Cites:    %d checked: %s%s" % (c["found"], ", ".join("%d %s" % (n, s) for s, n in c["now"].items() if n) or "none",
                                          ", %d fixed" % c["fixed"] if c["fixed"] else ""))
     print("Failures: %d answered, %d missing" % (r["failures"]["answered"], r["failures"]["missing"]))
-    print("Page:     %s" % r["page"])
     for e in r["errors"]:
         print("Blocks:   %s" % e)
     for w in r["warnings"]:
         print("Warning:  %s" % w)
     print("Result:   %s" % ("ready for review" if r["ready"] else "%d thing(s) block the approval request" % len(r["errors"])))
+    if r["ready"]:
+        print("Message:  send this to the lead with the design")
+        for line in r["message"].split("\n"):
+            print("  %s" % line)
+        print("Next:     the lead reads it (--open shows it), then --approve \"Name\" --result approved|conditions|changes")
+
+
+def log_build(ws, ref, report):
+    feature = features.resolve(ws, ref)
+    events.log(feature, "design", "Design built: ready for review." if report["ready"] else
+               "Design built: %d thing(s) block the approval request." % len(report["errors"]))
 
 
 # --------------------------------------------------------------------------- pick and approve
@@ -453,8 +518,15 @@ def approve(ws, cfg, ref, name, result, notes):
         paths.approved.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(str(paths.design), str(paths.approved / ("design-v%s.md" % meta["version"])))
     report = build(ws, cfg, ref)
+    if result == "changes":
+        events.log(feature, "design", "%s asked for changes to the design%s" % (
+            name.strip(), ": %s" % "; ".join(notes) if notes else "."), by=name.strip())
+    else:
+        events.log(feature, "approve", "Design %s by %s (version %s)." % (
+            "approved with conditions" if result == "conditions" else "approved", name.strip(), meta["version"]),
+            by=name.strip())
     return {"status": meta["status"], "by": name.strip(), "on": meta["approved_on"], "version": meta["version"],
-            "conditions": meta["conditions"], "page": report["page"]}
+            "conditions": meta["conditions"], "design": report["design"]}
 
 
 def status(ws, cfg, ref):
@@ -464,7 +536,8 @@ def status(ws, cfg, ref):
     last = load_json(paths.build, "work/build.json") or {}
     opts = load_json(paths.options, "work/options.json")
     return {"feature": feature.name, "design": meta, "ready": last.get("ready"), "blocks": last.get("errors") or [],
-            "unpicked": options.unpicked(opts) if opts else [], "page": str(paths.page) if paths.page.exists() else None}
+            "unpicked": options.unpicked(opts) if opts else [],
+            "file": str(paths.design) if paths.design.is_file() else None}
 
 
 # --------------------------------------------------------------------------- main
@@ -509,8 +582,8 @@ def main(argv=None):
                 print_prepare(out)
                 return 0
         elif args.plan:
-            names = [r.strip() for x in (args.repos or []) for r in x.split(",") if r.strip()]
             try:
+                names = helpers.known_repos(args.repos, repo_dirs(cfg, ws))
                 out = helpers.plan(args.plan, names, helpers.settings(cfg), choices=not args.no_choices)
             except ValueError as e:
                 raise UsageError(str(e))
@@ -557,6 +630,7 @@ def main(argv=None):
                 return 0
         elif args.build:
             out = build(ws, cfg, args.ref)
+            log_build(ws, args.ref, out)
             if not args.json:
                 print_report(out)
             else:
@@ -564,8 +638,12 @@ def main(argv=None):
             return 0 if out["ready"] else 1
         elif args.pick:
             c = do_pick(ws, cfg, args.ref, args.pick, args.by)
-            print("Picked:   choice %s = %s (%s)" % (args.pick.split("=")[0].strip(), c["picked"], args.by))
+            if not args.json:
+                print("Picked:   choice %s = %s (%s)" % (args.pick.split("=")[0].strip(), c["picked"], args.by))
+            events.log(features.resolve(ws, args.ref), "design", "Choice %s is now %s, picked by %s." % (
+                args.pick.split("=")[0].strip(), c["picked"], args.by), by=args.by)
             out = build(ws, cfg, args.ref)
+            log_build(ws, args.ref, out)
             if not args.json:
                 print_report(out)
             else:
@@ -577,7 +655,9 @@ def main(argv=None):
                 print("Design:   %s by %s on %s (version %s)" % (out["status"], out["by"], out["on"], out["version"]))
                 for c in out["conditions"]:
                     print("Note:     %s" % c)
-                print("Page:     %s" % out["page"])
+                print("File:     %s" % out["design"])
+                print("Next:     %s" % ("change the design from the notes, then --build" if out["status"] == "changes-needed"
+                                        else "/chopchop:spec writes the full plan to build it"))
                 return 0
         elif args.status:
             out = status(ws, cfg, args.ref)
@@ -588,16 +668,14 @@ def main(argv=None):
                 print("Ready:    %s" % {True: "yes", False: "no", None: "not built yet"}[out["ready"]])
                 for b in out["blocks"]:
                     print("Blocks:   %s" % b)
-                if out["page"]:
-                    print("Page:     %s" % out["page"])
+                if out["file"]:
+                    print("File:     %s" % out["file"])
                 return 0
         elif args.open:
-            feature = features.resolve(ws, args.ref)
-            pg = Paths(feature).page
-            if not pg.exists():
-                raise UsageError("No feature.html yet. Run --build first.")
-            webbrowser.open(pg.resolve().as_uri())
-            print("Opened:   %s" % pg)
+            paths = Paths(features.resolve(ws, args.ref))
+            if not paths.design.is_file():
+                raise UsageError("No design.md yet. Run --scaffold, write it, then --build.")
+            print(board.open_dashboard(ws) or "Read:     %s (no dashboard skill next to this one)" % paths.design)
             return 0
         else:
             raise UsageError("Use --prepare, --scaffold, --build, --pick, --approve, --status or --open. See --help.")

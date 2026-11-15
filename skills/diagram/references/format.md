@@ -91,7 +91,7 @@ Limits: 14 parts. 4 columns fit in about 1240 px. A 5th column works, but the te
 | `messages[].n` | 1, 2, 3 with no gaps |
 | `messages[].kind` | `person`, `call`, `db`, `event`, `external`, `message`, `reply` |
 | `messages[].say` | 2 to 6 words on the arrow |
-| `messages[].line` | one plain sentence, read out on the slide |
+| `messages[].line` | one plain sentence, shown under the flow in design.md |
 | `messages[].if` | optional: the condition for an error path. Drawn in amber. |
 | `messages[].stories` | story or AC ids from requirement.md |
 | `out_of_scope` | story ids this flow does not cover on purpose |

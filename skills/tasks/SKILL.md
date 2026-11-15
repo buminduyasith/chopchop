@@ -1,6 +1,6 @@
 ---
 name: tasks
-description: Cut a spec into small, independent tasks that each fit one PR in one repo, then track them on a board. For a chopchop feature it cuts them straight from spec/spec.json (one task per work package, one prove task per end-to-end journey); it also takes design or spec files you hand it. Use when the user gives design or spec files and asks for tasks, a plan or a work breakdown, asks for the task board or status (--status), or sets a task's status (--set). Writes _chopchop/<NNN-feature>/design/ and tasks/, and creates the feature branch after the user approves it.
+description: Cut a spec into small, independent tasks that each fit one PR in one repo, then track where each one stands. For a chopchop feature it cuts them straight from spec/spec.json (one task per work package, one prove task per end-to-end journey); it also takes design or spec files you hand it. Use when the user gives design or spec files and asks for tasks, a plan or a work breakdown, asks for the task status (--status), or sets a task's status (--set). Writes _chopchop/<NNN-feature>/design/ and tasks/ in Markdown, each file with a Summary on top, and creates the feature branch after the user approves it.
 argument-hint: "<design files or folder> [--name <short-name> | --feature <ref>] | --status [<ref>] | --set <task> <status>"
 ---
 
@@ -18,17 +18,20 @@ _chopchop/
     ├── design/                       copies of the files the user gave
     └── tasks/
         ├── plan.md                   waves, graph, branches (script writes)
-        ├── status.md                 board as Markdown (script writes)
-        ├── board.html                board as a page (script writes)
+        ├── status.md                 where every task stands (script writes)
         ├── changelog.md              changes found while building
         ├── T01-refund-contracts.md   one task (you write it)
         └── T02-refund-api.md
 ```
 
-A script does everything that must be the same every time: copying, checks, branches,
-status and the board. You do the thinking: reading the design and the code, and cutting the
-tasks. The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py`. Run it with `python3`
-from the user's project folder.
+A script does everything that must be the same every time: copying, checks, branches and
+status. You do the thinking: reading the design and the code, and cutting the tasks. The
+script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py`. Run it with `python3` from the
+user's project folder.
+
+Everything is Markdown, and every file starts with a `## Summary`: 2 to 5 short lines a busy
+reader can stop after. The live dashboard (`/chopchop:dashboard`) shows the tasks as a board,
+so there is no page to build or open.
 
 ## What the user typed
 
@@ -37,7 +40,7 @@ from the user's project folder.
 | files or a folder | Steps 1 to 6 below. |
 | a feature (`1`, `PAY-120`) that has `spec/spec.json`, from `/chopchop:spec` | "From the spec" below. You do not cut tasks by hand. |
 | a feature with a design from `/chopchop:design` but no spec | Do not cut tasks from the design. Say the spec comes first, and offer `/chopchop:spec <ref>`. |
-| `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --status <ref> --open`, then reply with one line per column. |
+| `--status [ref]` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --status <ref>`, then reply with one line per column. |
 | `--set T02 in-review` | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --set T02 in-review --feature <ref>`. Statuses: `todo`, `in-progress`, `in-review`, `done`. |
 | `--list` or nothing | `python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --list`, then ask what they want. |
 
@@ -55,6 +58,11 @@ end-to-end journey (wave 3), with the rules, contracts, code to copy, sketches a
 taken word for word from the spec. Then it checks them.
 
 - It refuses when the spec is not ready. Tell the user to run `/chopchop:spec <ref>`.
+- It warns, and goes on, when no person approved the spec, or the spec changed after the
+  approval. Say the warning to the user in one line: a person approves it with
+  `/chopchop:spec --approve "Name"`.
+- Each task file it writes starts with a Summary: what the task does, its repo and wave, how
+  many tests, and what it depends on.
 - When tasks already exist it writes nothing, and lists packages that have no task. Ask the
   user before adding any. Never rewrite a task.
 - Then go to step 6 (the plan and the branch).
@@ -120,6 +128,10 @@ Write one file per task in `tasks/`, named `T01-short-name.md`, using
 7. **It stands alone.** `## Context` quotes the parts of the design it needs, word for word,
    with where they come from. A builder reads one task file and the code, nothing else.
 8. **Say what not to change.** Contracts from wave 0, shared files, other tasks' areas.
+9. **A Summary first.** `## Summary`, right under the title, as in the template: what the task
+   adds in one line, the repo and wave, how many tests, what it depends on.
+10. **Simple English.** Short sentences (25 words or fewer), everyday words, no long dashes.
+    A quote from the design stays word for word.
 
 Leave `## Branch` as it is in the template. The script fills it in.
 
@@ -131,6 +143,10 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --check <ref>
 
 Fix every error and run it again until the result is OK. Fix warnings too, unless you have
 a reason. Then say the reason in the reply.
+
+The check also reads each task file for the Summary and for simple English. These are
+warnings, never errors: a task file cut before the Summary rule keeps working. Add the
+Summary to a task you write. Do not rewrite an old task file only for this.
 
 ## 6. Show the plan and the branch
 
@@ -154,15 +170,16 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_tasks.py --branch <ref> --create
 
 That creates the branch in each repo, pushes it, and writes the exact branch commands into
 every task file. If the user wants another name, pass `--branch-name <name>`. Then run
-`--status <ref> --open` so they see the board.
+`--status <ref>` and say where to see the board: the dashboard, Tasks tab.
 
 ## Safety rules
 
 - Only push the new feature branch chopchop just created. Never push to the base branch, main,
   or any branch that already exists. Never merge, never force-push, never check out.
 - Task PRs go into the feature branch. Only a person merges anything.
-- Never edit `plan.md` (except its `## Notes`), `status.md`, `board.html` or any `## Branch`
-  section by hand. The script rewrites them.
+- Never edit `plan.md` (except its `## Notes`), `status.md` or any `## Branch` section by
+  hand. The script rewrites them. It also keeps the Summary of `changelog.md` up to date.
+- Markdown only. Never write HTML.
 - Change a status only with `--set`.
 - `changelog.md` is for changes found while building. Add entries in the format at the top
   of the file. Never delete old entries.

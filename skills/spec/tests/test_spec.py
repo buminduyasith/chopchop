@@ -18,7 +18,7 @@ sys.path.insert(0, str(PLUGIN / "skills" / "tasks" / "scripts"))
 
 import chopchop_spec  # noqa: E402  (puts the tasks scripts on the path)
 import chopchop_tasks  # noqa: E402
-from chopchoplib import diagrams, features, specdata  # noqa: E402
+from chopchoplib import board, diagrams, events, features, plain, specdata  # noqa: E402
 from chopchoplib import tasks as tasklib  # noqa: E402
 
 SETUP = PLUGIN / "evals" / "sample-project" / "setup.py"
@@ -95,11 +95,29 @@ class BuildTest(Base):
         self.assertIn("### J1 · Customer gets a refund", body)
         self.assertIn("Manual: signed by Asha", body)
         self.assertIn("0 of 27 proofs passed", body)
-        self.assertIn("```mermaid\nflowchart LR", body)
+        # Section 6: one folder tree per repo (A new, M changed, D deleted), no code and no Mermaid file map
+        files = body.split("<!-- chopchop:files -->")[1].split("<!-- /chopchop:files -->")[0]
+        self.assertIn("### payments-api", files)
+        self.assertRegex(files, r"(?m)^  - `\S+` \*\*new\*\*")      # a nested list, the file and its change
+        self.assertNotIn("```", files)                                   # no text box, no Mermaid file map
+
+        self.assertIn("Approved: not yet.", out)
+        self.assertIn("then a person approves it (--approve \"Name\"), then /chopchop:tasks", out)
+        self.assertEqual(list(self.feature.path.rglob("*.html")), [])  # Markdown only
 
         out = run(chopchop_tasks.main, "--from-spec", code=0, ws=self.ws)
         self.assertIn("Cut:      5 tasks", out)
+        self.assertIn("Warning:  the spec is not approved yet. A person says yes with /chopchop:spec --approve", out)
         found = {t.id: t for t in tasklib.load_tasks(self.paths.tasks)}
+        # every task file starts with a Summary: what, where, how many tests, what it waits for
+        self.assertEqual(plain.summary_points(found["T02"].text), [
+            "What: POST /refunds saves a pending refund within the rules, and an agent can cancel a pending one.",
+            "Repo: payments-api, wave 1, size M", "Tests: 8 (8 unit)", "Depends on: T01"])
+        self.assertEqual(plain.summary_points(found["T01"].text)[3], "Depends on: nothing")
+        self.assertEqual([w for w in tasklib.lint(list(found.values())) if "Summary" in w], [])
+        self.assertNotIn("has no \"## Summary\"", out)
+        self.assertEqual([e["text"] for e in events.read(self.feature) if e["kind"] == "tasks"],
+                         ["5 tasks cut from the spec: T01, T02, T03, T04, T05"])
         self.assertEqual(sorted(found), ["T01", "T02", "T03", "T04", "T05"])
         self.assertEqual((found["T02"].get("package"), found["T02"].get("depends_on")), ("P2", ["T01"]))
         self.assertEqual(found["T04"].get("depends_on"), [])  # another repo codes against the contract with a mock
@@ -118,6 +136,8 @@ class BuildTest(Base):
         self.assertIn("Proof:    2 of 27 proved", out)
         self.spec_cmd("--sign", "M2", "--by", "Asha")
         self.assertIn("signed by Asha", self.paths.md.read_text())
+        self.assertEqual([(e["kind"], e["text"], e.get("by")) for e in events.read(self.feature) if e["kind"] == "spec"],
+                         [("spec", "Spec built: ready.", None), ("spec", "M2 signed by Asha.", "Asha")])
         self.assertIn("Not everything is proved yet", self.spec_cmd("--done", "--by", "Asha", code=2))
         self.assertIn("is not a manual check", self.spec_cmd("--sign", "R-1", "--by", "Asha", code=2))
 
@@ -143,8 +163,81 @@ class BuildTest(Base):
         self.write(prose=False)
         out = self.spec_cmd("--build", code=1)
         self.assertIn("section 1 (Summary) is empty", out)
+        self.assertIn("The spec is not ready, so it cannot be approved yet", self.spec_cmd("--approve", "Asha", code=2))
+        self.assertNotIn("approved_by", self.paths.md.read_text())
         self.paths.json.write_text("{not json")
         self.assertIn("is not valid JSON", self.spec_cmd("--build", code=2))
+
+    def test_plan_refuses_a_repo_that_is_not_in_the_config(self):
+        self.assertIn("Not in chopchop.yaml: nosuch.", self.spec_cmd("--plan", "medium", "--repos", "payments-api", "nosuch", code=2))
+        self.assertIn("2 explorers (payments-api, web-app)", self.spec_cmd("--plan", "medium", "--repos", "payments-api,web-app"))
+
+    def test_open_starts_the_dashboard_or_names_the_file(self):
+        self.write()
+        real = board.DASHBOARD
+        fake = self.root / "fake_dashboard.py"
+        fake.write_text("print('Dashboard: http://127.0.0.1:4599/')\n")
+        try:
+            board.DASHBOARD = fake
+            self.assertEqual(self.spec_cmd("--open").strip(), "Dashboard: http://127.0.0.1:4599/")
+            board.DASHBOARD = self.root / "no-dashboard.py"
+            self.assertEqual(self.spec_cmd("--open").strip(), "Read:     %s (no dashboard skill next to this one)" % self.paths.md)
+        finally:
+            board.DASHBOARD = real
+
+
+class ApproveTest(Base):
+    def meta(self):
+        return features.read_front_matter(self.paths.md)
+
+    def test_approve_then_a_change_asks_for_a_new_yes(self):
+        self.write()
+        self.assertIn("--approve needs the name", self.spec_cmd("--approve", " ", code=2))
+        out = self.spec_cmd("--approve", "Asha", "--note", "Ship payments-api first.")
+        self.assertIn("Approved: by Asha on %s (Ship payments-api first.)" % self.meta()["approved_on"], out)
+        self.assertIn("Next:     /chopchop:tasks", out)
+        meta = self.meta()
+        self.assertEqual((meta["approved_by"], meta["approved_note"], meta["changed_since_approval"], meta["status"]),
+                         ("Asha", "Ship payments-api first.", False, "ready"))
+        self.assertRegex(meta["approved_on"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertTrue(meta["approved_hash"])
+        # nothing changed: a new build keeps the yes, and tasks are cut with no warning
+        out = self.spec_cmd("--build")
+        self.assertNotIn("changed after", out)
+        self.assertIn("then /chopchop:tasks", out)
+        self.assertNotIn("a person approves it", out)
+        self.assertFalse(self.meta()["changed_since_approval"])
+        self.assertIn("Approved: by Asha", self.spec_cmd("--status"))
+        self.assertNotIn("not approved", run(chopchop_tasks.main, "--from-spec", ws=self.ws))
+        # a fact in spec.json changes
+        spec = json.loads(self.paths.json.read_text())
+        spec["rules"][0]["text"] = spec["rules"][0]["text"].replace("30 days", "31 days")
+        self.paths.json.write_text(json.dumps(spec, indent=2))
+        out = self.spec_cmd("--build")
+        self.assertIn("Warning:  the spec changed after Asha approved it on", out)
+        self.assertIn("a person approves it (--approve \"Name\"), then /chopchop:tasks", out)
+        self.assertTrue(self.meta()["changed_since_approval"])
+        status = self.spec_cmd("--status")
+        self.assertIn("It changed since: approve it again.", status)
+        self.assertTrue(json.loads(self.spec_cmd("--status", "--json"))["approval"]["changed"])
+        self.assertIn("Warning:  the spec changed after Asha approved it.", run(chopchop_tasks.main, "--from-spec", ws=self.ws))
+        # a new yes clears it
+        self.spec_cmd("--approve", "Ben")
+        meta = self.meta()
+        self.assertEqual((meta["approved_by"], meta["approved_note"], meta["changed_since_approval"]), ("Ben", None, False))
+        # a change of the words counts too, a change of a generated block or of white space does not
+        text = self.paths.md.read_text()
+        self.paths.md.write_text(text.replace("Customers ask for refunds from the order page.",
+                                              "Customers ask for refunds from the order page.  \n"))
+        self.spec_cmd("--status")  # rewrites the done block
+        self.spec_cmd("--build")
+        self.assertFalse(self.meta()["changed_since_approval"])
+        self.paths.md.write_text(self.paths.md.read_text().replace("Customers ask for refunds from the order page.",
+                                                                   "Customers ask for refunds from the order page, or by phone."))
+        self.spec_cmd("--build")
+        self.assertTrue(self.meta()["changed_since_approval"])
+        self.assertEqual([(e["text"], e["by"]) for e in events.read(self.feature) if e["kind"] == "approve"],
+                         [("Spec approved by Asha. Note: Ship payments-api first.", "Asha"), ("Spec approved by Ben.", "Ben")])
 
 
 class DataTest(unittest.TestCase):

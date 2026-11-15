@@ -8,6 +8,7 @@ argument-hint: "[repo ...]"
 
 Map the whole system once, then keep it fresh. The map is
 `_chopchop/system/system-map.json`, and `system-map.md` beside it is the version people read.
+It is Markdown and starts with a Summary: how many repos, parts and links, and when it was updated.
 `/chopchop:design` reads it before every design, so it knows what exists, who owns it and
 what talks to what.
 
@@ -38,8 +39,8 @@ repo is fresh, say "The system map is up to date." and stop.
 ## 2. Helper settings (first time only)
 
 If `chopchop.yaml` has no `agents:` block, ask the 3 helper questions once, before any
-helper starts, as the design skill does in its step 2 (also when design runs with `--auto`),
-and save them with its script:
+helper starts, as the design skill does in its step 2 (with `--auto`, save the recommended ones
+without asking), and save them with its script:
 `python3 ${CLAUDE_SKILL_DIR}/../design/scripts/chopchop_design.py --helpers --max N --model M --effort E`.
 
 ## 3. Read the repos

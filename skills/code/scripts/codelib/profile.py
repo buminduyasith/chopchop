@@ -11,6 +11,8 @@
   pr: "the git host's MCP server (create pull request tool)"
   ---
   # How to work in payments-api
+
+  ## Summary
   ...
 
 The first time a repo is used, detect() looks at the repo (guides, CI, build files, tests)
@@ -223,7 +225,23 @@ def example_tests(root, limit=5):
 # --------------------------------------------------------------------------- write
 
 
+def summary_points(repo, meta):
+    """The Summary of a profile: what it is, the commands it holds, and if a person confirmed it."""
+    cmds = ", ".join("%s `%s`" % (k, meta[k]) for k in COMMANDS if meta.get(k))
+    return [("What", "how to build, lint and test %s, and the rules its code follows." % repo),
+            ("Commands", cmds or "none found yet. Add them to the front matter."),
+            ("Pull requests", meta.get("pr") or "not set yet"),
+            ("Status", "confirmed by a person." if meta.get("confirmed")
+             else "a draft. A person checks it, then confirms it.")]
+
+
+def with_summary(repo, meta, body):
+    from chopchoplib import tasks as tasklib  # tasks' copy
+    return tasklib.put_summary(body, summary_points(repo, meta))
+
+
 def render_draft(repo, found):
+    from chopchoplib import plain
     from chopchoplib.features import render_front_matter
     meta = {"repo": repo, "confirmed": False}
     for kind in COMMANDS:
@@ -234,6 +252,7 @@ def render_draft(repo, found):
              "# How to work in %s" % repo, "",
              "_Draft written by chopchop from what it found in the repo. Check the commands, fill in the "
              "rules, then confirm it with `/chopchop:code --profile %s --confirm`. Edit it any time._" % repo, "",
+             plain.summary_block(summary_points(repo, meta)),
              "## Commands", "",
              "chopchop runs these, in this order, before it opens a PR. They live in the front matter above.", "",
              "| Step | Command | Found in |", "| --- | --- | --- |"]
@@ -263,5 +282,6 @@ def confirm(ws, repo):
     meta, body = parse_front_matter(p.read_text(encoding="utf-8"))
     meta["confirmed"] = True
     body = re.sub(r"(?m)^_Draft written by chopchop[^\n]*\n\n?", "", body)
+    body = with_summary(repo, meta, body)  # the commands and the status as they are now
     p.write_text(render_front_matter(meta) + body, encoding="utf-8")
     return meta

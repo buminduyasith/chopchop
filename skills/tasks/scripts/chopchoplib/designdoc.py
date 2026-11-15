@@ -1,4 +1,4 @@
-"""design.md: 12 fixed sections for leads, generated blocks, lint and slides.
+"""design.md: 12 fixed sections for leads, generated blocks and lint.
 
 chopchop writes the prose. The script owns four blocks and fills them on every build:
 
@@ -7,10 +7,13 @@ chopchop writes the prose. The script owns four blocks and fills them on every b
   <!-- chopchop:decisions --> ... <!-- /chopchop:decisions -->  section 8, from options.json
   <!-- chopchop:approval --> ... <!-- /chopchop:approval -->    section 12, approvers and status
 
-Speaker notes for the slides go in a section as <!-- talk: ... -->.
+Section 1 is the Summary of the file. The simple English rules (the words to avoid, long
+sentences, long dashes, placeholder text) are the shared ones in plain.py.
 """
 
 import re
+
+from . import plain
 
 HEADINGS = [
     "Summary and the ask", "High-level design", "Why", "Scope", "Main flow and errors", "Data changes",
@@ -24,14 +27,10 @@ STATUSES = ["draft", "approved", "approved-with-conditions", "changes-needed"]
 STATUS_TEXT = {"draft": "Draft. Not approved yet.", "approved": "Approved.",
                "approved-with-conditions": "Approved with conditions.", "changes-needed": "Changes needed."}
 MAX_DIAGRAMS = 4
-LONG_SENTENCE = 25
-BANNED = {
-    "utilize": "use", "utilise": "use", "leverage": "use", "facilitate": "help", "robust": "say what it survives",
-    "seamless": "say what works", "seamlessly": "say what works", "e.g.": "for example", "i.e.": "that is",
-    "etc.": "list them, or say the list is partial", "in order to": "to", "going forward": "from now on",
-}
-PLACEHOLDER = re.compile(r"\bTBD\b|\bTODO\b|\blorem\b|\{\{|<fill|\bXXX\b", re.I)
-DASHES = re.compile("[–—]")
+LONG_SENTENCE = plain.LONG_SENTENCE
+BANNED = plain.BANNED
+PLACEHOLDER = plain.PLACEHOLDER
+DASHES = plain.DASHES
 
 
 def block_re(name):
@@ -83,14 +82,7 @@ def words(text):
 
 
 def long_sentences(text, limit=LONG_SENTENCE):
-    out = []
-    flat = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*([-*+]|\d+[.)])\s+", "\n", _prose(text)))
-    for s in re.split(r"(?<=[.!?])\s+|\n", flat):
-        s = re.sub(r"`[^`]*`", "x", s).strip()
-        n = len(s.split())
-        if n > limit:
-            out.append("%d words: %s..." % (n, " ".join(s.split()[:8])))
-    return out
+    return plain.long_sentences(without_blocks(text), limit)
 
 
 def ask_line(body):
@@ -101,11 +93,6 @@ def ask_line(body):
 def size_line(body):
     m = re.search(r"\*\*Size:\*\*[ \t]*(\S.*)", body)
     return m.group(1).strip() if m else ""
-
-
-def talk(text):
-    m = re.search(r"(?s)<!--\s*talk:\s*(.*?)-->", text)
-    return re.sub(r"\s+", " ", m.group(1)).strip() if m else ""
 
 
 # --------------------------------------------------------------------------- lint
@@ -136,14 +123,16 @@ def lint(body, size, story_ids=()):
                           "<!-- chopchop:%s -->\n<!-- /chopchop:%s -->" % (name, BLOCKS[name], name, name))
     if not ask_line(section_text(body, 1)):
         errors.append('section 1 needs a line "**The ask:** ...": the one decision the lead makes')
+    if (1, HEADINGS[0]) in found and plain.summary(body) is None:
+        errors.append("section 1 is the Summary of this file. Keep it at the top, before any other long text.")
     def blank(m):
         return "\n" * m.group(0).count("\n")
-    plain = body
+    clean = body
     for name in BLOCKS:
-        plain = block_re(name).sub(blank, plain)
-    plain = re.sub(r"(?ms)^```.*?^```", blank, plain)
-    plain = re.sub(r"(?s)<!--.*?-->", blank, plain)
-    for i, line in enumerate(plain.split("\n"), 1):
+        clean = block_re(name).sub(blank, clean)
+    clean = re.sub(r"(?ms)^```.*?^```", blank, clean)
+    clean = re.sub(r"(?s)<!--.*?-->", blank, clean)
+    for i, line in enumerate(clean.split("\n"), 1):
         if PLACEHOLDER.search(line):
             errors.append("line %d still has placeholder text: %s" % (i, line.strip()[:60]))
     for i, line in enumerate(body.split("\n"), 1):
@@ -163,7 +152,7 @@ def lint(body, size, story_ids=()):
                         % (n_words, size or "medium", budget))
     own = len(re.findall(r"(?m)^```mermaid", without_blocks(body)))
     if own:
-        warnings.append("%d Mermaid diagram(s) written by hand. Draw diagrams with the diagram skill, so the page and design.md agree." % own)
+        warnings.append("%d Mermaid diagram(s) written by hand. Draw diagrams with the diagram skill, so the dashboard and design.md agree." % own)
     if own + 2 > MAX_DIAGRAMS:
         warnings.append("%d diagrams. At most %d in design.md." % (own + 2, MAX_DIAGRAMS))
     for m in re.finditer(r"(?ms)^```mermaid\n(flowchart|graph).*?^```", without_blocks(body)):
@@ -177,16 +166,12 @@ def lint(body, size, story_ids=()):
     for sid in story_ids:
         if not re.search(r"(?<![\w-])%s(?!\d)" % re.escape(sid), scope):
             errors.append("story %s is not in section 4 (Scope). Put it in scope or out of scope." % sid)
-    no_talk = [str(n) for n, _, text in sections(body) if n and n not in (2, 8) and not talk(text)]
-    if no_talk:
-        warnings.append("no speaker notes (a talk comment) in section %s. The slides then use only the section's own points."
-                        % ", ".join(no_talk))
     if not appendix(body).strip():
         warnings.append('no "## Likely questions" yet. The mock lead review fills it.')
     return errors, warnings
 
 
-# --------------------------------------------------------------------------- slides
+# --------------------------------------------------------------------------- points
 
 
 def _plain(s):
@@ -218,19 +203,3 @@ def bullets(text, limit=5, width=140):
         b = _plain(b)
         clean.append(b if len(b) <= width else b[:width - 1].rsplit(" ", 1)[0] + "…")
     return [b for b in clean if b]
-
-
-def first_diagram(text):
-    m = re.search(r"(?ms)^```mermaid\n(.*?)^```", without_blocks(text))
-    return m.group(1).strip() if m else ""
-
-
-def questions(body):
-    """[(question, answer)] from the Likely questions appendix (### headings)."""
-    text = appendix(body)
-    out = []
-    parts = re.split(r"(?m)^### +", text)
-    for p in parts[1:]:
-        q, _, a = p.partition("\n")
-        out.append((q.strip(), _plain(re.sub(r"(?s)<!--.*?-->", "", a)).strip()))
-    return out

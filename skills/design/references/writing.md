@@ -33,7 +33,7 @@ cut: detail belongs in the spec.
 
 | # | Section | What goes in |
 | --- | --- | --- |
-| 1 | Summary and the ask | 3 to 5 lines, then `**The ask:**` (the one decision the lead makes) and `**Size:**` (repos, about how many tasks, waves). |
+| 1 | Summary and the ask | The Summary of the file: 3 to 5 lines a busy reader can stop after. Then `**The ask:**` (the one decision the lead makes) and `**Size:**` (repos, about how many tasks, waves). |
 | 2 | High-level design | Generated from architecture.json (the diagram skill). Write nothing else here. |
 | 3 | Why | 3 to 6 bullets. Facts only, each fact about today's code with a citation. |
 | 4 | Scope | In scope with story ids. Out of scope with the parked ideas. Every story id is in one of the two. |
@@ -51,12 +51,16 @@ one or two line answer. Add a "Why not ...?" for each option not picked.
 
 A section with nothing to say keeps its heading and says "None." Leads always know where to look.
 
-## Speaker notes
+## The Summary rule
 
-Each section can carry notes for its slide:
+Every Markdown file chopchop writes starts with a Summary, so a reader can stop there. In
+design.md that is section 1. The dashboard shows its first lines on the feature card. Write it
+last, when you know the whole design: what we build, for whom, and what the lead must decide.
+The build fails when section 1 is missing or empty.
 
-```
-<!-- talk: Walk the numbers. Stop at step 3: the 30 day rule lives there. -->
-```
+## No plain text boxes
 
-2 or 3 short lines, the way the developer would say it out loud. Never shown in the document.
+A code block is only for real code or a command, always with its language: ```js, ```bash, ```json.
+Never put a list, a tree, a message, a quote or a note in a code block. It shows as a grey box that is hard
+to read. Use a list (nested for a tree), a table, or a quote (`> `) instead. The checks warn about a code
+block with no language or with `text`.

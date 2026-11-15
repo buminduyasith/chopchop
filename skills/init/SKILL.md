@@ -117,8 +117,8 @@ Keep it short:
 3. The base branch.
 4. For style files you wrote: ask the team to read them once. Suggest moving a good one into
    its repo later and pointing `style:` at it.
-5. Next step: `/chopchop:stories PAY-120` to bring in an epic's stories, then
-   `/chopchop:design <your idea>`. Or `/chopchop:tasks <design files>` when a design exists.
+5. Next step: `/chopchop:run PAY-120` with a tracker key, or `/chopchop:run <your idea in a
+   sentence>`. It takes the feature from there and opens the live dashboard.
 
 ## Rules
 

@@ -8,18 +8,20 @@ design is never a surprise at the end. Few questions, all with answers to pick.
 Look in this order. If one of them answers it, do not ask. Use the answer, and say where it
 came from.
 
-1. The stories and acceptance criteria.
-2. The code: the system map, the explorer reports, the repo's own files.
-3. `chopchop.yaml` and the repo's guides (CLAUDE.md, AGENTS.md, README, CONTRIBUTING).
-4. `_chopchop/team-decisions.md` and ADRs: past decisions.
-5. Earlier answers in `work/answers.json`. Never ask the same thing twice.
+1. `requirements/brief.md` and `requirements/grooming.md`, when the feature was groomed. The
+   brief says what to build. Every answer in grooming is a decision already made.
+2. The stories and acceptance criteria.
+3. The code: the system map, the explorer reports, the repo's own files.
+4. `chopchop.yaml` and the repo's guides (CLAUDE.md, AGENTS.md, README, CONTRIBUTING).
+5. `_chopchop/team-decisions.md` and ADRs: past decisions.
+6. Earlier answers in `work/answers.json`. Never ask the same thing twice.
 
 ## Never ask
 
 - Which language, framework, database, queue or test tool. The repo says.
 - Where tests live, how to build, how to run. The repo and CI say.
 - The base branch or the repos. `chopchop.yaml` says.
-- Anything a story already answers.
+- Anything a story, the brief or a grooming answer already settles.
 - "Do you want tests?", "Should it handle errors?", "Should it be secure?". The answer is
   always yes.
 - How to do something the code already does one way. That is a pattern to follow.

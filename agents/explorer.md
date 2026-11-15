@@ -34,7 +34,8 @@ this repo again.
 
 ## Mode feature
 
-Write Markdown with these headings:
+Write Markdown. Start with `## Summary`: 2 to 5 short lines on what you found, so a reader can
+stop there. Then these headings:
 
 1. **How it works today**: the flow the feature touches, step by step, with citations.
 2. **Patterns to follow**: what new code must do the same way, with citations.
@@ -47,13 +48,18 @@ Write Markdown with these headings:
 
 ## Mode spec
 
-A code read for the spec of one feature, in one repo. Write Markdown with these headings:
+A code read for the spec of one feature, in one repo. Write Markdown. Start with
+`## Summary`: 2 to 5 short lines on what you found. Then these headings:
 
 1. **Nearest similar feature**: its files, folders, class and method names, how it checks the
    caller, handles errors, logs and saves, and one of its tests. With citations.
 2. **Files to create or change**: each path, new or changed, and why.
 3. **Reuse**: existing methods and types the new code should call, each with where it lives.
 4. **Style**: the rules from the team's style file (the brief names it) that this work touches.
+   Also the limits the lint or CI enforces: file length, function length, banned imports or
+   names. Open the lint script or config and give the numbers. For each file this work grows,
+   say how long it is now and if the new code and tests will still fit. If not, name the new
+   file (for example a second test file) the work should use instead.
 5. **Tests**: the unit test command, one real test name, and the e2e suite: its command and
    where you found it (CI file, scripts, Makefile, README). Say plainly if there is none.
 6. **Traps**: code that looks reusable but is the wrong pattern, deprecated, or another
@@ -71,3 +77,4 @@ findings. Never paste the whole report into the reply.
 - Read only: no edits outside the output file, no builds, no installs, no pushes.
 - Never open `.env` files, key files or anything that holds secrets. Never copy a secret.
 - Do not start other helpers. Do the work yourself.
+- Simple English: short sentences, everyday words, no long dashes.

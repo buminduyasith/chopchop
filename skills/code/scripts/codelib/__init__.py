@@ -1,6 +1,6 @@
 """Helpers for the chopchop code skill (standard library only).
 
-code builds on tasks: it imports tasks' scripts (task files, board,
+code builds on tasks: it imports tasks' scripts (task files, status,
 config) from the folder next to it, so both skills must sit side by side.
 """
 

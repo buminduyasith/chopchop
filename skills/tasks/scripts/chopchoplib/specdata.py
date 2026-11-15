@@ -44,7 +44,7 @@ A failure reference such as "2.twice" means message 2 of design/flow.json, quest
 import posixpath
 import re
 
-from . import cite, designdoc, diagrams
+from . import changes, cite, designdoc, diagrams, plain
 
 SPEC_DIR = "spec"
 SPEC_MD = "spec.md"
@@ -83,10 +83,23 @@ def forbidden(package, repo_info=None):
     return set(_list((package or {}).get("forbid")) + _list((repo_info or {}).get("forbid")))
 
 
+USE = r"(?<![\w$])%s(?![\w$])(?!\s*:(?!:))"
+
+
 def uses(code, names):
     """Names from the list that the code uses, imports included. Comments and object keys do not count."""
     code = COMMENT.sub("", code)
-    return sorted(n for n in names if re.search(r"(?<![\w$])%s(?![\w$])(?!\s*:(?!:))" % re.escape(n), code))
+    return sorted(n for n in names if re.search(USE % re.escape(n), code))
+
+
+def use_lines(code, names):
+    """[(name, line number)] for every use uses() counts, in line order. Lines start at 1."""
+    clean = COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), code)
+    out = []
+    for n in names:
+        for m in re.finditer(USE % re.escape(n), clean):
+            out.append((n, clean.count("\n", 0, m.start()) + 1))
+    return sorted(set(out), key=lambda x: (x[1], x[0]))
 EXT_LANG = {".java": "java", ".kt": "kotlin", ".ts": "ts", ".tsx": "tsx", ".js": "js", ".jsx": "jsx", ".py": "python",
             ".go": "go", ".rb": "ruby", ".cs": "csharp", ".rs": "rust", ".sql": "sql", ".php": "php", ".swift": "swift",
             ".scala": "scala", ".yaml": "yaml", ".yml": "yaml", ".json": "json", ".sh": "bash", ".md": "markdown"}
@@ -416,9 +429,9 @@ def validate(spec, stories=None, known=None, repos=None, flow=None):
             errors.append("open question blocks the build: %s (owner: %s)" % (q.get("text"), q.get("owner") or "nobody"))
 
     for where, text in _walk_strings(spec):
-        if designdoc.PLACEHOLDER.search(text):
+        if plain.PLACEHOLDER.search(text):
             errors.append("%s still has placeholder text: %s" % (where, text[:60]))
-        if designdoc.DASHES.search(text):
+        if plain.DASHES.search(text):
             errors.append("%s has a long dash. Use a comma, a full stop or a colon." % where)
     return errors, warnings
 
@@ -524,26 +537,25 @@ def lint(body):
 
     def blank(m):
         return "\n" * m.group(0).count("\n")
-    plain = body
+    clean = body
     for name in BLOCKS:
-        plain = block_re(name).sub(blank, plain)
-    plain = re.sub(r"(?ms)^```.*?^```", blank, plain)
-    plain = re.sub(r"(?s)<!--.*?-->", blank, plain)
-    for i, line in enumerate(plain.split("\n"), 1):
-        if designdoc.PLACEHOLDER.search(line):
+        clean = block_re(name).sub(blank, clean)
+    clean = re.sub(r"(?ms)^```.*?^```", blank, clean)
+    clean = re.sub(r"(?s)<!--.*?-->", blank, clean)
+    for i, line in enumerate(clean.split("\n"), 1):
+        if plain.PLACEHOLDER.search(line):
             errors.append("line %d still has placeholder text: %s" % (i, line.strip()[:60]))
     for i, line in enumerate(body.split("\n"), 1):
-        if designdoc.DASHES.search(line):
+        if plain.DASHES.search(line):
             errors.append("line %d has a long dash. Use a comma, a full stop or a colon." % i)
+    if (1, HEADINGS[0]) in found and plain.summary(body) is None:
+        errors.append("section 1 is the Summary of this file. Keep it at the top, before any other long text.")
     low = _prose(body).lower()
-    for word, use in designdoc.BANNED.items():
+    for word, use in plain.BANNED.items():
         if re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(word), low):
             warnings.append('"%s": use "%s"' % (word, use))
-    flat = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*([-*+]|\d+[.)])\s+", "\n", _prose(body)))
-    for s in re.split(r"(?<=[.!?])\s+|\n", flat):
-        s = re.sub(r"`[^`]*`", "x", s).strip()
-        if len(s.split()) > designdoc.LONG_SENTENCE:
-            warnings.append("long sentence, %d words: %s..." % (len(s.split()), " ".join(s.split()[:8])))
+    for s in plain.long_sentences(without_blocks(body)):
+        warnings.append("long sentence, %s" % s)
     return errors, warnings
 
 
@@ -595,23 +607,8 @@ def render_rules(spec):
 
 
 def render_files(spec):
-    pk = ordered_packages(spec)
-    if not pk:
-        return "None."
-    n = sum(len(_list(p.get("files"))) for p in pk)
-    repos = sorted({p.get("repo") for p in pk})
-    out = [_short("%d files in %d repo%s. Green is new, amber is changed." % (n, len(repos), "" if len(repos) == 1 else "s")),
-           "", "```mermaid", diagrams.file_map_mermaid(spec), "```", ""]
-    for repo in repos:
-        out += ["**%s**" % repo, "", "| Change | File | What | Package |", "| --- | --- | --- | --- |"]
-        for p in pk:
-            if p.get("repo") != repo:
-                continue
-            for f in _list(p.get("files")):
-                if isinstance(f, dict):
-                    out.append("| %s | `%s` | %s | %s |" % (f.get("change"), _cell(f.get("path")), _cell(f.get("what")), p.get("id")))
-        out.append("")
-    return "\n".join(out).rstrip()
+    """Section 6: one folder tree per repo with what is new, changed or deleted, then what changes in each file."""
+    return changes.render(changes.collect(spec))
 
 
 def render_fit(spec, results):
@@ -863,6 +860,20 @@ def _quote_rules(spec, ids):
     return out
 
 
+def _first_sentence(text):
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    return re.split(r"(?<=[.!?])\s+", text)[0] if text else ""
+
+
+def _task_summary(what, repo, wave, size, tests, deps):
+    """The Summary every task file starts with: what, where, how many tests, what it waits for."""
+    return plain.summary_block([
+        ("What", what),
+        ("Repo", "%s, wave %s, size %s" % (repo, wave, size)),
+        ("Tests", tests),
+        ("Depends on", ", ".join(deps) if deps else "nothing")]).rstrip("\n").split("\n")
+
+
 def to_tasks(spec, snippets=None):
     """[{"meta": {...}, "body": "...", "file": "T01-slug.md"}] for every package and runnable journey.
     snippets: {citation: code} so each task carries the real code to copy."""
@@ -890,7 +901,13 @@ def to_tasks(spec, snippets=None):
             banned = sorted(forbidden(p, repos_info.get(p.get("repo"))))
             if banned:
                 meta["forbid"] = banned
-            body = ["# %s · %s" % (x["id"], p.get("title")), "", "## Goal", "", p.get("goal", ""), "", "## Context", ""]
+            tests = [t for t in _list(p.get("tests")) if isinstance(t, dict)]
+            levels = [(n, sum(1 for t in tests if t.get("level", "unit") == n)) for n in LEVELS]
+            body = ["# %s · %s" % (x["id"], p.get("title")), ""]
+            body += _task_summary(_first_sentence(p.get("goal")) or p.get("title"), p.get("repo"), p.get("wave"),
+                                  p.get("size"), "%d (%s)" % (len(tests), ", ".join("%d %s" % (c, n) for n, c in levels if c))
+                                  if tests else "none named", meta["depends_on"])
+            body += ["", "## Goal", "", p.get("goal", ""), "", "## Context", ""]
             body += _quote_rules(spec, _list(p.get("rules"))) or ["None."]
             body += ["## Contract", ""]
             for c in _list(p.get("uses")):
@@ -950,9 +967,12 @@ def to_tasks(spec, snippets=None):
                     "size": "S", "status": "todo", "owner": None, "depends_on": sorted(needs),
                     "touches": [j.get("file")], "stories": _list(j.get("stories")), "kind": "prove",
                     "journey": j["id"], "e2e": run.get("command"), "pr": None}
-            body = ["# %s · Prove: %s" % (x["id"], j.get("title")), "", "## Goal", "",
-                    "The end-to-end journey %s passes, run the way %s runs e2e tests." % (j["id"], j.get("repo")), "",
-                    "## Context", ""]
+            body = ["# %s · Prove: %s" % (x["id"], j.get("title")), ""]
+            body += _task_summary("prove the end-to-end journey %s: %s." % (j["id"], str(j.get("title")).rstrip(".")),
+                                  j.get("repo"), PROVE_WAVE, "S", "1 end-to-end test", meta["depends_on"])
+            body += ["", "## Goal", "",
+                     "The end-to-end journey %s passes, run the way %s runs e2e tests." % (j["id"], j.get("repo")), "",
+                     "## Context", ""]
             body += _quote_rules(spec, _list(j.get("rules")))
             body += ["Test data: %s" % j.get("data"), "", "| # | Do | See |", "| --- | --- | --- |"]
             body += ["| %d | %s | %s |" % (i, _cell(s.get("do")), _cell(s.get("see"))) for i, s in enumerate(_list(j.get("steps")), 1)

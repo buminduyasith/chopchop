@@ -1,8 +1,8 @@
 # Design files
 
 Four files carry the data. You (or a helper) write them. The script checks them, draws from
-them, and builds `design/options.md`, the generated blocks of `design/design.md`, and
-`feature.html`.
+them, and builds `design/options.md` and the generated blocks of `design/design.md`. Both are
+Markdown and start with a Summary. The dashboard draws the two diagrams from the same files.
 
 ## design/architecture.json and design/flow.json
 
@@ -49,6 +49,7 @@ The real choices, written before the design and kept after the picks.
 | `sketch` | Optional: a small high-level design (nodes and links, as in architecture.json) for this option. |
 | `picked_by` | `you`, `lead`, or `chopchop` (nobody picked: an assumption to confirm). |
 | `concern` | chopchop's one-line concern when the pick differs from its own. |
+| `picked_reason` | The person's own reason, in one line, when their pick differs from chopchop's. It shows in the Why column of section 8. |
 
 ## work/answers.json
 

@@ -12,6 +12,7 @@ SKILLS = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
 import chopchop_check  # noqa: E402
+from chopchoplib import events, plain  # noqa: E402
 from chopchoplib.features import parse_front_matter  # noqa: E402
 
 DESIGN = """# Refund design
@@ -124,6 +125,15 @@ class WriteTest(Base):
         self.assertLess(body.index("## Missing in the design"), body.index("## Extra in the design"))
         self.assertIn("| PAY-122 | **missing** | - |", body)
         self.assertNotIn("(new)", body)
+        self.assertEqual(plain.summary_points(text), [
+            "What: where the design and the requirements do not agree.",
+            "Result: not ready. Fix the conflicts and the important gaps before cutting tasks.",
+            "Found: 1 conflict, 1 missing, 1 extra, 0 questions",
+            "Coverage: 1 of 3 requirements covered, 1 partly, 1 missing"])
+        self.assertLess(body.index("## Summary"), body.index("**Result: not ready.**"))
+        log = events.read(self.feature)
+        self.assertEqual((log[0]["kind"], log[0]["text"]),
+                         ("note", "Check written: not ready. 1 conflict(s), 1 missing, 1 extra, 0 question(s)."))
 
         # the design was fixed for the window, a question came up
         question = {"kind": "question", "severity": "medium", "req": "PAY-121.AC2", "req_quote": "Minimum 0.01.",
@@ -152,6 +162,18 @@ class WriteTest(Base):
             self.assertIn(needle, out)
         self.assertFalse((self.feature / "check.md").exists())
 
+    def test_simple_english_in_the_words_you_wrote(self):
+        dash = dict(MISSING, problem="Nothing lets an admin cancel \u2014 at all.")
+        out = self.cli("--write", self.findings([dash]), "1", code=2)
+        self.assertIn("finding 1: 'problem' has a long dash. Use a comma, a full stop or a colon.", out)
+        self.assertFalse((self.feature / "check.md").exists())
+        # a quote is someone else's words: a dash in it is kept and never blocks. Hard words only warn.
+        wordy = dict(CONFLICT, req_quote="Refunds are allowed within 14\u201330 days.",
+                     fix="Utilize 30 days in the design.")
+        out = self.cli("--write", self.findings([wordy]), "1")
+        self.assertIn("Warning:  finding 1, fix: \"utilize\": use \"use\"", out)
+        self.assertIn("> Refunds are allowed within 14\u201330 days.", (self.feature / "check.md").read_text())
+
 
 class AnyFilesTest(Base):
     def test_any_files_without_a_feature(self):
@@ -169,6 +191,7 @@ class AnyFilesTest(Base):
                           extra=[{"id": "R1", "text": "Users can export a CSV.", "source": "brief.md:3"}])
         printed = self.cli("--write", f, "--req", str(brief), "--design", str(design))
         self.assertIn("# Check · design vs requirements", printed)
+        self.assertIn("## Summary\n\n- **What:** where the design and the requirements do not agree.", printed)
         out = self.root / "report.md"
         self.cli("--write", f, "--req", str(brief), "--design", str(design), "--out", str(out))
         self.assertIn("**Result: ready.**", out.read_text())

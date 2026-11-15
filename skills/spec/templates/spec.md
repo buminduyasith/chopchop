@@ -39,7 +39,7 @@ End with the closest feature to copy. -->
 
 ## 6. Repos and files
 
-<!-- Generated: every file, by repo, with the file map. -->
+<!-- Generated: one folder tree per repo. A is a new file, M a changed one, D a deleted one. -->
 
 <!-- chopchop:files -->
 <!-- /chopchop:files -->

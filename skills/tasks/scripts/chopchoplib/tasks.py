@@ -2,10 +2,11 @@
 
   _chopchop/001-PAY-120-refunds/tasks/
     plan.md                   waves, graph, branches (script writes, keeps ## Notes)
-    status.md                 the board as Markdown (script writes)
-    board.html                the board as a page (script writes)
+    status.md                 where every task stands (script writes)
     changelog.md              changes found while building (people and /chopchop:code write)
     T01-refund-contracts.md   one task (the planner writes it, the script owns ## Branch)
+
+Every one of these files has a "## Summary" near the top. The dashboard shows them as they are.
 
 Each task starts with front matter. Values are JSON or bare words:
 
@@ -28,13 +29,13 @@ import fnmatch
 import re
 from pathlib import Path
 
+from . import plain
 from .features import parse_front_matter, render_front_matter, slugify
 
 TASKS_DIR = "tasks"
 DESIGN_DIR = "design"
 PLAN_FILE = "plan.md"
 STATUS_FILE = "status.md"
-BOARD_FILE = "board.html"
 CHANGELOG_FILE = "changelog.md"
 
 STATUSES = ["todo", "in-progress", "in-review", "done"]
@@ -182,6 +183,23 @@ def check(tasks, repos=None):
     return errors, warnings
 
 
+def lint(tasks, more=2):
+    """Simple English and the Summary rule for the task files. Returns warnings only.
+
+    A task file made before the Summary rule, or one that quotes a story word for word, must not
+    fail a check. Tasks cut from a spec carry the spec's own words, so only a task a person or an
+    agent wrote by hand gets the long sentence and word warnings."""
+    out = []
+    for t in tasks:
+        errors, warnings = plain.lint(t.body, name=t.path.name)
+        out += ["%s: %s" % (t.id, e) for e in errors]
+        if not (t.meta.get("package") or t.meta.get("journey")):
+            out += ["%s: %s" % (t.id, w) for w in warnings[:more]]
+            if len(warnings) > more:
+                out.append("%s: %d more simple English warnings like these" % (t.id, len(warnings) - more))
+    return out
+
+
 def _has_glob(path):
     return any(ch in path for ch in "*?[")
 
@@ -208,6 +226,18 @@ def find_section(body, title):
     nxt = re.search(r"(?m)^## ", body[m.end():])
     end = m.end() + nxt.start() if nxt else len(body)
     return m.start(), body[m.end():end], end
+
+
+def put_summary(text, points):
+    """Write or refresh the "## Summary" of a Markdown file: right after its title."""
+    block = plain.summary_block(points)
+    found = find_section(text, "Summary")
+    if found:
+        start, _, end = found
+        return text[:start] + block + ("\n" if text[end:] else "") + text[end:]
+    title = re.search(r"(?m)^# [^\n]*\n", text)
+    pos = title.end() if title else 0
+    return text[:pos] + "\n" + block + "\n" + text[pos:].lstrip("\n")
 
 
 def replace_section(body, title, content):
@@ -273,6 +303,10 @@ def read_changelog(path):
         text = Path(path).read_text(encoding="utf-8")
     except OSError:
         return []
+    return parse_changelog(text)
+
+
+def parse_changelog(text):
     text = re.sub(r"(?s)<!--.*?-->", "", text)
     heads = list(CHANGE_RE.finditer(text))
     out = []
@@ -286,9 +320,43 @@ def read_changelog(path):
     return out
 
 
+ENTRIES_HEAD = "Entries"
+
+
+def changelog_points(entries):
+    if entries:
+        first = entries[0]
+        where = ", ".join(x for x in (first.get("task"), first.get("date")) if x)
+        count = "%d. The newest is %s%s." % (len(entries), first["id"], " (%s)" % where if where else "")
+    else:
+        count = "none yet."
+    return [("What", "changes found while building the tasks, newest first."), ("Entries", count),
+            ("Read it", "before you start any task.")]
+
+
+def changelog_with_summary(text):
+    """The changelog with its Summary written or brought up to date. An old changelog gets one."""
+    points = changelog_points(parse_changelog(text))
+    if find_section(text, "Summary"):
+        return put_summary(text, points)
+    title = re.search(r"(?m)^# [^\n]*\n", text)
+    pos = title.end() if title else 0
+    # The "## Entries" heading ends the Summary, so the text and the format comment stay out of it.
+    return (text[:pos] + "\n" + plain.summary_block(points) + "\n## %s\n\n" % ENTRIES_HEAD
+            + text[pos:].lstrip("\n"))
+
+
 CHANGELOG_TEMPLATE = """# Changelog · {feature}
 
-Changes found while building the tasks. Newest first. Read this before you start any task.
+## Summary
+
+- **What:** changes found while building the tasks, newest first.
+- **Entries:** none yet.
+- **Read it:** before you start any task.
+
+## Entries
+
+Newest first. Add one entry per change, in the format the comment below shows.
 
 <!--
 Add one entry per change, like this:

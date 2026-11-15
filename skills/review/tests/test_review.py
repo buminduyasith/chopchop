@@ -13,7 +13,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
 import chopchop_review  # noqa: E402  (puts the tasks scripts on the path)
-from chopchoplib import review  # noqa: E402
+from chopchoplib import plain, review  # noqa: E402
 
 
 def git(path, *args):
@@ -68,6 +68,10 @@ class PlainRepoTest(unittest.TestCase):
         self.assertIn("CLAUDE.md", pack)
         self.assertIn("- new    `new dir/tax.py`", pack)
         self.assertNotIn("chopchop-review", git(self.repo, "status", "--porcelain"))  # kept inside .git
+        self.assertEqual(plain.summary_points(pack)[:2], [
+            "What: one code change to review: 2 files in shop, pending changes (not committed).", "Round: 1"])
+        # where each added line sits in the new file, for a fix list that names file:line
+        self.assertEqual(review.added_places(diff), [("app.py", 2, "    return sum(xs) + 1"), ("new dir/tax.py", 1, "RATE = 0.2")])
 
         (folder / "findings.json").write_text(json.dumps({"findings": [
             {"file": "app.py", "line": 2, "kind": "bug", "severity": "high", "what": "Adds 1 to every total",
@@ -131,6 +135,43 @@ class SortRulesTest(unittest.TestCase):
         self.assertEqual(review.banned_uses("+ProblemDetails x;\n", self.RULES), [])
         self.assertEqual(review.outside(["src/refunds/A.java", "src/x.java", "ok.md"], self.RULES, ["ok.md"]),
                          ["src/x.java"])
+
+    def test_banned_places_name_the_file_and_line_and_skip_keys_and_comments(self):
+        diff = ("diff --git a/test/orderService.test.js b/test/orderService.test.js\n"
+                "--- a/test/orderService.test.js\n+++ b/test/orderService.test.js\n"
+                "@@ -33,3 +33,7 @@ describe('refund', () => {\n"
+                "   it('decides', () => {\n"
+                "-    const rows = [];\n"
+                "+    // refundStatus is the old flat field\n"
+                "+    for (const { refundStatus } of rows) {\n"
+                "+      expect(details).toEqual({ refundStatus: 'requested' });\n"
+                "+      check(refundStatus);\n"
+                "+    }\n"
+                "   });\n"
+                "\\ No newline at end of file\n"
+                "diff --git a/src/new.js b/src/new.js\n--- /dev/null\n+++ b/src/new.js\n@@ -0,0 +1,2 @@\n"
+                "+/* canRefund lived in\n+   orderHelpers once */\n")
+        rules = dict(self.RULES, banned_names=["refundStatus", "canRefund", "orderHelpers"])
+        places = review.banned_places(diff, rules)
+        self.assertEqual([(p["name"], p["file"], p["line"]) for p in places], [
+            ("refundStatus", "test/orderService.test.js", 35),   # the loop variable
+            ("refundStatus", "test/orderService.test.js", 37)])  # the call: not the comment, not the object key
+        self.assertEqual(places[0]["text"], "for (const { refundStatus } of rows) {")
+        self.assertEqual(review.banned_uses(diff, rules), ["refundStatus"])  # the block comment in new.js counts for nothing
+        self.assertEqual(review.banned_places(diff, dict(rules, banned_names=[])), [])
+
+    def test_the_pack_does_not_call_a_guess_accepted(self):
+        info = {"repo": "shop", "repo_path": "/r", "mode": "pending", "base": None, "round": 1, "task": None,
+                "files": [{"path": "a.py", "change": "change"}], "diff": "/r/d", "diff_lines": 3, "findings": "/r/f",
+                "risks": ["Design risk: two refunds race"], "assumptions": ["Refunds are in EUR only."],
+                "decided": ["It stopped on: a name. A person decided: go on."]}
+        pack = review.render_pack(info)
+        self.assertIn("## Risks the design already lists, do not raise\n", pack)
+        self.assertIn("## Spec assumptions, do not raise as new\n", pack)
+        self.assertIn("## Decided by a person, do not raise again\n", pack)
+        self.assertNotIn("accepted by the lead", pack)
+        plain_pack = review.render_pack(dict(info, risks=[], assumptions=[], decided=[]))
+        self.assertNotIn("do not raise", plain_pack)
 
 
 if __name__ == "__main__":

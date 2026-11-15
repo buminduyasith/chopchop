@@ -8,7 +8,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "tasks" / "scripts"))
 
-from chopchoplib import cite, designdoc, diagrams, helpers, mdhtml, options  # noqa: E402
+from chopchoplib import cite, designdoc, diagrams, helpers, mdhtml, options, plain, specdata  # noqa: E402
 
 
 class CiteTest(unittest.TestCase):
@@ -180,11 +180,24 @@ class LintTest(unittest.TestCase):
         for word in ("utilize", "robust", "e.g.", "in order to"):
             self.assertIn('"%s"' % word, joined)
         self.assertIn("long sentence", joined)
+        self.assertNotIn("speaker notes", joined)  # slides and their notes are gone
 
-    def test_bullets_and_talk(self):
-        text = "Intro line.\n\n- First point with `code`.\n- Second **point**.\n<!-- talk: Say this. -->"
+    def test_one_word_list_for_every_file(self):
+        self.assertIs(designdoc.BANNED, plain.BANNED)
+        self.assertIs(designdoc.PLACEHOLDER, plain.PLACEHOLDER)
+        self.assertEqual(designdoc.LONG_SENTENCE, plain.LONG_SENTENCE)
+        body = "\n".join("## %d. %s\n\n**In short:** None." % (i, h) for i, h in enumerate(specdata.HEADINGS, 1))
+        body = body.replace("**In short:** None.", "**In short:** We commence prior to the release.", 1)
+        _, warnings = specdata.lint(body)
+        self.assertIn('"commence": use "start"', warnings)  # a word only the shared list has
+        self.assertIn('"prior to": use "before"', warnings)
+
+    def test_bullets(self):
+        text = "Intro line.\n\n- First point with `code`.\n- Second **point**.\n<!-- a comment -->"
         self.assertEqual(designdoc.bullets(text), ["First point with code.", "Second point."])
-        self.assertEqual(designdoc.talk(text), "Say this.")
+        table = "| Risk | What we do |\n| --- | --- |\n| Two refunds race | One open refund per payment |\n"
+        self.assertEqual(designdoc.bullets(table), ["Two refunds race: One open refund per payment"])
+        self.assertFalse(hasattr(designdoc, "talk"))
 
 
 if __name__ == "__main__":
