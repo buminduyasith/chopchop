@@ -1,0 +1,2296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<title>chopchop</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231b1a17'/%3E%3Cpath d='M5 12 7.6 4M8.6 12l2.6-8' stroke='%23f4f3ef' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E">
+<script nonce="__CSP_NONCE__">
+(function () {
+  var t = "dark";   // dark unless the reader picked light before
+  try { if (localStorage.getItem("chopchop-theme") === "light") t = "light"; } catch (e) { /* no storage: stay dark */ }
+  document.documentElement.setAttribute("data-theme", t);
+})();
+</script>
+<style>
+/* ---------------------------------------------------------------- tokens */
+/* Dark is the default. Light applies only when the reader picked it (data-theme="light"). */
+:root {
+  --bg: #131412;
+  --surface: #1a1b18;
+  --raised: #22231f;
+  --ink: #ecebe6;
+  --ink-2: #c9c6be;
+  --muted: #9d9a91;
+  --line: #30312c;
+  --line-2: #4a4b44;
+  --code-bg: #262721;
+
+  --accent: #a9b7ff;           /* links, focus, the open tab */
+  --accent-soft: #1d2242;
+  --accent-line: #3a4379;
+
+  /* state: each one always comes with a shape and a word, never colour alone */
+  --wait: #f5bd3d;             /* waiting on a person */
+  --wait-bg: #33290f;
+  --wait-line: #6f5a1b;
+  --run: #74a9ff;              /* chopchop is working, or it is its turn */
+  --run-bg: #14233f;
+  --run-line: #31508a;
+  --done: #2fbf93;             /* done, approved */
+  --done-bg: #10302a;
+  --done-line: #23604f;
+  --stop: #f0695e;             /* stopped, a real problem */
+  --stop-bg: #3b1a18;
+  --stop-line: #7a342e;
+
+  --paper: #17181a;            /* behind a drawing */
+  --shadow: 0 0 0 1px rgba(255, 255, 255, .07), -12px 0 32px rgba(0, 0, 0, .55);
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --top: 44px;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f4f3ef; --surface: #fbfaf8; --raised: #ffffff; --ink: #1b1a17; --ink-2: #45433e; --muted: #6b675f;
+  --line: #dedbd3; --line-2: #c6c2b7; --code-bg: #eceae3;
+  --accent: #2c3fa0; --accent-soft: #e9ecf8; --accent-line: #c5cdec;
+  --wait: #dba000; --wait-bg: #fbf1d6; --wait-line: #e2c36d;
+  --run: #3572e0; --run-bg: #e5edfc; --run-line: #b4c9f3;
+  --done: #12936e; --done-bg: #dff2eb; --done-line: #a5d6c4;
+  --stop: #b8322a; --stop-bg: #fae5e2; --stop-line: #e7b1ab;
+  --paper: #ffffff;
+  --shadow: 0 0 0 1px rgba(27, 26, 23, .06), -10px 0 30px rgba(27, 26, 23, .14);
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------- base */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
+h1, h2, h3, h4, p, ul, ol, dl, dd, figure { margin: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+button, input, select { font: inherit; color: inherit; }
+code, .mono { font-family: var(--mono); font-size: .92em; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.muted { color: var(--muted); }
+.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+a.ext .ic { width: 11px; height: 11px; margin-left: 3px; vertical-align: -1px; opacity: .75; }
+
+/* state marks: a shape per state */
+.mark { width: 14px; height: 14px; flex: none; display: inline-block; vertical-align: -2px; }
+.mark .f { fill: currentColor; }
+.mark .s { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.mark .ko { fill: none; stroke: var(--raised); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.m-done { color: var(--done); } .m-run { color: var(--run); } .m-wait { color: var(--wait); }
+.m-stop { color: var(--stop); } .m-todo, .m-skip { color: var(--line-2); }
+.m-wait .f { stroke: var(--ink); stroke-opacity: .28; stroke-width: 1; }
+.m-run .pulse { transform-origin: 7px 7px; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { transform: scale(.6); opacity: 1; } 50% { transform: scale(1); opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .m-run .pulse { animation: none; } }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 1.3; padding: 4px 10px; border: 1px solid var(--line-2);
+  border-radius: 4px; background: var(--raised); color: var(--ink); cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btn:hover { border-color: var(--ink-2); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.quiet { border-color: transparent; background: none; color: var(--ink-2); }
+.btn.quiet:hover { border-color: var(--line-2); }
+
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; line-height: 1.35; padding: 1px 6px; border: 1px solid var(--line-2);
+  border-radius: 3px; color: var(--ink-2); background: var(--raised); white-space: nowrap; }
+.tag.c::before { content: ""; width: 7px; height: 7px; border-radius: 1px; background: var(--c, var(--line-2)); flex: none; }
+.tag.t-wait { --c: var(--wait); background: var(--wait-bg); border-color: var(--wait-line); color: var(--ink); }
+.tag.t-run { --c: var(--run); background: var(--run-bg); border-color: var(--run-line); color: var(--ink); }
+.tag.t-done { --c: var(--done); background: var(--done-bg); border-color: var(--done-line); color: var(--ink); }
+.tag.t-stop { --c: var(--stop); background: var(--stop-bg); border-color: var(--stop-line); color: var(--ink); }
+.tag.t-wait::before { border-radius: 0; transform: rotate(45deg) scale(.86); }
+.tag.t-run::before { border-radius: 50%; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+
+/* ---------------------------------------------------------------- top bar */
+.top { position: sticky; top: 0; z-index: 20; height: var(--top); display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 7px; font: 700 14px var(--mono); letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+.brand .cut { color: var(--accent); letter-spacing: -.12em; }
+.where { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.top nav { margin-left: auto; display: flex; align-items: center; gap: 4px; flex: none; }
+.top nav a.nav { color: var(--ink-2); text-decoration: none; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
+.top nav a.nav:hover { background: var(--code-bg); }
+.top nav a.nav[aria-current="page"] { color: var(--ink); font-weight: 650; }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding: 0 6px; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
+.live.on { color: var(--ink-2); }
+.live.on i { background: var(--done); box-shadow: 0 0 0 3px var(--done-bg); }
+.skip { position: absolute; left: -999px; top: 6px; z-index: 40; }
+.skip:focus { left: 8px; }
+
+main { max-width: 1560px; margin: 0 auto; padding: 16px 16px 40px; min-width: 0; }
+main:focus { outline: none; }
+.pagehead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 12px; }
+.pagehead h1 { font-size: 20px; line-height: 1.25; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.pagehead .sub { color: var(--muted); font-size: 13px; }
+.crumb { font-size: 12.5px; color: var(--muted); margin-bottom: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.crumb a { color: var(--ink-2); }
+.num { font-family: var(--mono); color: var(--muted); font-weight: 500; }
+h2.sec { font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.note { color: var(--muted); padding: 24px 0; }
+.empty { border: 1px dashed var(--line-2); border-radius: 5px; padding: 28px 20px; text-align: center; color: var(--ink-2); display: grid; gap: 6px; justify-items: center; }
+.empty strong { font-size: 15px; color: var(--ink); }
+.empty code { background: var(--code-bg); padding: 2px 6px; border-radius: 3px; }
+.problem { border: 1px solid var(--stop-line); background: var(--stop-bg); border-radius: 5px; padding: 10px 12px; margin-bottom: 12px; }
+
+/* ---------------------------------------------------------------- filters */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+.filters label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.filters input[type="search"], .filters select { height: 30px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--raised); min-width: 0; }
+.filters input[type="search"] { width: min(260px, 100%); }
+.filters select { max-width: 100%; }
+.filters .check { gap: 6px; padding: 0 4px; }
+.filters .count { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- home */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; }
+.fcard { border: 1px solid var(--line); background: var(--surface); border-radius: 5px; padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.fcard:hover { border-color: var(--line-2); }
+.fcard .ft { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.fcard .ft a { color: var(--ink); font-weight: 650; font-size: 15px; text-decoration: none; overflow-wrap: anywhere; line-height: 1.3; }
+.fcard .ft a:hover { text-decoration: underline; }
+.fcard .key { margin-left: auto; font: 500 11.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.wb { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+.wtext { color: var(--ink-2); overflow-wrap: anywhere; }
+.sline { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; height: 6px; }
+.sline i { border-radius: 1px; background: var(--line); }
+.sline i.done { background: var(--done); }
+.sline i.now { background: var(--run); }
+.sline i.waiting { background: var(--wait); }
+.sline i.skipped { background: repeating-linear-gradient(90deg, var(--line-2) 0 3px, transparent 3px 6px); }
+.scap { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; }
+.sum { padding-left: 18px; color: var(--ink-2); font-size: 13.5px; }
+.sum li { margin: 2px 0; overflow-wrap: anywhere; }
+.fcard .sum li > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fcard .foot { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.tbar { display: flex; gap: 2px; height: 8px; border-radius: 2px; overflow: hidden; background: var(--line); }
+.tbar i { display: block; min-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 8px; height: 8px; border-radius: 1px; }
+i.b-done { background: var(--done); }
+i.b-review { background: var(--done); opacity: .45; }
+i.b-committed { background: var(--run); opacity: .45; }
+i.b-building { background: var(--run); }
+i.b-todo { background: var(--line-2); }
+.tbar i.b-todo { background: transparent; }
+.runfacts { display: grid; gap: 4px; margin-top: 10px; font-size: 13px; }
+h2.sec.group-title { margin: 28px 0 10px; }
+.small { font-size: 12.5px; margin-top: 8px; }
+
+/* ---------------------------------------------------------------- feature head */
+.stepper { list-style: none; padding: 0; margin: 14px 0 12px; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.stepper li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; min-width: 0; font-size: 12.5px; }
+.stepper li::before { content: ""; position: absolute; top: 8px; right: 50%; width: 100%; height: 2px; background: var(--line-2); }
+.stepper li:first-child::before { display: none; }
+.stepper li.st-done::before, .stepper li.st-now::before, .stepper li.st-waiting::before { background: var(--done); }
+.stepper .dot { position: relative; z-index: 1; background: var(--bg); border-radius: 50%; padding: 0 3px; line-height: 0; }
+.stepper .dot .mark { width: 18px; height: 18px; vertical-align: 0; }
+.stepper .dot .mark .ko { stroke: var(--bg); }
+.stepper .lab { font-weight: 600; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; }
+.stepper .st-now .lab, .stepper .st-waiting .lab { color: var(--ink); }
+.stepper .st-todo .lab, .stepper .st-skipped .lab { color: var(--muted); font-weight: 500; }
+.stepper .stw { font-size: 11.5px; color: var(--muted); }
+.waitline { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 12px 14px; display: grid; gap: 3px; }
+.waitline.w-wait { background: var(--wait-bg); border-color: var(--wait-line); }
+.waitline.w-run { background: var(--run-bg); border-color: var(--run-line); }
+.waitline.w-done { background: var(--done-bg); border-color: var(--done-line); }
+.waitline.w-stop { background: var(--stop-bg); border-color: var(--stop-line); }
+.waitline .who { font-size: 19px; font-weight: 650; line-height: 1.3; display: flex; align-items: center; gap: 9px; letter-spacing: -.01em; }
+.waitline .who .mark { width: 16px; height: 16px; }
+.waitline .txt { font-size: 14.5px; overflow-wrap: anywhere; }
+.waitline .nxt { font-size: 12.5px; color: var(--ink-2); }
+.waitline code { background: var(--raised); border: 1px solid var(--line); padding: 0 5px; border-radius: 3px; }
+.tabrow { position: sticky; top: var(--top); z-index: 10; background: var(--bg); margin: 14px 0 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a { padding: 9px 11px; color: var(--ink-2); text-decoration: none; white-space: nowrap; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); font-weight: 650; box-shadow: inset 0 -2px 0 var(--accent); }
+.tabs a.off { color: var(--muted); }
+.tabs .n { font: 500 11.5px var(--mono); color: var(--muted); }
+.tabs .mark { width: 11px; height: 11px; vertical-align: 0; }
+.tabrow .btn { flex: none; margin-bottom: 2px; }
+
+/* ---------------------------------------------------------------- overview */
+.over { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px 36px; align-items: start; }
+.over > div { display: grid; gap: 26px; min-width: 0; }
+.over section { min-width: 0; }
+.lead { font-size: 15.5px; line-height: 1.55; padding-left: 20px; }
+.lead li { margin: 4px 0; overflow-wrap: anywhere; }
+.rows { border-top: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: minmax(84px, max-content) minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.row .k { font-weight: 600; }
+.row .v { color: var(--ink-2); overflow-wrap: anywhere; min-width: 0; }
+.row .a { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.row .cond { grid-column: 2 / -1; font-size: 12.5px; color: var(--ink-2); }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+.more { font-size: 12.5px; margin-top: 8px; display: inline-block; }
+
+/* ---------------------------------------------------------------- documents */
+.docwrap { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: 32px; align-items: start; }
+.docwrap.solo { grid-template-columns: minmax(0, 1fr); }
+.doc { min-width: 0; }
+.dochead { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.dochead .path { font-family: var(--mono); font-size: 12px; }
+.dochead .btn { margin-left: auto; }
+.toc { position: sticky; top: calc(var(--top) + 52px); max-height: calc(100vh - var(--top) - 72px); overflow: auto; font-size: 12.5px; border-left: 1px solid var(--line); padding-left: 14px; }
+.toc summary { font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); cursor: pointer; margin-bottom: 6px; }
+.toc ul { list-style: none; padding: 0; display: grid; gap: 1px; }
+.toc a { display: block; padding: 2px 0; color: var(--ink-2); text-decoration: none; overflow-wrap: anywhere; }
+.toc a:hover { color: var(--accent); text-decoration: underline; }
+.toc .l1 { font-weight: 650; color: var(--ink); margin-top: 6px; }
+.toc .l3 { padding-left: 12px; color: var(--muted); }
+.md { font-size: 14.5px; line-height: 1.62; overflow-wrap: anywhere; min-width: 0; }
+.md > :first-child { margin-top: 0; }
+.md :is(h1, h2, h3, h4, h5, h6):focus { outline: none; }
+.md :is(h1, h2, h3, h4, h5, h6) { line-height: 1.3; scroll-margin-top: calc(var(--top) + 56px); letter-spacing: -.005em; }
+.md h1 { font-size: 21px; margin: 26px 0 12px; }
+.md h2 { font-size: 17px; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.md h3 { font-size: 15px; margin: 20px 0 6px; }
+.md :is(h4, h5, h6) { font-size: 14px; margin: 16px 0 4px; }
+.md p { margin: 9px 0; }
+.md :is(ul, ol) { margin: 9px 0; padding-left: 22px; }
+.md li { margin: 3px 0; }
+.md li > :is(ul, ol) { margin: 3px 0; }
+.md li.task { list-style: none; margin-left: -20px; }
+.md li.task input { margin: 0 4px 0 0; vertical-align: -1px; accent-color: var(--done); }
+.md code { font-size: 12.5px; background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+.md pre.code { background: var(--code-bg); padding: 10px 12px; border-radius: 4px; overflow: auto; max-width: 100%; font: 12.5px/1.5 var(--mono); margin: 10px 0; overflow-wrap: normal; }
+.md pre.code code { background: none; padding: 0; font-size: inherit; white-space: pre; }
+.md pre.raw { white-space: pre-wrap; overflow-wrap: anywhere; }
+.md .tbl { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 4px; max-width: 100%; overflow-wrap: break-word; }
+.md table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 1.5; }
+.md :is(th, td) { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; min-width: 7.5em; }
+.md :is(th, td):first-child { min-width: 2.5em; }
+.md th { background: var(--code-bg); font-weight: 650; white-space: nowrap; }
+.md tr:last-child td { border-bottom: 0; }
+.md .al-c { text-align: center; } .md .al-r { text-align: right; }
+.md blockquote { margin: 10px 0; padding: 1px 14px; border-left: 3px solid var(--line-2); color: var(--ink-2); }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+.md del { color: var(--muted); }
+.md .img-ref { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--line-2); border-radius: 3px; padding: 0 5px; }
+.md .summary { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 5px; padding: 12px 16px; margin: 14px 0; font-size: 15px; }
+.md .summary :is(h1, h2, h3) { border: 0; margin: 0 0 4px; padding: 0; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+.md .summary > :last-child { margin-bottom: 0; }
+.md .diagram { margin: 12px 0; border: 1px solid var(--line); border-radius: 4px; overflow: auto; max-width: 100%; background: var(--surface); }
+.md .diagram.drawn { background: var(--paper); padding: 12px; }
+.md .diagram.drawn svg { display: block; margin: 0 auto; }
+/* Every drawing is made for white paper (chopchop's own colours are fixed). In dark, turn the whole drawing dark instead. */
+:root:not([data-theme="light"]) .md .diagram :is(.drawing, .drawn) > svg { filter: invert(.91) hue-rotate(180deg) saturate(1.25); }
+.md .diagram pre.mermaid { margin: 0; padding: 10px 12px; font: 12px/1.5 var(--mono); white-space: pre; color: var(--ink-2); overflow-wrap: normal; }
+.md .diagram .drawing { padding: 12px; min-width: min-content; background: var(--paper); }
+.md .diagram .drawing svg { display: block; margin: 0 auto; }
+.md .diagram .dnote { margin: 0; padding: 6px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); background: var(--bg); position: sticky; left: 0; }
+.compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 10px; flex: 1; min-height: 0; }
+.pane { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.pane > header { padding: 6px 10px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; flex: none; }
+.pane > header h2 { font-size: 14px; }
+.pane > header .btn { margin-left: auto; }
+.pane .scroll { overflow: auto; padding: 10px 12px 28px; flex: 1; min-height: 0; }
+.pane .md { font-size: 14px; }
+.pane .md h1 { font-size: 18px; margin-bottom: 8px; }
+.pane .md h2 { font-size: 16px; }
+.pane .md :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: 8px; }
+.pane .toc, .drawer .toc { position: static; max-height: none; border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; margin-bottom: 10px; }
+.pane .toc summary, .drawer .toc summary { margin: 0; }
+.pane .toc[open] summary, .drawer .toc[open] summary { margin-bottom: 6px; }
+/* The reading mode has no page scroll: the header, one title line, the tabs, then the panes down to the window's edge. */
+main.reading { max-width: none; height: calc(100vh - var(--top)); padding: 8px 12px 10px; display: flex; flex-direction: column; overflow: hidden; }
+main.reading .crumb { margin: 0; flex: none; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+main.reading .crumb .ttl { overflow: hidden; text-overflow: ellipsis; color: var(--ink); font-weight: 600; min-width: 0; }
+main.reading .tabrow { position: static; margin: 2px 0 8px; flex: none; }
+main.reading .tabbody { flex: 1; min-height: 0; display: flex; }
+
+/* ---------------------------------------------------------------- tasks */
+.board { display: grid; grid-template-columns: repeat(5, minmax(196px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 8px; align-items: start; }
+.col { min-width: 0; }
+.col > h3 { font-size: 12.5px; font-weight: 650; display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px 6px; border-bottom: 2px solid var(--line-2); margin-bottom: 8px; }
+.col > h3 .n { font: 500 12px var(--mono); color: var(--muted); }
+.col .list { display: grid; gap: 8px; align-content: start; min-height: 40px; }
+.col .none { font-size: 12.5px; color: var(--muted); padding: 6px 2px; }
+.tcard { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); padding: 8px 10px; display: grid; gap: 5px; min-width: 0; }
+.tcard:hover, .tcard.open { border-color: var(--ink-2); }
+.tcard.open { box-shadow: inset 3px 0 0 var(--accent); }
+.tcard .tt { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 11.5px; color: var(--muted); }
+.tcard .tid { font: 650 12px var(--mono); color: var(--ink); }
+.tcard a.t { color: var(--ink); text-decoration: none; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.tcard a.t::after { content: ""; position: absolute; inset: 0; }
+.tcard .tsum { font-size: 12.5px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.tcard .tauto { font-size: 12px; color: var(--ink-2); display: flex; gap: 6px; align-items: flex-start; overflow-wrap: anywhere; }
+.tcard .tauto .mark { margin-top: 2px; width: 12px; height: 12px; }
+.tcard .tauto.stop { color: var(--ink); font-weight: 600; }
+.scrim { position: fixed; inset: 0; background: rgba(8, 8, 7, .45); z-index: 29; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(820px, calc(100vw - 56px)); background: var(--bg); box-shadow: var(--shadow); z-index: 30; display: flex; flex-direction: column; }
+.drawer > header { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; background: var(--surface); }
+.drawer > header h2 { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.drawer .body { overflow: auto; padding: 14px 16px 48px; flex: 1; min-height: 0; }
+.drawer .box { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 8px 12px; margin: 10px 0 14px; font-size: 13px; display: grid; gap: 4px; }
+.drawer .box.stop { background: var(--stop-bg); border-color: var(--stop-line); }
+.drawer details.files { font-size: 12.5px; margin: 8px 0; }
+.drawer details.files ul { padding-left: 18px; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- review */
+.prlist { border-top: 1px solid var(--line); margin-bottom: 12px; }
+.pr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.pr .ti { min-width: 0; overflow-wrap: anywhere; }
+.pr .ti .id { font: 600 12.5px var(--mono); margin-right: 8px; }
+.pr .meta { font-size: 12px; color: var(--muted); grid-column: 1 / -1; }
+.counts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.counts .tag { font-size: 12px; padding: 2px 8px; }
+.counts .tag b { font-family: var(--mono); font-weight: 650; }
+.group { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); margin: 12px 0; min-width: 0; }
+.group > header { padding: 10px 14px; display: grid; gap: 7px; }
+.group h3 { font-size: 15.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.group .plain { font-size: 14.5px; overflow-wrap: anywhere; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13.5px; }
+.kv dt { color: var(--muted); }
+.kv dd { overflow-wrap: anywhere; min-width: 0; }
+.kv ul { padding-left: 18px; }
+.kv .ev { font-family: var(--mono); font-size: 12px; }
+.cm { padding: 10px 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; min-width: 0; }
+.cm.dim { opacity: .68; }
+.cm .by { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
+.cm .by b { color: var(--ink); font-size: 13.5px; }
+.cm .loc { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.cm .said { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; background: none; border-left: 3px solid var(--accent-line); border-radius: 0; padding: 2px 0 2px 12px; color: var(--ink-2); }
+.cm .plain { font-size: 14.5px; overflow-wrap: anywhere; }
+.cm details > summary { cursor: pointer; font-size: 12.5px; color: var(--accent); width: max-content; max-width: 100%; }
+.cm details[open] > summary { margin-bottom: 8px; }
+.cm .replies { border-left: 2px solid var(--line-2); padding-left: 10px; display: grid; gap: 6px; font-size: 13px; }
+.cm .replies p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reply { display: flex; gap: 8px; align-items: flex-start; }
+.reply p { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); background: var(--raised); border-radius: 4px; padding: 6px 9px; }
+.call { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 13px; }
+.call .hint { color: var(--muted); font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- activity */
+.feed { list-style: none; padding: 0; }
+.feed li { display: grid; grid-template-columns: 54px 86px minmax(0, 1fr); gap: 4px 10px; padding: 6px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.feed li.day { display: block; font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 16px 0 6px; border-bottom: 1px solid var(--line-2); }
+.feed li.day:first-child { padding-top: 0; }
+.feed .at { font: 500 12px var(--mono); color: var(--muted); }
+.feed .tx { overflow-wrap: anywhere; min-width: 0; }
+.feed .tx .tag { margin-left: 6px; }
+
+/* ---------------------------------------------------------------- a narrow desktop pane (about 640 to 980 px) */
+@media (max-width: 980px) {
+  .tabrow .btn .long { display: none; }
+  .over { grid-template-columns: minmax(0, 1fr); }
+  .docwrap { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .docwrap .toc { position: static; max-height: none; order: -1; border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; margin-bottom: 12px; }
+  .docwrap .toc summary { margin: 0; }
+  .docwrap .toc[open] summary { margin-bottom: 6px; }
+  .where { max-width: 28vw; }
+  /* the board becomes five rows, so no task card gets squeezed */
+  .board { grid-template-columns: minmax(0, 1fr); overflow: visible; gap: 14px; }
+  .col .list { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); min-height: 0; }
+  .stepper .stw { font-size: 11px; }
+}
+
+/* Code colours, like VS Code: Dark+ by default, Light+ in the light theme. */
+:root {
+  --hl-kw: #569cd6; --hl-ctrl: #c586c0; --hl-str: #ce9178; --hl-num: #b5cea8; --hl-com: #6a9955; --hl-fn: #dcdcaa;
+  --hl-type: #4ec9b0; --hl-var: #9cdcfe; --hl-attr: #9cdcfe; --hl-tag: #569cd6; --hl-meta: #c586c0; --hl-del: #f48771;
+  --hl-add: #89d185; --hl-sel: #d7ba7d; --hl-lit: #569cd6;
+}
+:root[data-theme="light"] {
+  --hl-kw: #0000ff; --hl-ctrl: #af00db; --hl-str: #a31515; --hl-num: #098658; --hl-com: #008000; --hl-fn: #795e26;
+  --hl-type: #267f99; --hl-var: #001080; --hl-attr: #e50000; --hl-tag: #800000; --hl-meta: #af00db; --hl-del: #a31515;
+  --hl-add: #098658; --hl-sel: #800000; --hl-lit: #0000ff;
+}
+.md pre.code { position: relative; }
+.md pre.code[data-lang]::after { content: attr(data-lang); position: absolute; top: 4px; right: 8px; font: 10.5px/1 var(--mono); color: var(--muted); text-transform: lowercase; opacity: .8; pointer-events: none; }
+.md pre.code code.hljs { color: var(--ink); }
+.hljs-keyword, .hljs-built_in.hljs-keyword, .hljs-doctag { color: var(--hl-kw); }
+.hljs-literal { color: var(--hl-lit); }
+.hljs-keyword.hljs-control, .hljs-meta .hljs-keyword { color: var(--hl-ctrl); }
+.hljs-string, .hljs-regexp, .hljs-template-tag, .hljs-template-variable, .hljs-char.escape_ { color: var(--hl-str); }
+.hljs-number { color: var(--hl-num); }
+.hljs-comment, .hljs-quote { color: var(--hl-com); font-style: italic; }
+.hljs-title.function_, .hljs-title.function_.invoke__, .hljs-function .hljs-title { color: var(--hl-fn); }
+.hljs-title.class_, .hljs-title.class_.inherited__, .hljs-type, .hljs-built_in { color: var(--hl-type); }
+.hljs-variable, .hljs-params, .hljs-property, .hljs-variable.language_ { color: var(--hl-var); }
+.hljs-attr, .hljs-attribute { color: var(--hl-attr); }
+.hljs-name, .hljs-tag { color: var(--hl-tag); }
+.hljs-meta, .hljs-meta .hljs-string { color: var(--hl-meta); }
+.hljs-selector-class, .hljs-selector-id, .hljs-selector-tag, .hljs-symbol, .hljs-bullet, .hljs-link { color: var(--hl-sel); }
+.hljs-section { color: var(--hl-kw); font-weight: 600; }
+.hljs-deletion { color: var(--hl-del); }
+.hljs-addition { color: var(--hl-add); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+
+/* Changes: the spec's files as an editor's explorer, with git colours. */
+:root { --g-new: #73c991; --g-change: #e2c08d; --g-delete: #f47067; --ex-sel: #04395e; --ex-hover: #2a2d2e; --ex-guide: #3e3e3e; }
+:root[data-theme="light"] { --g-new: #2e7d32; --g-change: #895503; --g-delete: #ad0707; --ex-sel: #dde6f6; --ex-hover: #eef0f3; --ex-guide: #d4d4d4; }
+.ch-tools { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 4px 0 12px; }
+.ch-tools input[type=search] { flex: 1 1 200px; max-width: 320px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12.5px; background: none; border: 0; border-right: 1px solid var(--line); color: var(--ink-2); padding: 5px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed=true] { background: var(--accent-soft); color: var(--ink); }
+.seg button:disabled { opacity: .45; cursor: default; }
+.seg .n { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11.5px; }
+.seg .s-new .n { color: var(--g-new); } .seg .s-change .n { color: var(--g-change); } .seg .s-delete .n { color: var(--g-delete); }
+.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.ex-wrap { display: grid; grid-template-columns: minmax(300px, 520px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .ex-wrap { grid-template-columns: minmax(0, 1fr); } }
+.explorer { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 4px 0 8px; font: 13px/22px var(--sans); overflow: hidden; }
+.ex-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.ex-head .ex-sum { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ex-row { display: flex; align-items: center; gap: 4px; width: 100%; height: 22px; padding: 0 10px 0 calc(6px + var(--d, 0) * 12px); background: none; border: 0; border-left: 2px solid transparent;
+          color: var(--ink); font: inherit; text-align: left; cursor: pointer; text-decoration: none; white-space: nowrap; position: relative; }
+.ex-row:hover { background: var(--ex-hover); text-decoration: none; }
+.ex-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.ex-row.on { background: var(--ex-sel); border-left-color: var(--accent); }
+.ex-row .nm { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ex-repo { font-weight: 700; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); padding-left: 6px; margin-top: 2px; }
+.ex-counts { margin-left: auto; display: inline-flex; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0; }
+.chev { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.5; transition: transform .12s; }
+.chev.open { transform: rotate(90deg); }
+.fold { width: 16px; height: 16px; flex: none; fill: #dcb67a; opacity: .9; }
+:root[data-theme="light"] .fold { fill: #c09553; }
+.tw { width: 16px; flex: none; }
+.fi { flex: none; width: 22px; text-align: center; font: 700 9.5px/1 var(--mono); color: var(--fc); letter-spacing: -.02em; }
+.fi .fi-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--fc); }
+.fi.big { font-size: 13px; width: auto; }
+.gd { position: absolute; left: 0; top: 0; bottom: 0; pointer-events: none; }
+.gd i { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--ex-guide); }
+.gd i:nth-child(1) { left: 25px; }
+.gd i:nth-child(2) { left: 37px; }
+.gd i:nth-child(3) { left: 49px; }
+.gd i:nth-child(4) { left: 61px; }
+.gd i:nth-child(5) { left: 73px; }
+.gd i:nth-child(6) { left: 85px; }
+.gd i:nth-child(7) { left: 97px; }
+.gd i:nth-child(8) { left: 109px; }
+.gd i:nth-child(9) { left: 121px; }
+.gd i:nth-child(10) { left: 133px; }
+.gd i:nth-child(11) { left: 145px; }
+
+.ex-row .st { margin-left: auto; padding-left: 10px; font: 600 11.5px/1 var(--mono); }
+.ex-row .dot { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .8; }
+.c-new { color: var(--g-new); } .c-change { color: var(--g-change); } .c-delete { color: var(--g-delete); }
+.ex-file.c-delete .nm { text-decoration: line-through; }
+.ex-dir.c-new .nm, .ex-dir.c-change .nm, .ex-dir.c-delete .nm { color: inherit; }
+.ex-tag { font-size: 10.5px; line-height: 15px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+.ex-none { padding: 10px 14px; color: var(--muted); }
+.ex-side { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 14px 16px 16px; position: sticky; top: calc(var(--top) + 56px); }
+.ex-side h3 { margin: 0; font-size: 16px; }
+.ex-side h4 { margin: 14px 0 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.ex-side ul { margin: 0; padding-left: 18px; } .ex-side li { margin: 3px 0; }
+.ex-crumb { font: 12px/1.4 var(--mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.ex-crumb .sep { opacity: .6; }
+.ex-title { display: flex; align-items: center; gap: 10px; }
+.pill { font-size: 11.5px; font-weight: 600; border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
+.ex-who { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ex-task { font: 12.5px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; }
+.ex-task .st-committed, .ex-task .st-done { color: var(--done); } .ex-task .st-building { color: var(--run); } .ex-task .st-in-review { color: var(--wait); }
+.ex-repo-sum { margin: 14px 0 0; display: grid; gap: 4px; }
+.ex-repo-sum .bars { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); }
+.ex-repo-sum .bar.c-new { background: var(--g-new); } .ex-repo-sum .bar.c-change { background: var(--g-change); } .ex-repo-sum .bar.c-delete { background: var(--g-delete); }
+.ex-legend { display: flex; gap: 14px; margin-top: 16px; font: 600 12px var(--mono); }
+
+.explorer.embed { margin: 10px 0 18px; max-width: 980px; }
+.explorer.embed .ex-sum { display: inline-flex; gap: 10px; align-items: center; font-weight: 600; }
+.explorer.embed .ex-open { font-weight: 500; text-transform: none; }
+.explorer details > summary { list-style: none; }
+.explorer details > summary::-webkit-details-marker { display: none; }
+.explorer details:not([open]) > summary .chev { transform: none; }
+.explorer details[open] > summary .chev { transform: rotate(90deg); }
+.explorer .why { color: var(--muted); font-size: 12px; margin-left: 12px; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+.explorer.embed .ex-row .st { margin-left: 8px; }
+.md .ch-embed > .explorer { font-size: 13px; }
+.md blockquote { margin: 8px 0 12px; padding: 2px 0 2px 14px; border-left: 3px solid var(--accent-line); color: var(--ink-2); background: none; }
+</style>
+</head>
+<body>
+<button class="btn skip" id="skip" type="button">Skip to the content</button>
+<header class="top">
+  <a class="brand" href="#/" aria-label="chopchop, all features"><span class="cut" aria-hidden="true">//</span>chopchop</a>
+  <span class="where" id="where"></span>
+  <nav aria-label="Main">
+    <a class="nav" id="nav-home" href="#/">Features</a>
+    <a class="nav" id="nav-system" href="#/system" hidden>System</a>
+    <span class="live" id="live" role="status" title="The page updates by itself while this is on"><i></i><b id="live-text">Connecting</b></span>
+    <button class="btn quiet" id="theme" type="button"></button>
+  </nav>
+</header>
+<main id="view" tabindex="-1"><p class="note">Loading.</p></main>
+<noscript><p style="padding:16px">The dashboard needs JavaScript.</p></noscript>
+
+<script nonce="__CSP_NONCE__">
+(function () {
+"use strict";
+
+// Mermaid draws the diagrams that chopchop did not draw on the server. It is the only thing
+// this page loads from outside, pinned to one exact version and checked against its hash.
+const HLJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js";
+const HLJS_SRI = "sha512-EBLzUL8XLl+va/zAsmXwS7Z2B1F9HUHkZwyS/VKwh3S7T/U0nF4BaU29EP/ZSf6zgiIxYAnKLu6bJ8dqpmX5uw==";
+const MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js";
+const MERMAID_SRI = "sha256-WB7X10vZBI0OOpE2OSfXLvIpQtdyJUayf3zCnjU5Drg=";
+
+const NS = "http://www.w3.org/2000/svg";
+const WHO = { you: "you", lead: "the lead", ba: "the BA", reviewers: "the reviewers", chopchop: "chopchop" };
+const STEPS = [["groom", "Groom"], ["brief", "Brief"], ["design", "Design"], ["spec", "Spec"], ["changes", "Changes"], ["tasks", "Tasks"],
+               ["build", "Build"], ["prs", "Review"], ["done", "Done"]];
+const STEP_WORD = { done: "done", now: "now", waiting: "waiting", todo: "", skipped: "skipped" };
+const TABS = [["overview", "Overview"], ["brief", "Brief"], ["design", "Design"], ["spec", "Spec"], ["tasks", "Tasks"],
+              ["review", "Review"], ["activity", "Activity"]];
+const DOC_PATH = { brief: "requirements/brief.md", design: "design/design.md", spec: "spec/spec.md" };
+const DOC_MISSING = {
+  brief: "The brief is not written yet. Grooming writes it, after the questions are answered.",
+  design: "The design is not written yet. It comes after the brief is approved.",
+  spec: "The spec is not written yet. It comes after the lead approves the design."
+};
+const COLS = [["todo", "Todo"], ["building", "Building"], ["committed", "Committed"], ["review", "In review"], ["done", "Done"]];
+const VERDICT = { real: "Real problem", "false-positive": "Reviewer is mistaken", negotiable: "Fair, but not for this PR",
+                  question: "Question", praise: "Praise", outdated: "Outdated" };
+const VERDICT_COUNT = { real: ["real problem", "real problems"], "false-positive": ["reviewer mistake", "reviewer mistakes"],
+                        negotiable: ["fair, but not for this PR", "fair, but not for this PR"], question: ["question", "questions"],
+                        praise: ["praise", "praise"], outdated: ["outdated", "outdated"] };
+const VERDICT_TAG = { real: "t-stop", "false-positive": "", negotiable: "t-wait", question: "t-run", praise: "t-done", outdated: "" };
+const VERDICT_RANK = { real: 0, question: 1, negotiable: 2, "false-positive": 3, praise: 4, outdated: 5 };
+const PRIORITY = { high: "High priority", medium: "Medium priority", low: "Low priority" };
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+const DECISION = { fix: "Fix it", reply: "Reply only", skip: "Skip it" };
+const ITEM_STATE = { triaged: "Explained", fixing: "Being fixed", fixed: "Fixed", replied: "Replied", closed: "Closed" };
+const PR_STATE = { open: ["Open", "t-run"], merged: ["Merged", "t-done"], closed: ["Closed", ""] };
+const PR_REVIEW = { approved: ["Approved", "t-done"], "changes-requested": ["Changes requested", "t-wait"],
+                    commented: ["Commented", ""], none: ["No review yet", ""] };
+
+const S = {
+  route: { view: "home" }, home: null, homeErr: null, feature: {}, featErr: {}, docs: {}, docNodes: {}, pr: {}, prErr: {},
+  system: null, filters: { q: "", step: "", who: "" }, taskFilter: {}, reviewFilter: {}, changesUI: {}, cmOpen: {}, source: {},
+  positions: {}, entry: null, entries: 0, lastHash: null, lastSig: null, seq: 0, mermaid: null, mmd: 0, dropped: false
+};
+
+// ------------------------------------------------------------------ DOM helpers
+// Text from files only ever goes in as text nodes. The one place that takes HTML is the Markdown the server escaped.
+
+function add(node, kid) {
+  if (kid == null || kid === false) return;
+  if (Array.isArray(kid)) { for (const k of kid) add(node, k); return; }
+  node.appendChild(kid.nodeType ? kid : document.createTextNode(String(kid)));
+}
+function safeHref(v) {
+  v = String(v);
+  return /^(https?:\/\/|#\/|mailto:)/i.test(v) || v === "#" ? v : "#/";
+}
+function el(tag, props) {
+  const node = document.createElement(tag);
+  if (props) {
+    for (const k in props) {
+      const v = props[k];
+      if (v == null || v === false) continue;
+      if (k === "class") node.className = v;
+      else if (k === "on") { for (const ev in v) node.addEventListener(ev, v[ev]); }
+      else if (k === "data") { for (const d in v) node.dataset[d] = v[d]; }
+      else if (k === "href") node.setAttribute("href", safeHref(v));
+      else node.setAttribute(k, v === true ? "" : String(v));
+    }
+  }
+  for (let i = 2; i < arguments.length; i++) add(node, arguments[i]);
+  return node;
+}
+function svg(box, cls, shapes) {
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("viewBox", box);
+  s.setAttribute("class", cls);
+  s.setAttribute("aria-hidden", "true");
+  for (const [tag, attrs] of shapes) {
+    const n = document.createElementNS(NS, tag);
+    for (const a in attrs) n.setAttribute(a, attrs[a]);
+    s.appendChild(n);
+  }
+  return s;
+}
+const ICONS = {
+  ext: [["path", { d: "M6.5 3.5H3.5v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9" }]],
+  close: [["path", { d: "M4 4l8 8M12 4l-8 8" }]],
+  sun: [["circle", { cx: 8, cy: 8, r: 2.8 }], ["path", { d: "M8 1.5v1.7M8 12.8v1.7M1.5 8h1.7M12.8 8h1.7M3.4 3.4l1.2 1.2M11.4 11.4l1.2 1.2M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2" }]],
+  moon: [["path", { d: "M13 9.6A5.6 5.6 0 0 1 6.4 3 5.6 5.6 0 1 0 13 9.6z" }]]
+};
+function icon(name) { return svg("0 0 16 16", "ic", ICONS[name]); }
+const MARKS = {
+  done: [["circle", { cx: 7, cy: 7, r: 6.5, class: "f" }], ["path", { d: "M4 7.3l2.1 2.1L10 5.2", class: "ko" }]],
+  run: [["circle", { cx: 7, cy: 7, r: 5.6, class: "s" }], ["circle", { cx: 7, cy: 7, r: 3.2, class: "f pulse" }]],
+  wait: [["path", { d: "M7 .6 13.4 7 7 13.4.6 7z", class: "f" }]],
+  stop: [["rect", { x: 1, y: 1, width: 12, height: 12, rx: 2, class: "f" }], ["path", { d: "M4.6 4.6l4.8 4.8M9.4 4.6l-4.8 4.8", class: "ko" }]],
+  todo: [["circle", { cx: 7, cy: 7, r: 5.6, class: "s" }]],
+  skip: [["circle", { cx: 7, cy: 7, r: 5.6, class: "s", "stroke-dasharray": "2.4 2.4" }], ["path", { d: "M4.4 7h5.2", class: "s" }]]
+};
+function mark(kind) { return svg("0 0 14 14", "mark m-" + kind, MARKS[kind] || MARKS.todo); }
+function tag(text, cls) { return el("span", { class: "tag" + (cls ? " c " + cls : "") }, text); }
+function ext(url, label, cls) {
+  if (!/^https?:\/\//i.test(url || "")) return el("span", { class: cls }, label);
+  return el("a", { href: url, target: "_blank", rel: "noopener noreferrer", class: "ext" + (cls ? " " + cls : "") }, label, icon("ext"));
+}
+function plural(n, one, many) { return n + " " + (n === 1 ? one : (many || one + "s")); }
+function pad3(n) { return String(n).padStart(3, "0"); }
+
+// ------------------------------------------------------------------ time
+
+function parseTs(s) {
+  if (!s) return null;
+  const d = new Date(/^\d{4}-\d\d-\d\d$/.test(s) ? s + "T00:00:00" : s);
+  return isNaN(d.getTime()) ? null : d;
+}
+function ago(d) {
+  const sec = Math.round((Date.now() - d.getTime()) / 1000);
+  if (sec < 45) return "just now";
+  if (sec < 3600) return Math.max(1, Math.round(sec / 60)) + " min ago";
+  if (sec < 86400) return Math.round(sec / 3600) + " h ago";
+  if (sec < 86400 * 14) return plural(Math.round(sec / 86400), "day") + " ago";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function when(ts) {
+  const d = parseTs(ts);
+  if (!d) return ts ? el("span", null, String(ts)) : null;
+  return el("time", { datetime: String(ts), title: d.toLocaleString(), data: { ts: String(ts) } }, ago(d));
+}
+setInterval(function () {
+  document.querySelectorAll("time[data-ts]").forEach(function (t) {
+    const d = parseTs(t.dataset.ts);
+    if (d) t.textContent = ago(d);
+  });
+}, 30000);
+
+// ------------------------------------------------------------------ data
+
+async function api(path) {
+  const res = await fetch(path, { cache: "no-store", headers: { Accept: "application/json" } });
+  if (!res.ok) {
+    let msg = "The dashboard answered " + res.status + ".";
+    try { const body = await res.json(); if (body && body.error) msg = String(body.error); } catch (e) { /* not JSON */ }
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+function docKey(n, path) { return n + "|" + path; }
+function docPath(r, f) {
+  const key = r.doc || "";
+  if (DOC_PATH[key]) return DOC_PATH[key];
+  if (f && Array.isArray(f.docs)) {
+    const hit = f.docs.find(function (d) { return d.key === key; });
+    if (hit) return hit.path;
+  }
+  return /\.(md|json)$/i.test(key) ? key : null;
+}
+function docsFor(r, f) {
+  if (r.view !== "feature") return [];
+  if (r.tab === "doc") { const p = docPath(r, f); return p ? [p] : []; }
+  if (r.tab === "compare") return [DOC_PATH.design, DOC_PATH.spec];
+  if (r.tab === "tasks" && r.task && f && Array.isArray(f.tasks)) {
+    const t = f.tasks.find(function (x) { return x.id === r.task; });
+    return t ? [t.path] : [];
+  }
+  return [];
+}
+async function loadDoc(n, path) {
+  try { S.docs[docKey(n, path)] = await api("/api/doc/" + n + "?path=" + encodeURIComponent(path)); }
+  catch (e) { S.docs[docKey(n, path)] = e.status === 404 ? { missing: true } : { error: e.message }; }
+}
+async function loadHome() {
+  try { S.home = await api("/api/features"); S.homeErr = null; }
+  catch (e) { S.homeErr = e.message; }
+  chrome();
+}
+async function load() {
+  const r = S.route, seq = ++S.seq;
+  const current = function () { return seq === S.seq; };
+  if (r.view === "home") {
+    await loadHome();
+  } else if (r.view === "feature") {
+    const known = docsFor(r, S.feature[r.n]);
+    const first = [api("/api/feature/" + r.n).then(function (d) { S.feature[r.n] = d; delete S.featErr[r.n]; },
+                                                    function (e) { S.featErr[r.n] = e.message; })];
+    for (const p of known) first.push(loadDoc(r.n, p));
+    await Promise.all(first);
+    if (!current()) return;
+    const more = docsFor(r, S.feature[r.n]).filter(function (p) { return known.indexOf(p) < 0; });
+    if (more.length) { render(); await Promise.all(more.map(function (p) { return loadDoc(r.n, p); })); }
+  } else if (r.view === "pr") {
+    try { S.pr[r.slug] = await api("/api/pr/" + encodeURIComponent(r.slug)); delete S.prErr[r.slug]; }
+    catch (e) { S.prErr[r.slug] = e.message; }
+  } else if (r.view === "system") {
+    try { S.system = await api("/api/system"); }
+    catch (e) { S.system = e.status === 404 ? { missing: true, error: e.message } : { error: e.message }; }
+  }
+  if (current()) render();
+}
+
+// ------------------------------------------------------------------ routing
+
+function parseRoute() {
+  const raw = (location.hash || "").replace(/^#/, "") || "/";
+  const cut = raw.indexOf("?");
+  const path = cut < 0 ? raw : raw.slice(0, cut);
+  const query = new URLSearchParams(cut < 0 ? "" : raw.slice(cut + 1));
+  let seg;
+  try { seg = path.split("/").filter(Boolean).map(decodeURIComponent); }
+  catch (e) { return { view: "lost" }; }
+  if (!seg.length) return { view: "home", query: query };
+  const fm = seg[0] === "f" ? /^(\d{1,9})(?:-[\w.~+-]*)?$/.exec(seg[1] || "") : null;
+  if (fm) {
+    const r = { view: "feature", n: parseInt(fm[1], 10), tab: seg[2] || "overview", key: seg[1] };
+    if (r.tab === "doc") { r.doc = seg.slice(3).join("/"); if (!r.doc) r.tab = "overview"; }
+    else if (r.tab === "tasks") r.task = seg[3] || null;
+    else if (r.tab === "changes") r.file = seg.slice(3).join("/") || null;
+    else if (["overview", "review", "activity", "compare"].indexOf(r.tab) < 0) return { view: "lost" };
+    return r;
+  }
+  if (seg[0] === "pr" && seg[1] && seg.length === 2) return { view: "pr", slug: seg[1] };
+  if (seg[0] === "system" && seg.length === 1) return { view: "system" };
+  return { view: "lost" };
+}
+function homeHash() {
+  const q = new URLSearchParams();
+  if (S.filters.q) q.set("q", S.filters.q);
+  if (S.filters.step) q.set("step", S.filters.step);
+  if (S.filters.who) q.set("who", S.filters.who);
+  const s = q.toString();
+  return "#/" + (s ? "?" + s : "");
+}
+function go(hash) { location.hash = hash; }
+// Links name a feature by its folder (001-PAY-120-refunds), so a URL says what it is. A bare number still works.
+function folderOf(n) {
+  n = Number(n);
+  const f = S.feature[n];
+  if (f && f.folder) return f.folder;
+  const row = S.home && (S.home.features || []).find(function (x) { return Number(x.number) === n; });
+  return row && row.folder ? row.folder : String(n);
+}
+function fhash(n) { return "#/f/" + encodeURIComponent(folderOf(n)); }
+function canonical() {
+  // An old link with a bare number (#/f/1/tasks) becomes the named one once the name is known.
+  const r = S.route;
+  if (!r || r.view !== "feature") return;
+  const name = folderOf(r.n);
+  if (name === String(r.n) || r.key === name) return;
+  const raw = (location.hash || "").replace(/^#/, "");
+  const fixed = raw.replace(/^\/f\/[^/?]+/, "/f/" + encodeURIComponent(name));
+  if (fixed !== raw) { r.key = name; history.replaceState(history.state, "", "#" + fixed); }
+}
+function tabsTop() {
+  const row = document.querySelector(".tabrow"), body = document.querySelector(".tabbody");
+  if (!row || !body) return 0;
+  // The tab row sticks, so measure from the content under it: scroll so the row sits right under the top bar.
+  return Math.max(0, Math.round(body.getBoundingClientRect().top + window.scrollY - 44 - row.offsetHeight - 16));
+}
+function onRoute() {
+  const prev = S.route, prevY = window.scrollY, first = S.lastHash == null;
+  if (S.entry != null) S.positions[S.entry] = prevY;
+  // A new visit has no id yet: give it one. Back and Forward land on an entry that already has its id.
+  let id = history.state && history.state.cc;
+  const fresh = !id;
+  if (fresh) {
+    id = Date.now() + "." + (++S.entries);
+    try { history.replaceState({ cc: id }, "", location.href); } catch (e) { /* still works, without Back positions */ }
+  }
+  S.entry = id;
+  S.route = parseRoute();
+  const r = S.route;
+  if (r.view === "home" && r.query) {
+    S.filters = { q: r.query.get("q") || "", step: r.query.get("step") || "", who: r.query.get("who") || "" };
+  }
+  let y = 0;
+  if (!fresh && S.positions[id] != null) y = S.positions[id];
+  else if (prev && prev.view === "feature" && r.view === "feature" && prev.n === r.n) {
+    y = prev.tab === "tasks" && r.tab === "tasks" ? prevY : -1;   // -1: stay, but no lower than the tabs
+  }
+  render({ nav: true, y: y, prevY: prevY });
+  if (r.view === "feature" && r.tab === "tasks" && r.task) {
+    const d = document.getElementById("drawer");
+    if (d) d.focus({ preventScroll: true });
+  } else if (prev && prev.view === "feature" && prev.task && r.view === "feature" && r.tab === "tasks") {
+    const back = Array.from(document.querySelectorAll(".tcard a.t")).find(function (a) {
+      return a.getAttribute("href") === fhash(r.n) + "/tasks/" + encodeURIComponent(prev.task);
+    });
+    if (back) back.focus({ preventScroll: true });
+  } else if (fresh && !first && y === 0) {
+    document.getElementById("view").focus({ preventScroll: true });
+  }
+  load();
+}
+
+// ------------------------------------------------------------------ render
+
+function keepUI() {
+  const keep = {};
+  document.querySelectorAll("[data-keep]").forEach(function (n) {
+    keep[n.dataset.keep] = { top: n.scrollTop, left: n.scrollLeft, open: n.tagName === "DETAILS" ? n.open : null };
+  });
+  const a = document.activeElement;
+  const focus = a && a.id && a !== document.body ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
+  return { keep: keep, focus: focus, x: window.scrollX, y: window.scrollY };
+}
+function restoreUI(snap) {
+  document.querySelectorAll("[data-keep]").forEach(function (n) {
+    const k = snap.keep[n.dataset.keep];
+    if (!k) return;
+    if (k.open != null) n.open = k.open;
+    n.scrollTop = k.top;
+    n.scrollLeft = k.left;
+  });
+  if (snap.focus) {
+    const n = document.getElementById(snap.focus.id);
+    if (n && n !== document.activeElement) {
+      n.focus({ preventScroll: true });
+      try { if (snap.focus.s != null) n.setSelectionRange(snap.focus.s, snap.focus.e); } catch (e) { /* not a text field */ }
+    }
+  }
+}
+function featSig(r) {
+  const f = S.feature[r.n];
+  if (!f) return ["none", S.featErr[r.n] || null];
+  const head = [f.title, f.key, f.number, f.steps, f.waiting_on, f.waiting_who, f.waiting, f.next, f.counts, f.gates, f.error,
+                f.stage, f.auto && f.auto.stopped, f.auto && f.auto.current];
+  let part = null;
+  if (r.tab === "overview") part = f;
+  else if (r.tab === "doc") { const p = docPath(r, f); part = [p, p && S.docs[docKey(r.n, p)], S.source]; }
+  else if (r.tab === "compare") part = [S.docs[docKey(r.n, DOC_PATH.design)], S.docs[docKey(r.n, DOC_PATH.spec)]];
+  else if (r.tab === "tasks") {
+    const t = r.task && (f.tasks || []).find(function (x) { return x.id === r.task; });
+    part = [f.tasks, f.run, S.taskFilter[r.n], r.task, t && S.docs[docKey(r.n, t.path)]];
+  } else if (r.tab === "review") part = [f.comments, S.reviewFilter["f" + r.n]];
+  else if (r.tab === "activity") part = f.events;
+  else if (r.tab === "changes") part = [f.changes, S.changesUI[r.n], r.file];
+  return [head, part];
+}
+function signature(r) {
+  let part;
+  if (r.view === "home") part = [S.home && [S.home.features, S.home.prs, S.home.workspace, S.home.system], S.homeErr, S.filters];
+  else if (r.view === "feature") part = featSig(r);
+  else if (r.view === "pr") part = [S.pr[r.slug], S.prErr[r.slug], S.reviewFilter["pr:" + r.slug]];
+  else if (r.view === "system") part = [S.system, S.source];
+  return JSON.stringify([r.view, part]);
+}
+function render(opts) {
+  opts = opts || {};
+  canonical();
+  const r = S.route, hash = location.hash;
+  const sig = signature(r);
+  if (!opts.nav && !opts.force && hash === S.lastHash && sig === S.lastSig) return;   // nothing on screen changed
+  const snap = opts.nav ? null : keepUI();
+  const view = document.getElementById("view");
+  const page = document.createDocumentFragment();
+  let title = "chopchop";
+  if (r.view === "home") title = viewHome(page);
+  else if (r.view === "feature") title = viewFeature(page, r);
+  else if (r.view === "pr") title = viewPr(page, r);
+  else if (r.view === "system") title = viewSystem(page);
+  else title = viewLost(page);
+  view.className = r.view === "feature" && r.tab === "compare" && S.feature[r.n] ? "reading" : "";
+  view.replaceChildren(page);
+  document.title = title ? title + " · chopchop" : "chopchop";
+  S.lastHash = hash;
+  S.lastSig = sig;
+  chrome();
+  if (snap) {
+    restoreUI(snap);
+    window.scrollTo(snap.x, snap.y);
+  } else {
+    restoreUI({ keep: {}, focus: null });
+    window.scrollTo(0, opts.y === -1 ? Math.min(opts.prevY || 0, tabsTop()) : (opts.y || 0));
+  }
+  drawMermaid(view);
+  colourCode(view);
+}
+function redraw() { render({ force: true }); }
+function chrome() {
+  const r = S.route, home = S.home;
+  const where = document.getElementById("where");
+  where.textContent = home && home.workspace ? home.workspace.project + (home.workspace.team ? " · " + home.workspace.team : "") : "";
+  where.title = home && home.workspace ? home.workspace.path : "";
+  document.getElementById("nav-system").hidden = !(home && home.system) && r.view !== "system";
+  const cur = function (id, on) { const n = document.getElementById(id); if (on) n.setAttribute("aria-current", "page"); else n.removeAttribute("aria-current"); };
+  cur("nav-home", r.view === "home");
+  cur("nav-system", r.view === "system");
+}
+function loading(text) { return el("p", { class: "note" }, text || "Loading."); }
+function problem(text) {
+  return el("div", { class: "problem", role: "alert" }, el("strong", null, "This did not load. "), text || "",
+            " ", el("button", { class: "btn", type: "button", on: { click: function () { load(); } } }, "Try again"));
+}
+function viewLost(root) {
+  root.append(el("div", { class: "empty" }, el("strong", null, "There is no page at this address."),
+                 el("a", { href: "#/" }, "Go to all features")));
+  return "Not found";
+}
+
+// ------------------------------------------------------------------ home
+
+function waitInfo(f) {
+  if (f.error) return { cls: "stop", label: "Cannot be read" };
+  if (f.stage === "done") return { cls: "done", label: "Done" };
+  const w = f.waiting_on;
+  if (!w) return { cls: "todo", label: "Nothing is waiting" };
+  if (w === "chopchop") {
+    const cur = f.auto && f.auto.current;
+    return { cls: "run", label: cur ? "chopchop is building " + cur : "chopchop's turn" };
+  }
+  const stopped = f.auto && f.auto.stopped && f.auto.stopped.length && f.stage === "build";
+  return { cls: stopped ? "stop" : "wait", label: "Waiting on " + (f.waiting_who || WHO[w] || w) };
+}
+function whoRank(f) {
+  if (f.error) return 7;
+  if (f.stage === "done") return 6;
+  const order = { you: 0, lead: 1, ba: 2, reviewers: 3, chopchop: 4 };
+  return f.waiting_on in order ? order[f.waiting_on] : 5;
+}
+function stepLine(f) {
+  const steps = f.steps || [];
+  const line = el("div", { class: "sline", role: "img" });
+  let at = 0;
+  steps.forEach(function (s, i) {
+    line.append(el("i", { class: s.state }));
+    if (s.state === "now" || s.state === "waiting") at = i + 1;
+  });
+  const done = f.stage === "done";
+  const text = done ? "All 8 steps done" : (at ? "Step " + at + " of " + steps.length + ": " + f.label : (f.label || ""));
+  line.setAttribute("aria-label", text);
+  return [line, el("div", { class: "scap" }, el("span", null, text))];
+}
+function barSegments(parts, total) {
+  const bar = el("div", { class: "tbar", role: "img" });
+  const legend = el("div", { class: "legend" });
+  const words = [];
+  for (const [cls, n, label] of parts) {
+    if (n > 0) {
+      const seg = el("i", { class: "b-" + cls, title: n + " " + label.toLowerCase() });
+      seg.style.flex = String(n);
+      bar.append(seg);
+    }
+    if (n > 0 || cls === "done") {
+      legend.append(el("span", null, el("i", { class: "b-" + cls }), n + " " + label.toLowerCase()));
+      words.push(n + " " + label.toLowerCase());
+    }
+  }
+  bar.setAttribute("aria-label", "Tasks: " + words.join(", ") + ", of " + total);
+  return [bar, legend];
+}
+function taskBarCounts(c) {
+  const total = c.total || 0;
+  if (!total) return null;
+  return barSegments([["done", c.done || 0, "Done"], ["review", c["in-review"] || 0, "In review"],
+                      ["building", c["in-progress"] || 0, "In progress"], ["todo", c.todo || 0, "Todo"]], total);
+}
+function featureCard(f) {
+  const w = waitInfo(f);
+  const card = el("article", { class: "fcard" });
+  card.append(el("div", { class: "ft" }, el("span", { class: "num" }, pad3(f.number)),
+                 el("a", { href: fhash(f.number) }, f.title || f.folder),
+                 f.key ? el("span", { class: "key" }, f.key) : null));
+  card.append(el("div", null, el("div", { class: "wb" }, mark(w.cls), w.label),
+                 f.waiting ? el("p", { class: "wtext" }, f.waiting) : null));
+  if (f.error) { card.append(el("p", { class: "muted mono" }, f.error)); return card; }
+  card.append(el("div", null, stepLine(f)));
+  if (f.summary && f.summary.length) {
+    card.append(el("ul", { class: "sum" }, f.summary.slice(0, 3).map(function (s) { return el("li", null, el("span", null, s)); })));
+  }
+  const bar = f.tasks ? taskBarCounts(f.tasks) : null;
+  if (bar) card.append(el("div", null, bar));
+  const foot = el("div", { class: "foot" });
+  if (f.updated) foot.append(el("span", null, "Changed ", when(f.updated)));
+  const c = f.comments || {};
+  if (f.prs && f.prs.length) foot.append(el("span", null, plural(f.prs.length, "PR") + (c.open != null ? ", " + c.open + " open" : "")));
+  if (c.undecided) foot.append(el("span", null, plural(c.undecided, "comment") + " need your call"));
+  if (c["new"]) foot.append(el("span", null, plural(c["new"], "new comment")));
+  if (foot.childNodes.length) card.append(foot);
+  return card;
+}
+function prCard(p) {
+  const c = p.counts || {};
+  const cls = p.waiting_on === "chopchop" ? "run" : (p.waiting_on ? "wait" : (p.prs && p.prs.length && !c.open ? "done" : "todo"));
+  const label = p.waiting_on === "chopchop" ? "chopchop's turn" : (p.waiting_on ? "Waiting on " + (p.waiting_who || p.waiting_on) : "Nothing is waiting");
+  const card = el("article", { class: "fcard" });
+  card.append(el("div", { class: "ft" }, el("a", { href: "#/pr/" + encodeURIComponent(p.slug) }, p.title || p.slug),
+                 el("span", { class: "key" }, p.slug)));
+  card.append(el("div", null, el("div", { class: "wb" }, mark(cls), label), el("p", { class: "wtext" }, p.waiting || "")));
+  if (p.prs && p.prs.length) card.append(el("div", { class: "tags" }, p.prs.map(function (x) { return prTags(x, true); })));
+  const foot = el("div", { class: "foot" });
+  foot.append(el("span", null, plural(c.threads || 0, "comment")));
+  if (c.undecided) foot.append(el("span", null, c.undecided + " need your call"));
+  if (c["new"]) foot.append(el("span", null, c["new"] + " not explained yet"));
+  if (p.updated) foot.append(el("span", null, "Changed ", when(p.updated)));
+  card.append(foot);
+  return card;
+}
+function matchesHome(f) {
+  const q = S.filters.q.trim().toLowerCase();
+  if (S.filters.step && f.stage !== S.filters.step) return false;
+  if (S.filters.who) {
+    const who = f.stage === "done" || !f.waiting_on ? "none" : f.waiting_on;
+    if (who !== S.filters.who) return false;
+  }
+  if (!q) return true;
+  const hay = [pad3(f.number), f.title, f.key, f.folder, f.waiting, f.label].concat(f.summary || []).join(" ").toLowerCase();
+  return q.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
+}
+function homeList() {
+  const d = S.home;
+  const box = el("div", { id: "home-list" });
+  const all = d.features || [];
+  const shown = all.filter(matchesHome).sort(function (a, b) {
+    return whoRank(a) - whoRank(b) || String(b.updated || "").localeCompare(String(a.updated || "")) || a.number - b.number;
+  });
+  const active = S.filters.q || S.filters.step || S.filters.who;
+  if (!all.length && !(d.prs || []).length) {
+    const ws = d.workspace || {};
+    box.append(el("div", { class: "empty" }, el("strong", null, "No features yet."),
+      ws.config ? el("span", null, "Start one in Claude Code: ", el("code", null, "/chopchop:run <Jira key or your idea>"))
+                : el("span", null, "This project has no chopchop.yaml yet. Set it up in Claude Code: ", el("code", null, "/chopchop:init")),
+      el("span", { class: "muted" }, "This page fills in by itself when the first feature is made.")));
+    return box;
+  }
+  if (all.length && !shown.length) {
+    box.append(el("div", { class: "empty" }, el("strong", null, "No feature matches these filters."),
+      el("button", { class: "btn", type: "button", on: { click: function () {
+        S.filters = { q: "", step: "", who: "" };
+        history.replaceState(history.state, "", homeHash());
+        redraw();
+      } } }, "Clear the filters")));
+  } else if (shown.length) {
+    box.append(el("div", { class: "cards" }, shown.map(featureCard)));
+  }
+  const q = S.filters.q.trim().toLowerCase();
+  const prs = (d.prs || []).filter(function (p) {
+    if (S.filters.step) return false;
+    if (S.filters.who && (p.waiting_on || "none") !== S.filters.who) return false;
+    return !q || (p.title + " " + p.slug + " " + (p.waiting || "")).toLowerCase().indexOf(q) >= 0;
+  });
+  if (prs.length) {
+    box.append(el("h2", { class: "sec group-title" }, "PRs without a feature"), el("div", { class: "cards" }, prs.map(prCard)));
+  }
+  const count = document.getElementById("home-count");
+  if (count) count.textContent = active ? shown.length + " of " + all.length + " shown" : "";
+  return box;
+}
+function viewHome(root) {
+  const d = S.home;
+  if (!d) {
+    root.append(el("div", { class: "pagehead" }, el("h1", null, "Features")), S.homeErr ? problem(S.homeErr) : loading());
+    return "Features";
+  }
+  const all = d.features || [];
+  const mine = all.filter(function (f) { return f.waiting_on === "you" && f.stage !== "done"; }).length;
+  const sub = !all.length ? "" : plural(all.length, "feature") + ". " +
+    (mine ? mine + (mine === 1 ? " waits" : " wait") + " on you." : "None waits on you.");
+  root.append(el("div", { class: "pagehead" }, el("h1", null, "Features"), el("span", { class: "sub" }, sub)));
+  if (S.homeErr) root.append(problem(S.homeErr));
+  const ws = d.workspace || {};
+  if (ws.config_problem) root.append(el("div", { class: "problem" }, "chopchop.yaml could not be read: " + ws.config_problem));
+  if (all.length || (d.prs || []).length) {
+    const refill = function () {
+      history.replaceState(history.state, "", homeHash());
+      S.lastHash = location.hash;
+      const old = document.getElementById("home-list");
+      const fresh = homeList();
+      if (old) old.replaceWith(fresh);
+      S.lastSig = signature(S.route);
+    };
+    const search = el("input", { type: "search", id: "f-q", placeholder: "Find a feature", value: S.filters.q, "aria-label": "Find a feature by text",
+                                 on: { input: function (e) { S.filters.q = e.target.value; refill(); } } });
+    const step = el("select", { id: "f-step", "aria-label": "Step", on: { change: function (e) { S.filters.step = e.target.value; refill(); } } },
+                    el("option", { value: "" }, "Any step"),
+                    STEPS.map(function (s) { return el("option", { value: s[0], selected: S.filters.step === s[0] }, s[1]); }));
+    const who = el("select", { id: "f-who", "aria-label": "Waiting on", on: { change: function (e) { S.filters.who = e.target.value; refill(); } } },
+                   el("option", { value: "" }, "Waiting on anyone"),
+                   [["you", "Waiting on you"], ["lead", "Waiting on the lead"], ["ba", "Waiting on the BA"],
+                    ["reviewers", "Waiting on the reviewers"], ["chopchop", "chopchop's turn"], ["none", "Nothing waiting"]]
+                     .map(function (o) { return el("option", { value: o[0], selected: S.filters.who === o[0] }, o[1]); }));
+    root.append(el("div", { class: "filters", role: "search" }, search, step, who, el("span", { class: "count", id: "home-count", "aria-live": "polite" })));
+  }
+  const list = homeList();
+  root.append(list);
+  const count = root.querySelector("#home-count");
+  const shown = all.filter(matchesHome).length;
+  if (count) count.textContent = S.filters.q || S.filters.step || S.filters.who ? shown + " of " + all.length + " shown" : "";
+  return "Features";
+}
+
+// ------------------------------------------------------------------ feature
+
+function stepper(f) {
+  const list = el("ol", { class: "stepper", "aria-label": "The 8 steps of this feature" });
+  for (const s of f.steps || []) {
+    const kind = { done: "done", now: "run", waiting: "wait", todo: "todo", skipped: "skip" }[s.state] || "todo";
+    const stopped = s.state === "waiting" && f.auto && f.auto.stopped && f.auto.stopped.length && s.id === "build";
+    const word = STEP_WORD[s.state] || "";
+    list.append(el("li", { class: "st-" + s.state, "aria-current": s.state === "now" || s.state === "waiting" ? "step" : null },
+                   el("span", { class: "dot" }, mark(stopped ? "stop" : kind)),
+                   el("span", { class: "lab" }, s.label),
+                   el("span", { class: "stw" }, word || "\u00a0")));
+  }
+  return list;
+}
+function waitLine(f) {
+  const w = waitInfo(f);
+  const box = el("section", { class: "waitline w-" + w.cls, "aria-label": "Who this feature waits for" });
+  let head;
+  if (f.error) head = "This feature cannot be read";
+  else if (f.stage === "done") head = "Done. Nothing is waiting.";
+  else if (!f.waiting_on) head = "Nothing is waiting";
+  else head = "Waiting on: " + (f.waiting_who || WHO[f.waiting_on] || f.waiting_on);
+  box.append(el("p", { class: "who" }, mark(w.cls), head));
+  if (f.waiting) box.append(el("p", { class: "txt" }, f.waiting));
+  if (f.error) box.append(el("p", { class: "nxt mono" }, f.error));
+  const nx = f.next;
+  if (nx && f.stage !== "done") {
+    if (nx.say) box.append(el("p", { class: "nxt" }, "To move on, say this in Claude Code: ", el("code", null, nx.say)));
+    else box.append(el("p", { class: "nxt" }, f.waiting_on === "chopchop" ? "chopchop carries on when you run: " : "To move on, run this in Claude Code: ",
+                       el("code", null, "/chopchop:run " + f.number)));
+  }
+  return box;
+}
+function gateView(f, g) {
+  // What to show for one approval: a mark (or none) and one plain line.
+  const step = (f.steps || []).find(function (s) { return s.id === g.id; }) || {};
+  if (g.state === "approved") {
+    return { mark: "done", text: "Approved" + (g.approved_by ? " by " + g.approved_by : "") + (g.approved_on ? " on " + g.approved_on : "") };
+  }
+  if (g.state === "changes-needed") return { mark: "stop", text: "Changes needed" };
+  if (g.state === "changed") return { mark: "wait", text: "Changed after approval. It needs a new yes from " + g.who + "." };
+  if (step.state === "skipped") return { mark: "skip", text: "Skipped. This feature started without one." };
+  if (g.state === "missing") return { mark: null, text: "Not written yet" };
+  if (step.state === "waiting") return { mark: "wait", text: "Waiting for " + g.who + " to approve it" };
+  if (step.state === "done") return { mark: "todo", text: "No approval on record" };
+  return { mark: "todo", text: "Not approved yet. " + (g.who === "you" ? "You approve it." : "The lead approves it.") };
+}
+function tabRow(f, r) {
+  const n = f.number;
+  const gates = {};
+  (f.gates || []).forEach(function (g) { gates[g.id] = g; });
+  const tc = (f.counts && f.counts.tasks) || {};
+  const cc = (f.counts && f.counts.comments) || {};
+  const nav = el("nav", { class: "tabs", "aria-label": "Parts of this feature", data: { keep: "tabs" } });
+  for (const [id, label] of TABS) {
+    const isDoc = id in DOC_PATH;
+    const href = id === "overview" ? fhash(n) : (isDoc ? fhash(n) + "/doc/" + id : fhash(n) + "/" + id);
+    const on = isDoc ? (r.tab === "doc" && (r.doc === id || r.doc === DOC_PATH[id])) : r.tab === id;
+    const a = el("a", { href: href, "aria-current": on ? "page" : null }, label);
+    if (isDoc && gates[id]) {
+      const g = gates[id], gv = gateView(f, g);
+      if (g.state === "missing") a.classList.add("off");
+      if (gv.mark === "done" || gv.mark === "wait" || gv.mark === "stop") a.append(mark(gv.mark));
+      a.title = gv.text;
+    }
+    if (id === "tasks" && tc.total) a.append(el("span", { class: "n" }, (tc.done || 0) + "/" + tc.total));
+    if (id === "changes") {
+      if (!f.changes || !f.changes.total) { a.classList.add("off"); a.title = "The spec lists the files it changes. There is no spec yet."; }
+      else { a.append(el("span", { class: "n" }, String(f.changes.total))); a.title = "Every file the spec adds, changes or deletes"; }
+    }
+    if (id === "review") {
+      const need = (cc.undecided || 0) + (cc["new"] || 0);
+      if (need) { a.append(mark("wait"), el("span", { class: "n" }, String(need))); a.title = need + " need a look"; }
+      else if (cc.threads) a.append(el("span", { class: "n" }, String(cc.threads)));
+    }
+    nav.append(a);
+  }
+  const cmp = r.tab === "compare";
+  return el("div", { class: "tabrow" }, nav,
+            cmp ? el("a", { class: "btn", href: fhash(n), role: "button", "aria-pressed": "true", title: "Leave the side by side view" },
+                     icon("close"), "Close compare")
+                : el("a", { class: "btn", href: fhash(n) + "/compare", role: "button", "aria-pressed": "false",
+                            title: "Read the design and the spec side by side" },
+                     "Compare", el("span", { class: "long" }, "design and spec")));
+}
+function viewFeature(root, r) {
+  const f = S.feature[r.n];
+  if (!f) {
+    root.append(el("div", { class: "crumb" }, el("a", { href: "#/" }, "Features"), "/", el("span", { class: "num" }, pad3(r.n))),
+                S.featErr[r.n] ? problem(S.featErr[r.n]) : loading());
+    return pad3(r.n);
+  }
+  const reading = r.tab === "compare";   // reading mode: no steps and no banner, so the two texts get the whole window
+  root.append(el("div", { class: "crumb" }, el("a", { href: "#/" }, "Features"), "/",
+                 el("span", { class: "num" }, pad3(f.number) + (f.key ? " · " + f.key : "")),
+                 reading ? ["/", el("span", { class: "ttl" }, f.title || f.folder)] : null));
+  if (!reading) root.append(el("div", { class: "pagehead" }, el("h1", null, f.title || f.folder)));
+  if (S.featErr[r.n]) root.append(problem(S.featErr[r.n]));
+  if (!reading && f.steps && f.steps.length) root.append(stepper(f));
+  if (!reading) root.append(waitLine(f));
+  root.append(tabRow(f, r));
+  const body = el("div", { class: "tabbody" });
+  if (r.tab === "overview") overview(body, f);
+  else if (r.tab === "doc") docTab(body, f, r);
+  else if (r.tab === "compare") compare(body, f);
+  else if (r.tab === "tasks") tasksTab(body, f, r);
+  else if (r.tab === "review") review(body, f.comments, "f" + f.number, f);
+  else if (r.tab === "changes") changesTab(body, f, r);
+  else if (r.tab === "activity") body.append(feed(f.events || [], "Nothing is logged yet. Every chopchop step adds a line here."));
+  root.append(body);
+  if (r.tab === "tasks" && r.task) root.append(taskDrawer(f, r));
+  return pad3(f.number) + " " + (f.title || "");
+}
+
+// ---- overview
+
+function boardCounts(tasks) {
+  const c = { todo: 0, building: 0, committed: 0, review: 0, done: 0 };
+  for (const t of tasks) if (t.column in c) c[t.column] += 1;
+  return c;
+}
+function runLine(f) {
+  const run = f.run;
+  if (!run) return null;
+  const tasks = f.tasks || [];
+  const stopped = tasks.filter(function (t) { return t.auto && t.auto.state === "stopped"; });
+  const out = [];
+  if (stopped.length) {
+    for (const t of stopped) out.push(el("p", null, mark("stop"), " ", el("strong", null, t.id + " stopped. "), t.auto.why || "A person must decide."));
+  }
+  if (run.current) out.push(el("p", null, mark("run"), " chopchop is building ", el("strong", null, run.current), "."));
+  else if (run.finished) out.push(el("p", { class: "muted" }, "The automatic build finished ", when(run.finished), "."));
+  else if (!stopped.length) out.push(el("p", { class: "muted" }, "An automatic build is open. Started ", when(run.started), "."));
+  return out;
+}
+function prTags(p, withId) {
+  const out = [];
+  if (withId && (p.id || p.repo)) out.push(el("span", { class: "tag mono" }, p.id || p.repo));
+  const st = PR_STATE[p.state];
+  if (st) out.push(tag(st[0], st[1]));
+  if (p.draft) out.push(tag("Draft"));
+  const rv = PR_REVIEW[p.review];
+  if (rv && p.review !== "none") out.push(tag(rv[0], rv[1]));
+  return out;
+}
+function overview(root, f) {
+  const left = el("div"), right = el("div");
+  const n = f.number;
+
+  const sum = el("section", null, el("h2", { class: "sec" }, "In short"));
+  if (f.summary && f.summary.length) sum.append(el("ul", { class: "lead" }, f.summary.map(function (s) { return el("li", null, s); })));
+  else sum.append(el("p", { class: "muted" }, "No Summary yet. It shows here as soon as the brief, the design or the spec has one."));
+  left.append(sum);
+
+  const gates = el("section", null, el("h2", { class: "sec" }, "Approvals"));
+  const rows = el("div", { class: "rows" });
+  for (const g of f.gates || []) {
+    const gv = gateView(f, g);
+    const row = el("div", { class: "row" },
+      g.exists ? el("a", { class: "k", href: fhash(n) + "/doc/" + g.id }, g.label) : el("span", { class: "k" }, g.label),
+      el("span", { class: "v" }, gv.mark ? [mark(gv.mark), " "] : null, gv.text),
+      el("span", { class: "a" }, g.updated ? ["changed ", when(g.updated)] : ""));
+    if (g.conditions && g.conditions.length) row.append(el("div", { class: "cond" }, "Conditions: " + g.conditions.join("; ")));
+    rows.append(row);
+  }
+  gates.append(rows);
+  left.append(gates);
+
+  const files = el("section", null, el("h2", { class: "sec" }, "All files"));
+  const frows = el("div", { class: "rows" });
+  for (const d of f.docs || []) {
+    frows.append(el("div", { class: "row" }, el("a", { class: "k", href: fhash(n) + "/doc/" + (d.key in DOC_PATH ? d.key : d.path.split("/").map(encodeURIComponent).join("/")) }, d.label),
+                    el("span", { class: "v mono" }, d.path), el("span", { class: "a" }, d.updated ? when(d.updated) : "")));
+  }
+  if (!(f.docs || []).length) frows.append(el("p", { class: "muted" }, "No files yet."));
+  files.append(frows);
+  left.append(files);
+
+  const tasks = f.tasks || [];
+  const prog = el("section", null, el("h2", { class: "sec" }, "Tasks"));
+  if (tasks.length) {
+    const c = boardCounts(tasks);
+    prog.append(el("div", null, barSegments([["done", c.done, "Done"], ["review", c.review, "In review"], ["committed", c.committed, "Committed"],
+                                             ["building", c.building, "Building"], ["todo", c.todo, "Todo"]], tasks.length)));
+    prog.append(el("div", { class: "runfacts" }, runLine(f)));
+    prog.append(el("a", { class: "more", href: fhash(n) + "/tasks" }, "Open the board"));
+  } else {
+    prog.append(el("p", { class: "muted" }, "No tasks yet. They are cut from the spec once it is approved."));
+  }
+  right.append(prog);
+
+  const prs = el("section", null, el("h2", { class: "sec" }, "Pull requests"));
+  const links = f.links || [];
+  if (links.length) {
+    const list = el("div", { class: "prlist" });
+    for (const p of links) {
+      list.append(el("div", { class: "pr" },
+        el("div", { class: "ti" }, el("span", { class: "id" }, p.id || p.repo || "PR"), ext(p.url, p.title || p.url)),
+        el("div", { class: "tags" }, prTags(p, false)),
+        p.tasks && p.tasks.length ? el("div", { class: "meta" }, "Tasks: " + p.tasks.join(", ")) : null));
+    }
+    prs.append(list);
+    const cc = (f.counts && f.counts.comments) || {};
+    if (cc.threads) {
+      prs.append(el("div", { class: "facts" }, el("span", null, plural(cc.threads, "review comment")),
+                    cc["new"] ? el("span", null, cc["new"] + " not explained yet") : null,
+                    cc.undecided ? el("span", null, cc.undecided + " need your call") : null,
+                    cc.to_fix ? el("span", null, cc.to_fix + " to fix") : null,
+                    cc.fixed ? el("span", null, cc.fixed + " fixed") : null));
+      prs.append(el("a", { class: "more", href: fhash(n) + "/review" }, "Open the review"));
+    }
+  } else {
+    prs.append(el("p", { class: "muted" }, "No PR yet. chopchop opens one per repo when the tasks are built."));
+  }
+  right.append(prs);
+
+  const act = el("section", null, el("h2", { class: "sec" }, "Latest activity"));
+  const ev = f.events || [];
+  if (ev.length) {
+    act.append(feed(ev.slice(0, 7)));
+    if (ev.length > 7) act.append(el("a", { class: "more", href: fhash(n) + "/activity" }, "All activity"));
+  } else {
+    act.append(el("p", { class: "muted" }, "Nothing is logged yet."));
+  }
+  if (f.updated) act.append(el("p", { class: "muted small" }, "Files last changed ", when(f.updated), "."));
+  right.append(act);
+
+  root.append(el("div", { class: "over" }, left, right));
+}
+
+// ---- documents
+
+function docBody(key, d) {
+  let c = S.docNodes[key];
+  if (!c || c.html !== d.html) {
+    const node = el("div", { class: "md" });
+    node.innerHTML = d.html;            // HTML the server made from Markdown, with every bit of file text escaped
+    const spot = node.querySelector(".ch-embed");
+    if (spot) {                          // the spec's file list: show it as the file explorer
+      const f = S.feature[parseInt(key, 10)];
+      const tree = f && changesEmbed(f);
+      if (tree) spot.replaceChildren(tree);
+    }
+    const keys = Object.keys(S.docNodes);
+    if (keys.length > 16) delete S.docNodes[keys[0]];
+    c = S.docNodes[key] = { html: d.html, node: node };
+  }
+  return c.node;
+}
+function tocBox(d, keep, open) {
+  const items = (d.toc || []).filter(function (t) { return t.level <= 3; });
+  if (items.length < 3) return null;
+  const box = el("details", { class: "toc", open: open ? true : null, data: { keep: keep } }, el("summary", null, "On this page"));
+  box.append(el("ul", null, items.map(function (t) {
+    return el("li", null, el("a", { href: "#", class: "l" + t.level, data: { toc: t.id } }, t.text));
+  })));
+  return box;
+}
+function docHead(d, key, extra) {
+  const head = el("div", { class: "dochead" });
+  const m = d.meta || {};
+  if (m.status) {
+    const st = String(m.status);
+    head.append(tag(st.replace(/-/g, " "), st.indexOf("approved") === 0 || st === "done" ? "t-done" : (st === "changes-needed" ? "t-stop" : "")));
+  }
+  if (m.approved_by) head.append(el("span", null, "Approved by " + m.approved_by + (m.approved_on ? " on " + m.approved_on : "")));
+  if (m.changed_since_approval) head.append(tag("Changed after approval", "t-wait"));
+  if (d.minutes) head.append(el("span", null, "About " + d.minutes + " min to read"));
+  if (d.updated) head.append(el("span", null, "Changed ", when(d.updated)));
+  if (extra) head.append(extra);
+  if (d.kind === "md") {
+    head.append(el("button", { class: "btn quiet", type: "button", "aria-pressed": S.source[key] ? "true" : "false",
+                               on: { click: function () { S.source[key] = !S.source[key]; redraw(); } } }, S.source[key] ? "Show the page" : "Show the source"));
+  }
+  return head;
+}
+function docPane(key, d, opts) {
+  opts = opts || {};
+  if (!d) return loading();
+  if (d.missing) return el("div", { class: "empty" }, el("strong", null, opts.missing || "This file is not written yet."));
+  if (d.error) return problem(d.error);
+  const wide = window.matchMedia("(min-width: 981px)").matches && !opts.inner;
+  const source = !opts.bare && S.source[key];
+  const toc = source ? null : tocBox(d, "toc-" + key, wide);
+  const article = el("article", { class: "doc" }, opts.bare ? null : docHead(d, key, opts.extra));
+  if (source) article.append(el("div", { class: "md" }, el("pre", { class: "code raw" }, d.raw || "")));
+  else article.append(docBody(key, d));
+  if (opts.inner) return el("div", { class: "docwrap solo" }, el("div", null, toc, article));
+  return el("div", { class: "docwrap" + (toc ? "" : " solo") }, article, toc);
+}
+function docTab(root, f, r) {
+  const path = docPath(r, f);
+  if (!path) {
+    root.append(el("div", { class: "empty" }, el("strong", null, "This feature has no such file."), el("a", { href: fhash(f.number) }, "See all its files")));
+    return;
+  }
+  const d = S.docs[docKey(f.number, path)];
+  const missing = DOC_MISSING[Object.keys(DOC_PATH).find(function (k) { return DOC_PATH[k] === path; })];
+  root.append(docPane(docKey(f.number, path), d, { missing: missing, extra: el("span", { class: "path" }, path) }));
+}
+function compare(root, f) {
+  const grid = el("div", { class: "compare" });
+  for (const id of ["design", "spec"]) {
+    const key = docKey(f.number, DOC_PATH[id]);
+    const d = S.docs[key];
+    const pane = el("section", { class: "pane", "aria-label": id === "design" ? "Design" : "Spec" });
+    const gate = (f.gates || []).find(function (g) { return g.id === id; });
+    const gv = gate ? gateView(f, gate) : null;
+    pane.append(el("header", null, el("h2", null, id === "design" ? "Design" : "Spec"),
+                   gv && /^(done|wait|stop)$/.test(gv.mark || "") ? el("span", { class: "muted", title: gv.text }, mark(gv.mark), " ",
+                      gate.state === "approved" ? "approved" : (gv.mark === "stop" ? "changes needed" : "not approved yet")) : null,
+                   el("a", { class: "btn quiet", href: fhash(f.number) + "/doc/" + id }, "Open alone")));
+    pane.append(el("div", { class: "scroll", data: { keep: "cmp-" + id }, tabindex: "0", role: "region", "aria-label": (id === "design" ? "Design" : "Spec") + " text" },
+                   docPane(key, d, { missing: DOC_MISSING[id], inner: true, bare: true })));
+    grid.append(pane);
+  }
+  root.append(grid);
+}
+
+// ---- tasks
+
+function autoLine(t) {
+  const a = t.auto;
+  const waits = t.waits_for && t.waits_for.length ? "Waits for " + t.waits_for.join(", ") : "";
+  if (!a) return waits && t.column === "todo" ? ["todo", waits] : null;
+  const round = a.round ? ", review round " + a.round : "";
+  switch (a.state) {
+    case "stopped": return ["stop", "Stopped" + (a.why ? ": " + a.why : ". A person must decide.")];
+    case "skipped": return ["skip", "Left out" + (a.why ? ": " + a.why : "")];
+    case "building": return ["run", "chopchop is building it" + round];
+    case "reviewing": return ["run", "An agent reviews it" + round];
+    case "fixing": return ["run", "chopchop fixes the review notes" + round];
+    case "ready": return ["run", "Reviewed, ready to commit" + round];
+    case "committed": return ["done", "Committed" + (a.commit ? " " + a.commit : "") + (a.round > 1 ? ", after " + a.round + " review rounds" : "")];
+    case "queued": return ["todo", "In the queue" + (waits ? ". " + waits : "")];
+    default: return a.state ? ["todo", String(a.state)] : null;
+  }
+}
+function taskCard(t, n, open) {
+  const card = el("article", { class: "tcard" + (open ? " open" : "") });
+  card.append(el("div", { class: "tt" }, el("span", { class: "tid" }, t.id), t.repo ? el("span", null, t.repo) : null,
+                 t.wave != null ? el("span", null, "wave " + t.wave) : null, t.size ? el("span", null, "size " + t.size) : null));
+  card.append(el("a", { class: "t", href: fhash(n) + "/tasks/" + encodeURIComponent(t.id) }, t.title));
+  if (t.summary && t.summary.length) card.append(el("p", { class: "tsum" }, t.summary.join(" ")));
+  const line = autoLine(t);
+  if (line) card.append(el("div", { class: "tauto " + line[0] }, mark(line[0]), el("span", null, line[1])));
+  return card;
+}
+function tasksTab(root, f, r) {
+  const tasks = f.tasks || [];
+  if (!tasks.length) {
+    root.append(el("div", { class: "empty" }, el("strong", null, "No tasks yet."),
+                   el("span", null, "chopchop cuts the spec into small tasks, one repo each, once the spec is approved.")));
+    return;
+  }
+  const flt = S.taskFilter[f.number] || (S.taskFilter[f.number] = { repo: "", wave: "" });
+  const repos = Array.from(new Set(tasks.map(function (t) { return t.repo; }).filter(Boolean))).sort();
+  const waves = Array.from(new Set(tasks.map(function (t) { return t.wave; }).filter(function (w) { return w != null; }))).sort();
+  const shown = tasks.filter(function (t) { return (!flt.repo || t.repo === flt.repo) && (flt.wave === "" || String(t.wave) === flt.wave); });
+  const bar = el("div", { class: "filters" });
+  if (repos.length > 1) {
+    bar.append(el("select", { id: "t-repo", "aria-label": "Repo", on: { change: function (e) { flt.repo = e.target.value; redraw(); } } },
+                  el("option", { value: "" }, "All repos"),
+                  repos.map(function (x) { return el("option", { value: x, selected: flt.repo === x }, x); })));
+  }
+  if (waves.length > 1) {
+    bar.append(el("select", { id: "t-wave", "aria-label": "Wave", on: { change: function (e) { flt.wave = e.target.value; redraw(); } } },
+                  el("option", { value: "" }, "All waves"),
+                  waves.map(function (x) { return el("option", { value: String(x), selected: flt.wave === String(x) }, "Wave " + x); })));
+  }
+  const stopped = tasks.filter(function (t) { return t.auto && t.auto.state === "stopped"; }).length;
+  bar.append(el("span", { class: "count" }, shown.length === tasks.length ? plural(tasks.length, "task") : shown.length + " of " + tasks.length + " tasks",
+                stopped ? ", " + stopped + " stopped" : ""));
+  root.append(bar);
+  const board = el("div", { class: "board", data: { keep: "board" } });
+  for (const [id, label] of COLS) {
+    const mine = shown.filter(function (t) { return t.column === id; });
+    const col = el("section", { class: "col", "aria-label": label + ", " + plural(mine.length, "task") },
+                   el("h3", null, label, el("span", { class: "n" }, String(mine.length))));
+    const list = el("div", { class: "list" });
+    if (mine.length) for (const t of mine) list.append(taskCard(t, f.number, r.task === t.id));
+    else list.append(el("p", { class: "none" }, "None"));
+    col.append(list);
+    board.append(col);
+  }
+  root.append(board);
+}
+function closeDrawer() { go(fhash(S.route.n) + "/tasks"); }
+function taskDrawer(f, r) {
+  const t = (f.tasks || []).find(function (x) { return x.id === r.task; });
+  const frag = document.createDocumentFragment();
+  frag.append(el("div", { class: "scrim", on: { click: closeDrawer } }));
+  const box = el("aside", { class: "drawer", id: "drawer", role: "dialog", "aria-label": "Task " + r.task, tabindex: "-1" });
+  const close = el("button", { class: "btn", type: "button", id: "drawer-close", "aria-label": "Close the task", on: { click: closeDrawer } }, icon("close"), "Close");
+  if (!t) {
+    box.append(el("header", null, el("h2", null, "Task " + r.task), close),
+               el("div", { class: "body" }, el("div", { class: "empty" }, el("strong", null, "There is no task " + r.task + " in this feature."))));
+    frag.append(box);
+    return frag;
+  }
+  box.append(el("header", null, el("h2", null, el("span", { class: "num" }, t.id + " "), t.title), close));
+  const body = el("div", { class: "body", data: { keep: "drawer" } });
+  const col = COLS.find(function (c) { return c[0] === t.column; });
+  body.append(el("div", { class: "tags" }, tag(col ? col[1] : t.status, t.column === "done" ? "t-done" : (t.column === "building" ? "t-run" : "")),
+                 t.repo ? tag(t.repo) : null, t.wave != null ? tag("Wave " + t.wave) : null, t.size ? tag("Size " + t.size) : null,
+                 t.owner ? tag("Owner: " + t.owner) : null,
+                 t.depends_on && t.depends_on.length ? tag("Needs " + t.depends_on.join(", ")) : null,
+                 t.pr ? ext(t.pr, "Its PR") : null));
+  const line = autoLine(t);
+  if (t.auto) {
+    const a = t.auto;
+    const facts = [];
+    if (a.round) facts.push(plural(a.round, "review round"));
+    if (a.asked) facts.push(plural(a.asked, "fix") + " asked");
+    if (a.parked) facts.push(plural(a.parked, "idea") + " parked for the lead");
+    if (a.tests) facts.push(plural(a.tests, "test"));
+    const abox = el("div", { class: "box" + (a.state === "stopped" ? " stop" : "") });
+    if (line) abox.append(el("p", null, mark(line[0]), " ", el("strong", null, line[1])));
+    if (facts.length) abox.append(el("p", { class: "muted" }, facts.join(" · ")));
+    if (a.subject) abox.append(el("p", { class: "mono" }, a.subject));
+    body.append(abox);
+  } else if (line) {
+    body.append(el("div", { class: "box" }, el("p", null, mark(line[0]), " ", line[1])));
+  }
+  if (t.touches && t.touches.length) {
+    body.append(el("details", { class: "files", data: { keep: "touches" } }, el("summary", null, "Touches " + plural(t.touches.length, "path")),
+                   el("ul", null, t.touches.map(function (p) { return el("li", null, p); }))));
+  }
+  const key = docKey(f.number, t.path);
+  body.append(docPane(key, S.docs[key], { inner: true, extra: el("span", { class: "path" }, t.path) }));
+  box.append(body);
+  frag.append(box);
+  return frag;
+}
+
+// ---- review
+
+function copyButton(target) {
+  const btn = el("button", { class: "btn", type: "button" }, "Copy");
+  btn.addEventListener("click", function () {
+    const text = target.textContent;
+    const done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1600); };
+    const select = function () {
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      if (ok) done(); else { btn.textContent = "Selected: press Ctrl+C"; setTimeout(function () { btn.textContent = "Copy"; }, 4000); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
+    else select();
+  });
+  return btn;
+}
+function threadWhere(t) {
+  const where = t.file ? t.file + (t.line ? ":" + t.line : "") : (t.kind === "review" ? "review summary" : "PR comment");
+  return ext(t.url, where, "loc");
+}
+function commentCard(t, it, scope) {
+  const fl = t.flags || {};
+  const card = el("article", { class: "cm" + (fl.live ? "" : " dim") });
+  const by = el("div", { class: "by" }, el("b", null, t.author || "someone"), t.bot ? tag("bot") : null, el("span", null, "on"), threadWhere(t),
+                t.pr ? el("span", { class: "mono" }, t.pr) : null, t.updated || t.created ? when(t.updated || t.created) : null);
+  if (t.resolved) by.append(tag("Resolved"));
+  if (t.outdated) by.append(tag("Outdated code"));
+  if (fl["new"]) by.append(tag("Not explained yet", "t-run"));
+  card.append(by);
+  if (it && it.plain) card.append(el("p", { class: "plain" }, it.plain));
+  const tags = el("div", { class: "call" });
+  if (it) {
+    if (it.verdict) tags.append(tag(VERDICT[it.verdict] || it.verdict, VERDICT_TAG[it.verdict]));
+    if (it.priority) tags.append(tag(PRIORITY[it.priority] || it.priority));
+    const st = it.state || "triaged";
+    if (st !== "triaged") tags.append(tag(ITEM_STATE[st] + (it.commit ? " in " + String(it.commit).slice(0, 10) : ""), st === "fixed" || st === "replied" ? "t-done" : (st === "fixing" ? "t-run" : "")));
+    if (it.decision) tags.append(el("span", null, "Your call: ", el("strong", null, DECISION[it.decision] || it.decision)));
+    else if (fl.needs_call) tags.append(tag("Needs your call", "t-wait"), el("span", { class: "hint" }, "Say fix, reply or skip in Claude Code."));
+    else if (st === "triaged" && fl.live) tags.append(el("span", { class: "hint" }, "No call needed."));
+  }
+  if (tags.childNodes.length) card.append(tags);
+  const said = el("div", { class: "said", tabindex: "0", role: "group", "aria-label": "What " + (t.author || "the reviewer") + " wrote" }, t.body || "(no text)");
+  if (!it) {
+    card.append(said);
+    if (t.replies && t.replies.length) card.append(replies(t));
+    return card;
+  }
+  const id = scope + "|" + t.id;
+  const open = id in S.cmOpen ? S.cmOpen[id] : !!fl.needs_call;
+  const more = el("details", { open: open ? true : null }, el("summary", null, "The comment, the reasons and the reply"));
+  more.addEventListener("toggle", function () { if (more.open !== open || id in S.cmOpen) S.cmOpen[id] = more.open; });
+  const kv = el("dl", { class: "kv" });
+  const put = function (k, v) { if (v) kv.append(el("dt", null, k), el("dd", null, v)); };
+  put("They wrote", said);
+  if (t.replies && t.replies.length) put("Replies", replies(t));
+  if (it.why || (it.evidence && it.evidence.length)) {
+    put("Why chopchop thinks so", [it.why ? el("p", null, it.why) : null,
+      Array.isArray(it.evidence) && it.evidence.length ? el("ul", { class: "ev" }, it.evidence.map(function (e) { return el("li", null, String(e)); })) : null]);
+  }
+  put("The fix", it.fix);
+  put("What else it touches", it.impact);
+  if (it.reply) {
+    const text = el("p", null, it.reply);
+    put("Reply draft", el("div", { class: "reply" }, text, copyButton(text)));
+  }
+  more.append(kv);
+  card.append(more);
+  return card;
+}
+function replies(t) {
+  return el("div", { class: "replies" }, t.replies.map(function (r) {
+    return el("p", null, el("strong", null, (r.author || "someone") + ": "), r.body || "");
+  }));
+}
+function review(root, c, scope, f) {
+  if (!c || (!c.prs.length && !c.threads.length)) {
+    root.append(el("div", { class: "empty" }, el("strong", null, "No review data yet."),
+                   el("span", null, "When the PRs are open, read their comments in Claude Code: ", el("code", null, "/chopchop:comments" + (f ? " " + f.number : "")))));
+    return;
+  }
+  const flt = S.reviewFilter[scope] || (S.reviewFilter[scope] = { verdict: "", priority: "", pr: "", state: "", mine: false });
+  const items = (c.triage && c.triage.items) || {};
+  const groups = (c.triage && c.triage.groups) || [];
+  const counts = c.counts || {};
+  const itemOf = function (t) { const it = items[t.id]; return it && !(t.flags && t.flags["new"]) ? it : null; };
+
+  root.append(el("h2", { class: "sec" }, "Pull requests"));
+  const list = el("div", { class: "prlist" });
+  for (const p of c.prs) {
+    list.append(el("div", { class: "pr" },
+      el("div", { class: "ti" }, el("span", { class: "id" }, p.id), ext(p.url, p.title || p.url || p.id)),
+      el("div", { class: "tags" }, prTags(p, false)),
+      el("div", { class: "meta" }, [p.threads != null ? plural(p.threads, "comment") : null, p.head && p.base ? p.head + " into " + p.base : null,
+                                     p.author ? "by " + p.author : null].filter(Boolean).join(" · "),
+         p.fetched ? [" · read ", when(p.fetched)] : null)));
+  }
+  if (!c.prs.length) list.append(el("p", { class: "muted" }, "No PR is recorded."));
+  root.append(list);
+
+  const chips = el("div", { class: "counts", "aria-label": "Comments by verdict" });
+  if (counts["new"]) chips.append(el("span", { class: "tag c t-run" }, el("b", null, String(counts["new"])), " not explained yet"));
+  if (counts.undecided) chips.append(el("span", { class: "tag c t-wait" }, el("b", null, String(counts.undecided)), " need your call"));
+  const bv = counts.by_verdict || {};
+  for (const v of Object.keys(VERDICT)) {
+    if (bv[v]) chips.append(el("span", { class: "tag" + (VERDICT_TAG[v] ? " c " + VERDICT_TAG[v] : "") }, el("b", null, String(bv[v])), " " + VERDICT_COUNT[v][bv[v] === 1 ? 0 : 1]));
+  }
+  if (counts.to_fix) chips.append(el("span", { class: "tag" }, el("b", null, String(counts.to_fix)), " to fix"));
+  if (counts.fixed) chips.append(el("span", { class: "tag c t-done" }, el("b", null, String(counts.fixed)), " fixed"));
+  if (counts.replied) chips.append(el("span", { class: "tag c t-done" }, el("b", null, String(counts.replied)), " replied"));
+  if (c.watch && c.watch.on) chips.append(el("span", { class: "tag c t-run" }, "Watching for new comments"));
+  root.append(chips);
+
+  const sel = function (id, label, key, options) {
+    return el("select", { id: id, "aria-label": label, on: { change: function (e) { flt[key] = e.target.value; redraw(); } } },
+              el("option", { value: "" }, label + ": all"),
+              options.map(function (o) { return el("option", { value: o[0], selected: flt[key] === o[0] }, o[1]); }));
+  };
+  const mineBox = el("input", { type: "checkbox", id: "r-mine", checked: flt.mine ? true : null, on: { change: function (e) { flt.mine = e.target.checked; redraw(); } } });
+  const active = flt.verdict || flt.priority || flt.pr || flt.state || flt.mine;
+  root.append(el("div", { class: "filters" },
+    sel("r-verdict", "Verdict", "verdict", Object.keys(VERDICT).map(function (v) { return [v, VERDICT[v]]; })),
+    sel("r-priority", "Priority", "priority", [["high", "High"], ["medium", "Medium"], ["low", "Low"]]),
+    c.prs.length > 1 ? sel("r-pr", "PR", "pr", c.prs.map(function (p) { return [p.id, p.id]; })) : null,
+    sel("r-state", "State", "state", [["new", "Not explained yet"]].concat(Object.keys(ITEM_STATE).map(function (s) { return [s, ITEM_STATE[s]]; }))),
+    el("label", { class: "check" }, mineBox, "Needs my call"),
+    active ? el("button", { class: "btn quiet", type: "button", on: { click: function () {
+      S.reviewFilter[scope] = { verdict: "", priority: "", pr: "", state: "", mine: false }; redraw(); } } }, "Clear") : null));
+
+  const pass = function (t) {
+    const it = itemOf(t), fl = t.flags || {};
+    if (flt.mine && !fl.needs_call) return false;
+    if (flt.pr && t.pr !== flt.pr) return false;
+    if (flt.verdict && !(it && it.verdict === flt.verdict)) return false;
+    if (flt.priority && !(it && it.priority === flt.priority)) return false;
+    if (flt.state === "new") { if (!fl["new"]) return false; }
+    else if (flt.state && !(it && (it.state || "triaged") === flt.state)) return false;
+    return true;
+  };
+  const byId = {};
+  for (const t of c.threads) byId[t.id] = t;
+  let shownAny = false;
+
+  const fresh = c.threads.filter(function (t) { return t.flags && t.flags["new"] && pass(t); });
+  if (fresh.length) {
+    shownAny = true;
+    const box = el("section", { class: "group" }, el("header", null, el("div", { class: "tags" }, tag("Not explained yet", "t-run")),
+      el("h3", null, plural(fresh.length, "new comment")),
+      el("p", { class: "plain muted" }, "chopchop has not read " + (fresh.length === 1 ? "this one" : "these") + " yet. Run /chopchop:comments to have " +
+                                         (fresh.length === 1 ? "it" : "them") + " explained.")));
+    for (const t of fresh) box.append(commentCard(t, null, scope));
+    root.append(box);
+  }
+
+  const grouped = {};
+  const urgency = function (g) {
+    return [g.priority in PRIORITY_RANK ? PRIORITY_RANK[g.priority] : 3, g.verdict in VERDICT_RANK ? VERDICT_RANK[g.verdict] : 6,
+            typeof g.order === "number" ? g.order : 999];
+  };
+  const sorted = groups.slice().sort(function (a, b) {
+    const x = urgency(a), y = urgency(b);
+    return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+  });
+  for (const g of sorted) {
+    const mine = g.threads.map(function (id) { return byId[id]; }).filter(Boolean);
+    mine.forEach(function (t) { if (itemOf(t)) grouped[t.id] = true; });
+    const show = mine.filter(function (t) { return itemOf(t) && pass(t); });
+    if (!show.length) continue;
+    shownAny = true;
+    const box = el("section", { class: "group" });
+    const head = el("header", null,
+      el("div", { class: "tags" }, g.verdict ? tag(VERDICT[g.verdict] || g.verdict, VERDICT_TAG[g.verdict]) : null,
+         g.priority ? tag(PRIORITY[g.priority] || g.priority) : null, el("span", { class: "muted mono" }, g.id),
+         el("span", { class: "muted" }, plural(mine.length, "comment") + (show.length !== mine.length ? ", " + show.length + " shown" : ""))),
+      el("h3", null, g.title || "Group " + g.id));
+    if (g.plain) head.append(el("p", { class: "plain" }, g.plain));
+    const kv = el("dl", { class: "kv" });
+    if (g.fix) kv.append(el("dt", null, "The fix"), el("dd", null, g.fix));
+    if (g.impact) kv.append(el("dt", null, "What else it touches"), el("dd", null, g.impact));
+    if (g.files && g.files.length) kv.append(el("dt", null, "Files"), el("dd", { class: "ev" }, g.files.join(", ")));
+    if (kv.childNodes.length) head.append(kv);
+    box.append(head);
+    for (const t of show) box.append(commentCard(t, itemOf(t), scope));
+    root.append(box);
+  }
+
+  const rank = function (t) {
+    const it = itemOf(t) || {};
+    return [t.flags && t.flags.live ? 0 : 1, it.priority in PRIORITY_RANK ? PRIORITY_RANK[it.priority] : 3, it.verdict in VERDICT_RANK ? VERDICT_RANK[it.verdict] : 6];
+  };
+  const loose = c.threads.filter(function (t) { return !(t.flags && t.flags["new"]) && !grouped[t.id] && pass(t); })
+    .sort(function (a, b) { const x = rank(a), y = rank(b); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; });
+  if (loose.length) {
+    shownAny = true;
+    const box = el("section", { class: "group" }, el("header", null, el("h3", null, groups.length ? "Other comments" : "Comments"),
+      el("p", { class: "muted" }, plural(loose.length, "comment") + " on " + (loose.length === 1 ? "its" : "their") + " own, not part of a group.")));
+    for (const t of loose) box.append(commentCard(t, itemOf(t), scope));
+    root.append(box);
+  }
+  if (!shownAny) {
+    root.append(el("div", { class: "empty" }, el("strong", null, active ? "No comment matches these filters." : "No review comments yet."),
+                   active ? null : el("span", null, "The reviewers have not written anything yet.")));
+  }
+}
+
+// ---- activity
+
+function feed(events, emptyText) {
+  if (!events.length) return el("div", { class: "empty" }, el("strong", null, emptyText || "Nothing yet."));
+  const list = el("ol", { class: "feed" });
+  let day = null;
+  for (const e of events) {
+    const d = parseTs(e.ts);
+    const label = d ? d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" }) : "";
+    if (label !== day) { list.append(el("li", { class: "day" }, label || "No date")); day = label; }
+    const kind = String(e.kind || "note");
+    const cls = kind === "stop" ? "t-stop" : (/^(approve|done|merge|commit)$/.test(kind) ? "t-done" : (/^(question|comment)$/.test(kind) ? "t-wait" : ""));
+    list.append(el("li", null,
+      el("time", { class: "at", datetime: String(e.ts || ""), title: d ? d.toLocaleString() : "" }, d ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : ""),
+      el("span", null, tag(kind, cls)),
+      el("span", { class: "tx" }, String(e.text || ""), e.task ? tag(String(e.task)) : null, e.repo ? tag(String(e.repo)) : null,
+         e.by ? el("span", { class: "muted" }, " by " + e.by) : null)));
+  }
+  return list;
+}
+
+// ------------------------------------------------------------------ PR store and system map
+
+function viewPr(root, r) {
+  const d = S.pr[r.slug];
+  root.append(el("div", { class: "crumb" }, el("a", { href: "#/" }, "Features"), "/", el("span", null, "PR without a feature"), "/", el("span", { class: "num" }, r.slug)));
+  if (!d) { root.append(S.prErr[r.slug] ? problem(S.prErr[r.slug]) : loading()); return r.slug; }
+  root.append(el("div", { class: "pagehead" }, el("h1", null, d.title || r.slug)));
+  const cls = d.waiting_on === "chopchop" ? "run" : (d.waiting_on ? "wait" : "todo");
+  root.append(el("section", { class: "waitline w-" + cls },
+    el("p", { class: "who" }, mark(cls), d.waiting_on ? "Waiting on: " + (d.waiting_who || d.waiting_on) : "Nothing is waiting"),
+    el("p", { class: "txt" }, d.waiting || "")));
+  const body = el("div", { class: "tabbody" });
+  body.style.marginTop = "18px";
+  review(body, d.comments, "pr:" + r.slug, null);
+  root.append(body);
+  if (d.events && d.events.length) root.append(el("h2", { class: "sec group-title" }, "Activity"), feed(d.events));
+  return d.title || r.slug;
+}
+function viewSystem(root) {
+  root.append(el("div", { class: "pagehead" }, el("h1", null, "System map"), el("span", { class: "sub" }, "What chopchop learned about the repos and how they connect")));
+  const d = S.system;
+  if (!d) { root.append(loading()); return "System map"; }
+  if (d.missing) {
+    root.append(el("div", { class: "empty" }, el("strong", null, "No system map yet."), el("span", null, "chopchop writes it when it learns the repos: ", el("code", null, "/chopchop:learn"))));
+    return "System map";
+  }
+  root.append(docPane("system", d, {}));
+  return "System map";
+}
+
+
+// ------------------------------------------------------------------ Changes: the spec's files as an editor's explorer
+
+const FILE_KINDS = [
+  [/\.(m|c)?jsx?$/i, "JS", "#cbcb41"], [/\.tsx?$/i, "TS", "#519aba"], [/\.py$/i, "PY", "#4b8bbe"], [/\.java$/i, "J", "#cc3e44"],
+  [/\.(kt|kts)$/i, "K", "#a074c4"], [/\.go$/i, "GO", "#519aba"], [/\.rb$/i, "RB", "#cc3e44"], [/\.rs$/i, "RS", "#de8a5a"],
+  [/\.cs$/i, "C#", "#519aba"], [/\.php$/i, "PHP", "#a074c4"], [/\.swift$/i, "SW", "#e37933"], [/\.json$/i, "{}", "#cbcb41"],
+  [/\.(ya?ml)$/i, "YML", "#a074c4"], [/\.(md|mdx)$/i, "MD", "#519aba"], [/\.html?$/i, "<>", "#e37933"], [/\.(s?css|less)$/i, "#", "#519aba"],
+  [/\.sql$/i, "SQL", "#f55385"], [/\.(sh|bash|zsh)$/i, "$", "#8dc149"], [/\.(xml|gradle)$/i, "<>", "#8dc149"],
+  [/(^|\/)dockerfile$/i, "DK", "#519aba"], [/\.(toml|ini|cfg|env)$/i, "CFG", "#6d8086"], [/\.(proto|graphql|gql)$/i, "API", "#e535ab"]
+];
+const CH_WORD = { "new": "New file", change: "Changed", "delete": "Deleted" };
+const CH_MARK = { "new": "A", change: "M", "delete": "D" };
+const CH_RANK = { "delete": 3, "new": 2, change: 1 };
+
+function fileKind(name) {
+  for (const [re, label, colour] of FILE_KINDS) if (re.test(name)) return [label, colour];
+  return ["", "#6d8086"];
+}
+function changesUI(n) {
+  return S.changesUI[n] || (S.changesUI[n] = { show: "all", q: "", tests: true, shut: {} });
+}
+function buildTree(files) {
+  const root = { dirs: {}, files: [] };
+  files.forEach(function (f) {
+    const parts = f.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) node = node.dirs[parts[i]] || (node.dirs[parts[i]] = { dirs: {}, files: [] });
+    node.files.push(f);
+  });
+  return root;
+}
+function worst(node) {   // the strongest change under a folder colours its name, like the editor does
+  let best = null;
+  node.files.forEach(function (f) { if (!best || CH_RANK[f.change] > CH_RANK[best]) best = f.change; });
+  Object.keys(node.dirs).forEach(function (k) { const w = worst(node.dirs[k]); if (w && (!best || CH_RANK[w] > CH_RANK[best])) best = w; });
+  return best;
+}
+function changesTab(root, f, r) {
+  const ch = f.changes;
+  if (!ch || !ch.total) {
+    root.append(el("div", { class: "empty" }, el("strong", null, "No file list yet."),
+                   el("span", null, "The spec lists every file it adds, changes or deletes. This view shows them as a folder tree per repo.")));
+    return;
+  }
+  const n = f.number, ui = changesUI(n);
+  const q = ui.q.trim().toLowerCase();
+  const keep = function (x) {
+    return (ui.show === "all" || x.change === ui.show) && (ui.tests || !x.test) && (!q || x.path.toLowerCase().indexOf(q) >= 0);
+  };
+  const sel = r.file || null;     // repo/path, already decoded by the route
+  let picked = null;
+
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "Show" });
+  [["all", "All", ch.total], ["new", "New", ch.counts["new"]], ["change", "Changed", ch.counts.change], ["delete", "Deleted", ch.counts["delete"]]]
+    .forEach(function (o) {
+      seg.append(el("button", { type: "button", class: "s-" + o[0], "aria-pressed": ui.show === o[0] ? "true" : "false", disabled: o[0] !== "all" && !o[2],
+                                on: { click: function () { ui.show = o[0]; redraw(); } } }, o[1], el("span", { class: "n" }, String(o[2] || 0))));
+    });
+  const find = el("input", { id: "ch-find-" + n, type: "search", placeholder: "Find a file", value: ui.q, "aria-label": "Find a file",
+                             on: { input: function (e) { ui.q = e.target.value; clearTimeout(S.chT); S.chT = setTimeout(redraw, 120); } } });
+  const tests = el("label", { class: "chk" }, el("input", { type: "checkbox", checked: ui.tests, on: { change: function (e) { ui.tests = e.target.checked; redraw(); } } }), "Test files");
+  const allShut = function (v) {
+    ch.repos.forEach(function (rp) { ui.shut[rp.repo] = v; walkDirs(buildTree(rp.files), rp.repo, function (key) { ui.shut[key] = v; }); });
+    redraw();
+  };
+  const tools = el("div", { class: "ch-tools" }, seg, find, tests,
+                   el("button", { type: "button", class: "btn quiet", title: "Open every folder", on: { click: function () { allShut(false); } } }, "Expand all"),
+                   el("button", { type: "button", class: "btn quiet", title: "Close every folder", on: { click: function () { allShut(true); } } }, "Collapse all"));
+
+  const pane = el("div", { class: "explorer", role: "tree", "aria-label": "Files the spec changes" });
+  pane.append(el("div", { class: "ex-head" }, el("span", null, "Changes"),
+                 el("span", { class: "ex-sum" }, plural(ch.total, "file") + " in " + plural(ch.repos.length, "repo"))));
+  let shownAny = false;
+  ch.repos.forEach(function (rp) {
+    const files = rp.files.filter(keep);
+    if (!files.length) return;
+    shownAny = true;
+    const shut = !!ui.shut[rp.repo];
+    const head = el("button", { type: "button", class: "ex-row ex-repo", "aria-expanded": shut ? "false" : "true", role: "treeitem",
+                                on: { click: function () { ui.shut[rp.repo] = !shut; redraw(); } } },
+                    chevron(shut), el("span", { class: "nm" }, rp.repo),
+                    el("span", { class: "ex-counts" },
+                       rp.counts["new"] ? el("span", { class: "c-new" }, rp.counts["new"] + " A") : null,
+                       rp.counts.change ? el("span", { class: "c-change" }, rp.counts.change + " M") : null,
+                       rp.counts["delete"] ? el("span", { class: "c-delete" }, rp.counts["delete"] + " D") : null));
+    pane.append(head);
+    if (shut) return;
+    const box = el("div", { role: "group" });
+    drawDir(box, buildTree(files), rp.repo, 1);
+    pane.append(box);
+  });
+  if (!shownAny) pane.append(el("div", { class: "ex-none" }, "No file matches. Clear the filter to see all."));
+
+  function drawDir(box, node, base, depth) {
+    Object.keys(node.dirs).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; }).forEach(function (name) {
+      let sub = node.dirs[name], label = name, key = base + "/" + name;
+      while (!sub.files.length && Object.keys(sub.dirs).length === 1) {   // compact folders: src/main/java on one line
+        const only = Object.keys(sub.dirs)[0];
+        label += "/" + only; key += "/" + only; sub = sub.dirs[only];
+      }
+      const shut = !!ui.shut[key], w = worst(sub);
+      box.append(el("button", { type: "button", class: "ex-row ex-dir" + (w ? " c-" + w : ""), role: "treeitem", "aria-expanded": shut ? "false" : "true",
+                                style: "--d:" + depth, title: key.slice(key.indexOf("/") + 1),
+                                on: { click: function () { ui.shut[key] = !shut; redraw(); } } },
+                    guides(depth), chevron(shut), folderIcon(shut), el("span", { class: "nm" }, label),
+                    w ? el("span", { class: "dot", "aria-hidden": "true" }) : null));
+      if (!shut) drawDir(box, sub, key, depth + 1);
+    });
+    node.files.slice().sort(function (a, b) { return a.path.toLowerCase() < b.path.toLowerCase() ? -1 : 1; }).forEach(function (x) {
+      const name = x.path.split("/").pop(), id = base.split("/")[0] + "/" + x.path, kind = fileKind(name);
+      const on = sel === id;
+      if (on) picked = { file: x, repo: base.split("/")[0] };
+      box.append(el("a", { class: "ex-row ex-file c-" + x.change + (on ? " on" : "") + (x.test ? " is-test" : ""), role: "treeitem",
+                           "aria-selected": on ? "true" : "false", style: "--d:" + depth,
+                           href: fhash(n) + "/changes/" + encodeURIComponent(id), title: x.path + " · " + CH_WORD[x.change] },
+                      guides(depth), el("span", { class: "tw" }),
+                      el("span", { class: "fi", style: "--fc:" + kind[1] }, kind[0] || el("span", { class: "fi-dot" })),
+                      el("span", { class: "nm" }, name),
+                      x.test ? el("span", { class: "ex-tag" }, "test") : null,
+                      el("span", { class: "st" }, CH_MARK[x.change])));
+    });
+  }
+  function walkDirs(node, base, fn) {
+    Object.keys(node.dirs).forEach(function (k) { fn(base + "/" + k); walkDirs(node.dirs[k], base + "/" + k, fn); });
+  }
+
+  // the side panel: why this file changes, and who changes it
+  const side = el("aside", { class: "ex-side", "aria-live": "polite" });
+  if (picked) {
+    const x = picked.file, crumbs = [picked.repo].concat(x.path.split("/"));
+    side.append(el("div", { class: "ex-crumb" }, crumbs.map(function (c, i) { return [i ? el("span", { class: "sep" }, "›") : null, el("span", null, c)]; })),
+                el("div", { class: "ex-title" }, el("span", { class: "fi big", style: "--fc:" + fileKind(crumbs[crumbs.length - 1])[1] }, fileKind(crumbs[crumbs.length - 1])[0]),
+                   el("h3", null, crumbs[crumbs.length - 1]), el("span", { class: "pill c-" + x.change }, CH_WORD[x.change])),
+                el("h4", null, "What changes"),
+                x.what.length ? el("ul", null, x.what.map(function (w) { return el("li", null, w.charAt(0).toUpperCase() + w.slice(1)); }))
+                              : el("p", { class: "muted" }, "The spec gives no note for this file."),
+                el("h4", null, "Who changes it"),
+                el("div", { class: "ex-who" },
+                   x.packages.map(function (pk) { return el("span", { class: "tag" }, "Package " + pk); }),
+                   x.tasks.map(function (t) {
+                     const st = (x.task_status || {})[t];
+                     return el("a", { class: "ex-task", href: fhash(n) + "/tasks/" + encodeURIComponent(t) }, t, st ? el("span", { class: "st-" + st }, " · " + st.replace("-", " ")) : null);
+                   })),
+                x.test ? el("p", { class: "muted" }, "This is a test file.") : "");
+  } else {
+    side.append(el("h3", null, "What the spec changes"),
+                el("p", { class: "muted" }, "Click a file to see why it changes and which task changes it."),
+                el("div", null, ch.repos.map(function (rp) {
+                  return el("div", { class: "ex-repo-sum" }, el("strong", null, rp.repo),
+                            el("div", { class: "bars" },
+                               ["new", "change", "delete"].map(function (c) {
+                                 const v = rp.counts[c] || 0;
+                                 return v ? el("span", { class: "bar c-" + c, style: "flex:" + v, title: v + " " + CH_WORD[c].toLowerCase() }) : null;
+                               })),
+                            el("span", { class: "muted" }, [rp.counts["new"] ? rp.counts["new"] + " new" : null, rp.counts.change ? rp.counts.change + " changed" : null,
+                                                            rp.counts["delete"] ? rp.counts["delete"] + " deleted" : null].filter(Boolean).join(", ")));
+                })),
+                el("div", { class: "ex-legend" }, el("span", { class: "c-new" }, "A new"), el("span", { class: "c-change" }, "M changed"), el("span", { class: "c-delete" }, "D deleted")));
+  }
+  root.append(tools, el("div", { class: "ex-wrap" }, pane, side));
+}
+
+// The same explorer, small and read only, inside the spec. Folders open and close by themselves (details).
+function changesEmbed(f) {
+  const ch = f.changes;
+  if (!ch || !ch.total) return null;
+  const n = f.number;
+  const box = el("div", { class: "explorer embed" });
+  box.append(el("div", { class: "ex-head" }, el("span", null, "Files this spec touches"),
+                el("span", { class: "ex-sum" },
+                   ["new", "change", "delete"].map(function (c) { return ch.counts[c] ? el("span", { class: "c-" + c }, ch.counts[c] + " " + CH_MARK[c] + " ") : null; }),
+                   el("a", { href: fhash(n) + "/changes", class: "ex-open" }, "Open in Changes"))));
+  ch.repos.forEach(function (rp) {
+    const top = el("details", { open: true, class: "ex-node" },
+                   el("summary", { class: "ex-row ex-repo" }, chevron(false), el("span", { class: "nm" }, rp.repo),
+                      el("span", { class: "ex-counts" },
+                         rp.counts["new"] ? el("span", { class: "c-new" }, rp.counts["new"] + " A") : null,
+                         rp.counts.change ? el("span", { class: "c-change" }, rp.counts.change + " M") : null,
+                         rp.counts["delete"] ? el("span", { class: "c-delete" }, rp.counts["delete"] + " D") : null)));
+    fill(top, buildTree(rp.files), rp.repo, 1);
+    box.append(top);
+  });
+  function fill(parent, node, repo, depth) {
+    Object.keys(node.dirs).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; }).forEach(function (name) {
+      let sub = node.dirs[name], label = name;
+      while (!sub.files.length && Object.keys(sub.dirs).length === 1) { const only = Object.keys(sub.dirs)[0]; label += "/" + only; sub = sub.dirs[only]; }
+      const w = worst(sub);
+      const d = el("details", { open: true, class: "ex-node" },
+                   el("summary", { class: "ex-row ex-dir" + (w ? " c-" + w : ""), style: "--d:" + depth },
+                      guides(depth), chevron(false), folderIcon(false), el("span", { class: "nm" }, label), w ? el("span", { class: "dot" }) : null));
+      fill(d, sub, repo, depth + 1);
+      parent.append(d);
+    });
+    node.files.slice().sort(function (a, b) { return a.path.toLowerCase() < b.path.toLowerCase() ? -1 : 1; }).forEach(function (x) {
+      const name = x.path.split("/").pop(), kind = fileKind(name);
+      const why = x.what.length ? x.what[0] + (x.what.length > 1 ? " (+" + (x.what.length - 1) + ")" : "") : "";
+      parent.append(el("a", { class: "ex-row ex-file c-" + x.change + (x.test ? " is-test" : ""), style: "--d:" + depth,
+                              href: fhash(n) + "/changes/" + encodeURIComponent(repo + "/" + x.path), title: x.path + (why ? ": " + why : "") },
+                       guides(depth), el("span", { class: "tw" }),
+                       el("span", { class: "fi", style: "--fc:" + kind[1] }, kind[0] || el("span", { class: "fi-dot" })),
+                       el("span", { class: "nm" }, name),
+                       why ? el("span", { class: "why" }, why) : null,
+                       el("span", { class: "st" }, CH_MARK[x.change])));
+    });
+  }
+  return box;
+}
+
+function chevron(shut) { return svg("0 0 16 16", "chev" + (shut ? "" : " open"), [["path", { d: "M6 4l4 4-4 4" }]]); }
+function folderIcon(shut) {
+  return svg("0 0 16 16", "fold", shut ? [["path", { d: "M1.5 3.5h4.2l1.4 1.5h7.4v8H1.5z" }]]
+                                       : [["path", { d: "M1.5 3.5h4.2l1.4 1.5h6.4v2H4.3l-2.8 6z" }], ["path", { d: "M4.3 7h10.2l-2.6 6H1.5z" }]]);
+}
+function guides(depth) {
+  const g = el("span", { class: "gd", "aria-hidden": "true" });
+  for (let i = 1; i < depth; i++) g.append(el("i"));
+  return g;
+}
+
+// ------------------------------------------------------------------ Code colours
+
+// Code in the spec, the design and the tasks is coloured like an editor. highlight.js loads only when a page
+// has code, from a pinned link with an integrity hash. Offline, the code stays plain and readable.
+const LANG_ALIAS = { sh: "bash", shell: "bash", zsh: "bash", console: "bash", js: "javascript", mjs: "javascript", cjs: "javascript",
+                     ts: "typescript", tsx: "typescript", jsx: "javascript", py: "python", yml: "yaml", kt: "kotlin",
+                     cs: "csharp", "c#": "csharp", rb: "ruby", rs: "rust", golang: "go", ps1: "powershell", md: "markdown",
+                     html: "xml", vue: "xml", gradle: "groovy", dockerfile: "dockerfile", jsonc: "json", http: "http" };
+const NO_COLOUR = ["", "text", "txt", "plain", "plaintext", "none", "output", "log"];
+function loadHljs() {
+  if (S.hljs) return S.hljs;
+  S.hljs = new Promise(function (resolve, reject) {
+    const s = document.createElement("script");
+    s.src = HLJS_URL;
+    s.integrity = HLJS_SRI;
+    s.crossOrigin = "anonymous";
+    s.referrerPolicy = "no-referrer";
+    s.async = true;
+    s.onload = function () {
+      if (!window.hljs) { reject(new Error("highlight.js did not start")); return; }
+      window.hljs.configure({ ignoreUnescapedHTML: true, throwUnescapedHTML: false });
+      resolve(window.hljs);
+    };
+    s.onerror = function () { reject(new Error("highlight.js did not load")); };
+    document.head.appendChild(s);
+  });
+  S.hljs.catch(function () { setTimeout(function () { S.hljs = null; }, 30000); });
+  return S.hljs;
+}
+function codeLang(node) {
+  const m = /(?:^|\s)lang-([\w+#.-]+)/.exec(node.className || "");
+  const raw = m ? m[1].toLowerCase() : "";
+  return LANG_ALIAS[raw] || raw;
+}
+async function colourCode(root) {
+  const nodes = Array.from(root.querySelectorAll("pre.code > code")).filter(function (n) { return !n.dataset.hl; });
+  if (!nodes.length) return;
+  nodes.forEach(function (n) { n.dataset.hl = "wait"; });
+  let h;
+  try { h = await loadHljs(); }
+  catch (e) { nodes.forEach(function (n) { n.dataset.hl = "plain"; }); return; }
+  for (const n of nodes) {
+    const lang = codeLang(n);
+    const pre = n.parentNode;
+    if (lang && pre && !pre.dataset.lang) pre.dataset.lang = lang;
+    try {
+      let out = null;
+      if (lang && h.getLanguage(lang)) out = h.highlight(n.textContent, { language: lang, ignoreIllegals: true });
+      else if (NO_COLOUR.indexOf(lang) < 0 || (!lang && n.textContent.split("\n").length > 1)) {
+        const guess = h.highlightAuto(n.textContent);
+        if (guess.relevance >= 5) out = guess;    // a weak guess colours prose: leave it plain
+      }
+      if (out) { n.innerHTML = out.value; n.classList.add("hljs"); }   // highlight.js escapes the text it colours
+      n.dataset.hl = out ? "done" : "plain";
+    } catch (e) { n.dataset.hl = "plain"; }
+  }
+}
+
+// ------------------------------------------------------------------ Mermaid
+
+function isDark() { return document.documentElement.getAttribute("data-theme") !== "light"; }
+function mermaidSetup(m) {
+  // Always the light look: the page turns a drawing dark with one filter, the same way for every kind of drawing.
+  m.initialize({ startOnLoad: false, securityLevel: "strict", theme: "neutral", suppressErrorRendering: true,
+                 flowchart: { useMaxWidth: false }, sequence: { useMaxWidth: false }, er: { useMaxWidth: false },
+                 state: { useMaxWidth: false }, class: { useMaxWidth: false }, gantt: { useMaxWidth: false } });
+}
+function loadMermaid() {
+  if (S.mermaid) return S.mermaid;
+  S.mermaid = new Promise(function (resolve, reject) {
+    const s = document.createElement("script");
+    s.src = MERMAID_URL;
+    s.integrity = MERMAID_SRI;
+    s.crossOrigin = "anonymous";
+    s.referrerPolicy = "no-referrer";
+    s.async = true;
+    s.onload = function () {
+      if (!window.mermaid) { reject(new Error("Mermaid did not start")); return; }
+      mermaidSetup(window.mermaid);
+      resolve(window.mermaid);
+    };
+    s.onerror = function () { reject(new Error("Mermaid did not load")); };
+    document.head.appendChild(s);
+  });
+  S.mermaid.catch(function () { setTimeout(function () { S.mermaid = null; }, 30000); });   // try again later, when back online
+  return S.mermaid;
+}
+function diagramNote(pre, text) {
+  const box = pre.parentNode;
+  if (!box || box.querySelector(".dnote")) return;
+  box.append(el("p", { class: "dnote" }, text));
+}
+async function drawMermaid(root) {
+  const nodes = Array.from(root.querySelectorAll("pre.mermaid")).filter(function (n) { return !n.dataset.state; });
+  if (!nodes.length) return;
+  nodes.forEach(function (n) { n.dataset.state = "wait"; });
+  let m;
+  try { m = await loadMermaid(); }
+  catch (e) {
+    nodes.forEach(function (n) {
+      n.dataset.state = "";
+      diagramNote(n, "This diagram is shown as text. The drawing tool (Mermaid) could not load, so you may be offline.");
+    });
+    return;
+  }
+  for (const n of nodes) {
+    const id = "mmd-" + (++S.mmd);
+    try {
+      const out = await m.render(id, n.textContent);
+      const box = el("div", { class: "drawing" });
+      box.innerHTML = out.svg;            // drawn by Mermaid in strict mode, from text it treats as text
+      n.hidden = true;
+      n.dataset.state = "done";
+      const old = n.parentNode.querySelector(".dnote");
+      if (old) old.remove();
+      n.after(box);
+    } catch (e) {
+      n.dataset.state = "failed";
+      diagramNote(n, "This diagram could not be drawn, so it is shown as text.");
+      const junk = document.getElementById("d" + id) || document.getElementById(id);
+      if (junk) junk.remove();
+    }
+  }
+}
+// ------------------------------------------------------------------ live updates
+
+let es = null, retry = 0, retryTimer = null, flushTimer = null;
+const pending = { features: new Set(), prs: new Set(), system: false, home: false };
+function setLive(on) {
+  const box = document.getElementById("live");
+  box.classList.toggle("on", on);
+  document.getElementById("live-text").textContent = on ? "Live" : "Reconnecting";
+  box.title = on ? "Live: the page updates by itself when a file changes" : "The link to the dashboard dropped. It reconnects by itself.";
+}
+function schedule() {
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(connect, Math.min(10000, 1000 * Math.pow(2, retry++)));
+}
+function connect() {
+  if (es || document.hidden) return;
+  try { es = new EventSource("/api/stream"); }
+  catch (e) { setLive(false); schedule(); return; }
+  es.addEventListener("hello", function () {
+    setLive(true);
+    retry = 0;
+    if (S.dropped) {   // we may have missed changes (or the server restarted): read again what is on screen
+      S.dropped = false;
+      S.feature = keepOnly(S.feature);
+      if (S.route.view !== "home") loadHome();
+      if (S.route.view === "feature" && S.route.n) pending.features.add(Number(S.route.n));
+      pending.home = true;
+      flush();
+    }
+  });
+  es.addEventListener("changed", function (ev) {
+    let m;
+    try { m = JSON.parse(ev.data); } catch (e) { return; }
+    (m.features || []).forEach(function (n) { pending.features.add(Number(n)); });
+    (m.prs || []).forEach(function (s) { pending.prs.add(String(s)); });
+    pending.system = pending.system || !!m.system;
+    pending.home = pending.home || !!m.home;
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flush, 200);
+  });
+  es.onerror = function () {
+    setLive(false);
+    S.dropped = true;
+    if (es && es.readyState === 2) { es = null; schedule(); }   // the browser gave up: try again ourselves
+  };
+}
+function keepOnly(map) {
+  const r = S.route, out = {};
+  if (r.view === "feature" && map[r.n]) out[r.n] = map[r.n];
+  return out;
+}
+function flush() {
+  const r = S.route;
+  const feats = pending.features, prs = pending.prs, sys = pending.system, home = pending.home;
+  pending.features = new Set(); pending.prs = new Set(); pending.system = false; pending.home = false;
+  feats.forEach(function (n) {
+    if (r.view === "feature" && r.n === n) return;
+    delete S.feature[n];
+    Object.keys(S.docs).forEach(function (k) { if (k.indexOf(n + "|") === 0) delete S.docs[k]; });
+  });
+  prs.forEach(function (s) { if (!(r.view === "pr" && r.slug === s)) delete S.pr[s]; });
+  if (sys && r.view !== "system") S.system = null;
+  if (r.view === "home") { if (feats.size || prs.size || home || sys) load(); return; }
+  if (home || sys) loadHome();
+  if ((r.view === "feature" && feats.has(r.n)) || (r.view === "pr" && prs.has(r.slug)) || (r.view === "system" && sys)) load();
+}
+document.addEventListener("visibilitychange", function () {
+  if (document.hidden) {
+    // A hidden tab gives its connection back, so many open tabs never use up the browser's limit.
+    if (es) { es.close(); es = null; }
+    clearTimeout(retryTimer);
+    S.dropped = true;
+  } else {
+    connect();
+  }
+});
+
+// ------------------------------------------------------------------ theme, clicks, keys
+
+function themeButton() {
+  const btn = document.getElementById("theme");
+  const dark = isDark();
+  btn.replaceChildren(icon(dark ? "sun" : "moon"), document.createTextNode(dark ? "Light" : "Dark"));
+  btn.setAttribute("aria-label", dark ? "Switch to the light theme" : "Switch to the dark theme");
+}
+document.getElementById("theme").addEventListener("click", function () {
+  const next = isDark() ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("chopchop-theme", next); } catch (e) { /* no storage: it lasts until the page closes */ }
+  themeButton();
+});
+document.getElementById("skip").addEventListener("click", function () { document.getElementById("view").focus(); });
+
+document.addEventListener("click", function (e) {
+  const a = e.target.closest ? e.target.closest("a") : null;
+  if (!a) return;
+  const jump = a.dataset.toc || a.dataset.anchor;
+  if (jump) {
+    e.preventDefault();
+    const scope = a.closest(".docwrap") || document.getElementById("view");
+    const target = scope.querySelector('[id="' + String(jump).replace(/["\\]/g, "") + '"]');
+    if (target) {
+      target.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      target.setAttribute("tabindex", "-1");
+      target.focus({ preventScroll: true });
+    }
+    return;
+  }
+});
+document.addEventListener("keydown", function (e) {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || "");
+  if (e.key === "Escape" && S.route.view === "feature" && S.route.task) { e.preventDefault(); closeDrawer(); return; }
+  if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    const q = document.getElementById("f-q");
+    if (q) { e.preventDefault(); q.focus(); }
+  }
+});
+
+try { history.scrollRestoration = "manual"; } catch (e) { /* not supported: fine */ }
+window.addEventListener("hashchange", onRoute);
+themeButton();
+if (!location.hash) history.replaceState(null, "", "#/");
+onRoute();
+if (S.route.view !== "home") loadHome();
+connect();
+})();
+</script>
+</body>
+</html>
