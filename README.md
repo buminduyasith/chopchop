@@ -3,11 +3,16 @@
 A Claude Code plugin that takes a feature from a Jira key, or a one-line idea, to merged PRs.
 People decide what to build and approve it. Agents read the code, build, review, test and fix.
 
-```
-/chopchop:run PAY-120            or            /chopchop:run let customers ask for a refund
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-dark.svg">
+  <img alt="How chopchop works: start from a Jira key or an idea; 1 groom, agents check the stories against the code and ask you a few questions; 2 brief, you approve; 3 design, the lead approves; 4 spec, you approve; 5 tasks; 6 a build loop where fresh agents build, review, fix, test and commit each task; 7 review, every PR comment explained, and a person merges. A live dashboard shows it all." src="docs/images/how-it-works-light.svg" width="100%">
+</picture>
 
-groom -> brief -> design -> spec -> tasks -> build -> review -> done
-          you      lead     you              agents   reviewers
+Start with one command, from a tracker key or from an idea:
+
+```bash
+/chopchop:run PAY-120
+/chopchop:run let customers ask for a refund
 ```
 
 - **One command.** `/chopchop:run` finds the next step and does it. It stops only where a person
@@ -28,7 +33,7 @@ logged in, or a file you give it. If there is nothing, it asks you.
 
 In Claude Code:
 
-```
+```bash
 /plugin marketplace add buminduyasith/chopchop
 /plugin install chopchop@chopchop
 ```
@@ -39,10 +44,10 @@ who opens a repo.
 
 ### Update
 
-```
-/chopchop:update              get the latest version, then run /reload-plugins
-/chopchop:update --auto on    let Claude Code update chopchop by itself from now on
-```
+| You type | What it does |
+| --- | --- |
+| `/chopchop:update` | Gets the latest version. Then run `/reload-plugins`. |
+| `/chopchop:update --auto on` | Lets Claude Code update chopchop by itself from now on. |
 
 ## Quick start
 
@@ -168,9 +173,15 @@ Everything is on the dashboard's Review tab and in `comments.md`.
 
 ### The build loop
 
-```
-pick  ->  build (fresh agent)  ->  check  ->  review (fresh agent)  ->  sort  ->  fix (at most 2 rounds)  ->  commit
-```
+For each task, in order:
+
+1. **Pick** the next task whose earlier tasks are done.
+2. **Build** it with a fresh agent: tests first, then the code.
+3. **Check** it: build, lint and tests.
+4. **Review** the change with a second fresh agent that did not write it.
+5. **Sort** the findings into fix now, park, or stop.
+6. **Fix** what is in scope, at most 2 rounds.
+7. **Commit** it, then go to the next task.
 
 - **Fresh context every task.** Each task gets a new builder and a new reviewer. The chat keeps
   a few lines per task, and the run lives in `work/auto.json`, so a new chat carries on.
@@ -194,25 +205,23 @@ pick  ->  build (fresh agent)  ->  check  ->  review (fresh agent)  ->  sort  ->
 
 ## The `_chopchop` folder
 
-```
-_chopchop/
-├── chopchop.yaml                    team settings (no secrets), written by /chopchop:init
-├── team-decisions.md                decisions every feature follows (optional)
-├── system/system-map.json  .md      the whole system, from /chopchop:learn
-├── styles/payments-web.md           a code style written from the code (optional)
-├── repos/payments-api.md            how to build, test and open PRs in that repo
-└── 001-PAY-120-refunds/             one folder per feature
-    ├── requirements/
-    │   ├── requirement.md           the stories as the BA wrote them, or your idea as you said it
-    │   ├── grooming.md              what the code says, every question and its answer
-    │   └── brief.md                 what we build, in simple English (you approve it)
-    ├── design/                      design.md (the lead approves it), options.md, the two pictures
-    ├── spec/                        spec.md (you approve it) and spec.json
-    ├── tasks/                       T01-*.md, plan.md, status.md, changelog.md
-    ├── comments.md                  the PR review report
-    ├── check.md                     design vs requirements
-    └── work/                        answers, helper reports, the build run, the activity log
-```
+- `_chopchop/`
+  - `chopchop.yaml`: team settings (no secrets), written by `/chopchop:init`
+  - `team-decisions.md`: decisions every feature follows (optional)
+  - `system/`: `system-map.json` and `system-map.md`, the whole system, from `/chopchop:learn`
+  - `styles/payments-web.md`: a code style written from the code (optional)
+  - `repos/payments-api.md`: how to build, test and open PRs in that repo
+  - `001-PAY-120-refunds/`: one folder per feature
+    - `requirements/`
+      - `requirement.md`: the stories as the BA wrote them, or your idea as you said it
+      - `grooming.md`: what the code says, every question and its answer
+      - `brief.md`: what we build, in simple English (you approve it)
+    - `design/`: `design.md` (the lead approves it), `options.md`, the two pictures
+    - `spec/`: `spec.md` (you approve it) and `spec.json`
+    - `tasks/`: `T01-*.md`, `plan.md`, `status.md`, `changelog.md`
+    - `comments.md`: the PR review report
+    - `check.md`: design against requirements
+    - `work/`: answers, helper reports, the build run, the activity log
 
 ## `chopchop.yaml`
 
@@ -294,8 +303,9 @@ claude plugin eval . --scaffold       # agent evals on the sample project (slow:
 ```
 
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.
-The plan behind version 2 is in `docs/v2-spec.md`, the trial runs in `docs/v2-trials.md`, and the
-dashboard's look in `docs/ui-style-guide.md`. To release, bump `version` in
+The plan behind version 2 is in `docs/v2-spec.md`, the trial runs in `docs/v2-trials.md`, the
+dashboard's look in `docs/ui-style-guide.md`, and the picture above comes from
+`docs/images/make_how_it_works.py` (run it again after changing the steps). To release, bump `version` in
 `.claude-plugin/plugin.json`: installed copies update only when it changes.
 
 ## License
