@@ -21,6 +21,7 @@ state_path = os.environ["FAKE_CLAUDE_STATE"]
 state = json.load(open(state_path))
 args = sys.argv[1:]
 state.setdefault("calls", []).append(args)
+state.setdefault("cwds", []).append(os.path.realpath(os.getcwd()))
 def save():
     json.dump(state, open(state_path, "w"))
 if args[:3] == ["plugin", "list", "--json"]:
@@ -33,7 +34,10 @@ if args[:3] == ["plugin", "marketplace", "update"]:
 if args[:2] == ["plugin", "update"]:
     pid = args[2]
     scope = args[args.index("--scope") + 1] if "--scope" in args else "user"
-    row = next(p for p in state["installed"] if p["id"] == pid and p["scope"] == scope)
+    # Like the real CLI: a project or local install is the one for the folder it runs in.
+    here = os.path.realpath(os.getcwd())
+    row = next(p for p in state["installed"] if p["id"] == pid and p["scope"] == scope
+               and (not p.get("projectPath") or os.path.realpath(p["projectPath"]) == here))
     old, new = row["version"], state["latest"]
     row["version"] = new
     print(json.dumps({"command": "update", "outcome": "ok", "oldVersion": old, "newVersion": new,
@@ -100,6 +104,30 @@ class UpdateTest(unittest.TestCase):
         self.assertIn("0.3.0 -> 0.5.0 (scope project)", out)
         self.assertEqual(sum(1 for c in self.calls() if c[:3] == ["plugin", "marketplace", "update"]), 1)
         self.assertNotIn("other@x", out)
+
+    def test_project_installs_in_two_folders(self):
+        root = Path(self.tmp.name)
+        a, b = root / "repos", root / "repos-copy"
+        a.mkdir()
+        b.mkdir()
+        self.write_state([{"id": "chopchop@chopchop", "version": "0.7.0", "scope": "project", "projectPath": str(a)},
+                          {"id": "chopchop@chopchop", "version": "0.7.0", "scope": "project", "projectPath": str(b)}],
+                         "0.10.0")
+        out = self.cli()
+        self.assertIn("0.7.0 -> 0.10.0 (scope project: %s)" % a, out)
+        self.assertIn("0.7.0 -> 0.10.0 (scope project: %s)" % b, out)
+        self.assertNotIn("nothing to update", out)
+        state = json.loads(self.state.read_text())
+        self.assertEqual([r["version"] for r in state["installed"]], ["0.10.0", "0.10.0"])
+        self.assertIn("Installed: chopchop@chopchop 0.10.0 (scope project: %s)" % b, self.cli("--check"))
+        self.assertIn("Latest:    chopchop@chopchop 0.10.0 (scope project: %s), nothing to update" % b, self.cli())
+
+    def test_project_folder_gone(self):
+        gone = Path(self.tmp.name) / "deleted"
+        self.write_state([{"id": "chopchop@chopchop", "version": "0.7.0", "scope": "project",
+                           "projectPath": str(gone)}], "0.10.0")
+        self.assertIn("project folder %s no longer exists" % gone, self.cli(code=1))
+        self.assertFalse(any(c[:2] == ["plugin", "update"] for c in self.calls()))
 
     def test_plugin_dir_and_failures(self):
         self.write_state([{"id": "chopchop@inline", "version": "0.4.0", "scope": "session"}], "0.5.0")

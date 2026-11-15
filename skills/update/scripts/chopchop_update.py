@@ -8,8 +8,9 @@ Usage
   chopchop_update.py --json       machine-readable output
 
 It runs the Claude Code CLI: `claude plugin marketplace update <marketplace>` and then
-`claude plugin update <plugin>@<marketplace> --scope <scope>` for each scope it is
-installed in. New versions take effect after a restart (or /reload-plugins).
+`claude plugin update <plugin>@<marketplace> --scope <scope>` for each install. A project or
+local install belongs to one folder and the CLI only updates the install of the folder it runs
+in, so each of those updates runs from its own project folder. New versions take effect after a restart (or /reload-plugins).
 
 Auto-update is off by default for marketplaces that are not official. --auto writes
 `autoUpdate` into this marketplace's entry under `extraKnownMarketplaces` in the user's
@@ -43,10 +44,10 @@ def claude():
     return path
 
 
-def run(*args, timeout=TIMEOUT):
+def run(*args, timeout=TIMEOUT, cwd=None):
     try:
         out = subprocess.run([claude()] + list(args), capture_output=True, text=True, timeout=timeout,
-                             stdin=subprocess.DEVNULL)
+                             stdin=subprocess.DEVNULL, cwd=cwd)
     except subprocess.TimeoutExpired:
         raise UpdateError("`claude %s` did not finish in %d seconds." % (" ".join(args), timeout))
     return out.returncode, out.stdout or "", out.stderr or ""
@@ -75,6 +76,18 @@ def installs():
     return [p for p in rows if str(p.get("id", "")).split("@")[0] == PLUGIN]
 
 
+def project_folder(p):
+    """The folder a project or local install belongs to, or None for the other scopes."""
+    if p.get("scope") in ("project", "local") and p.get("projectPath"):
+        return p["projectPath"]
+    return None
+
+
+def where(r):
+    """'scope user' or 'scope project: /path/to/folder' for the printed lines."""
+    return "scope %s: %s" % (r["scope"], r["path"]) if r.get("path") else "scope %s" % r["scope"]
+
+
 def update():
     found = installs()
     if not found:
@@ -86,6 +99,9 @@ def update():
         pid = p["id"]
         market = pid.split("@", 1)[1] if "@" in pid else ""
         row = {"id": pid, "scope": p.get("scope"), "old": p.get("version"), "new": p.get("version")}
+        folder = project_folder(p)
+        if folder:
+            row["path"] = folder
         if market in ("", "inline"):
             row.update(outcome="skipped", message="loaded with --plugin-dir: update that folder with git pull, "
                                                   "then /reload-plugins")
@@ -104,10 +120,14 @@ def update():
             row.update(outcome="failed", message="marketplace %s could not be refreshed" % market)
             results.append(row)
             continue
+        if folder and not os.path.isdir(folder):
+            row.update(outcome="failed", message="project folder %s no longer exists" % folder)
+            results.append(row)
+            continue
         args = ["plugin", "update", pid, "--json"]
         if p.get("scope"):
             args += ["--scope", p["scope"]]
-        code, out, err = run(*args)
+        code, out, err = run(*args, cwd=folder)
         info = last_json(out)
         if code != 0 or not info or info.get("outcome") not in (None, "ok"):
             msg = (info or {}).get("message") or err.strip() or out.strip() or "unknown error"
@@ -194,13 +214,14 @@ def main(argv=None):
                           "\"Plugin updated\". Run /reload-plugins then.")
             return 0
         if args.check:
-            rows = [{"id": r.get("id"), "scope": r.get("scope"), "version": r.get("version")} for r in installs()]
+            rows = [{"id": r.get("id"), "scope": r.get("scope"), "version": r.get("version"),
+                     "path": project_folder(r)} for r in installs()]
             auto = auto_state(marketplace_name()) if rows else False
             if args.json:
                 print(json.dumps({"installs": rows, "auto_update": auto}, indent=2))
             else:
                 for r in rows or [{"id": "chopchop", "scope": "-", "version": "not installed"}]:
-                    print("Installed: %s %s (scope %s)" % (r["id"], r["version"], r["scope"]))
+                    print("Installed: %s %s (%s)" % (r["id"], r["version"], where(r)))
                 if rows:
                     print("Auto:      %s" % ("on" if auto else "off (turn it on with --auto on)"))
             return 0
@@ -213,11 +234,11 @@ def main(argv=None):
     else:
         for r in results:
             if r["outcome"] == "updated":
-                print("Updated:   %s %s -> %s (scope %s)" % (r["id"], r["old"], r["new"], r["scope"]))
+                print("Updated:   %s %s -> %s (%s)" % (r["id"], r["old"], r["new"], where(r)))
             elif r["outcome"] == "up_to_date":
-                print("Latest:    %s %s (scope %s), nothing to update" % (r["id"], r["old"], r["scope"]))
+                print("Latest:    %s %s (%s), nothing to update" % (r["id"], r["new"], where(r)))
             else:
-                print("%-10s %s (scope %s): %s" % (r["outcome"].capitalize() + ":", r["id"], r["scope"], r["message"]))
+                print("%-10s %s (%s): %s" % (r["outcome"].capitalize() + ":", r["id"], where(r), r["message"]))
         if any(r["outcome"] == "updated" for r in results):
             print("Next:      restart Claude Code (or run /reload-plugins) to use the new version.")
     return 1 if any(r["outcome"] == "failed" for r in results) else 0
