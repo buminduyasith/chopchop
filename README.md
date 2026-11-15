@@ -96,19 +96,31 @@ it suggests better ways and you pick.
 | `--stop` | Stops it. |
 | `--status` | Says if it runs, and where. |
 
-- **Home:** every feature as a card: its step, its tasks, who it waits for, and its Summary.
-  Filter by text, step, or who it waits for.
-- **A feature:** the steps on top, then Brief, Design, Spec, Changes, Tasks, Review and Activity.
-  **Compare** shows the design and the spec side by side.
-- **Changes:** for the tech spec, every file it will add, change or delete, as a folder tree per repo, like
-  your editor's file explorer: green A for new, amber M for changed, red D for deleted. Click a file to see why
-  it changes and which task changes it.
+- **Home:** one card per feature: a "Your turn" pill when it waits on you, one plain sentence on where it
+  stands, its 8 steps as small bars, "6 of 6 tasks built", and its Summary. Filter by text, step, or who it
+  waits for.
+- **A feature:** the title and one sentence such as "Built and pushed. It's waiting for you to open the pull
+  requests", then a progress card ("Step 7 of 8 · Review" with 8 bars), then what you do next.
+- **Your turn:** when you must act, a card with numbered steps and any command in a bar with a Copy button.
+- **Pull requests:** while a feature is in review, one row per repo with its state and a button: "Open pull
+  request", or "Create pull request" when the branch is only pushed (it opens your git host's create page with
+  the branches filled in; GitHub, GitLab, Bitbucket and Azure DevOps).
+- **Tabs:** Overview, Brief, Design, Spec, Files, Tasks, Review and Activity. A check marks an approved document.
+  **Compare** shows the design and the spec side by side, each the full height of the window.
+- **Files:** for the tech spec, every file it will add, change or delete, as a folder tree per repo, like your
+  editor's file explorer: green A for new, amber M for changed, red D for deleted. Click a file to see why it
+  changes and which task changes it.
+- **Diagrams:** each in its own card, drawn in the page's colours. **See full view** shows the whole diagram
+  fitted to the window, with zoom and drag.
 - **Code:** coloured like VS Code.
 - **Tasks:** a board. Click a task to read it, with its diagrams.
 - **Live:** it updates by itself when a file changes.
+- **Looks:** dark by default with a light toggle, Lexend and JetBrains Mono, and contrast checked in both
+  themes. The rules are in `docs/ui-style-guide.md`.
 
 It runs on your machine only (`127.0.0.1`), reads the `_chopchop` folder, and never changes
-anything.
+anything. It loads two fonts from Google Fonts and, only on pages that need them, the diagram and code
+colour scripts from a pinned link. No file from your workspace is ever sent anywhere.
 
 ### `/chopchop:comments`
 
@@ -282,7 +294,8 @@ claude plugin eval . --scaffold       # agent evals on the sample project (slow:
 ```
 
 Standard library only, Python 3.8+. The tests use local git repos, so no account is needed.
-The plan behind version 2 is in `docs/v2-spec.md`. To release, bump `version` in
+The plan behind version 2 is in `docs/v2-spec.md`, the trial runs in `docs/v2-trials.md`, and the
+dashboard's look in `docs/ui-style-guide.md`. To release, bump `version` in
 `.claude-plugin/plugin.json`: installed copies update only when it changes.
 
 ## License
