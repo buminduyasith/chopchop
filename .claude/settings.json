@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "chopchop": {
+      "source": {
+        "source": "github",
+        "repo": "buminduyasith/chopchop"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "chopchop@chopchop": true
+  }
+}
