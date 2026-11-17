@@ -8,3 +8,6 @@ evals/results/
 _chopchop/.dashboard.json
 _chopchop/.dashboard.log
 docs/handoff/trial-logs/
+
+# chopchop workspace (kept out of the code)
+_chopchop/
