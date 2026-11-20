@@ -54,6 +54,7 @@
   --track: #2C2D30; --band: #17181A; --bandBorder: #2E2F33; --line: #8C8B86; --card: #232427; --cardBorder: #3A3B3F;
   --changed: #F5B35B; --changedSoft: #3A2A12; --purple: #C4A8FF; --purpleSoft: #2A2140; --orange: #F3AE6B; --orangeSoft: #33220F;
   --shadow: 0 0 0 1px rgba(255, 255, 255, .06), -12px 0 32px rgba(0, 0, 0, .55);
+  --mark: #5A4A16; --markLine: #E0B44A;
   color-scheme: dark;
 }
 :root.cc-light {
@@ -65,6 +66,7 @@
   --track: #E6E5E0; --band: #F4F3EF; --bandBorder: #E2E0D9; --line: #8A877F; --card: #FFFFFF; --cardBorder: #D9D7D0;
   --changed: #9A4A0B; --changedSoft: #FDEFD9; --purple: #6B3FC4; --purpleSoft: #F1ECFB; --orange: #9A4A0B; --orangeSoft: #FFF1E6;
   --shadow: 0 0 0 1px rgba(27, 26, 23, .06), -10px 0 30px rgba(27, 26, 23, .14);
+  --mark: #FCEBB6; --markLine: #C99A1E;
   color-scheme: light;
 }
 
@@ -725,6 +727,32 @@ h1, h2, h3 { font-family: var(--font-sans); color: var(--text); }
 .dstage.grab { cursor: grabbing; }
 .dstage svg { display: block; margin: 0 auto; }
 .dvhint { padding: var(--space-2) var(--space-6); color: var(--muted); font-size: var(--text-sm); border-top: 1px solid var(--border); }
+/* notes on a document */
+.md mark.note { background: var(--mark); color: inherit; border-bottom: 2px solid var(--markLine); border-radius: 2px; padding: 0 1px; scroll-margin-top: calc(var(--top) + 80px); }
+.md mark.note.flash { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dochead .docx { flex: 1 1 100%; display: grid; gap: var(--space-2); }
+.notebar { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); background: var(--surface); color: var(--text2); font-size: var(--text-sm); }
+.notebar summary { cursor: pointer; font-weight: var(--weight-semibold); color: var(--text); }
+.notebar .btn { margin-left: 0; }
+.notebar .ntools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.notebar .nhint { color: var(--muted); }
+.notebar .nerr { color: var(--warnText); }
+.nlist { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.nlist li { display: flex; gap: var(--space-2); align-items: flex-start; border-top: 1px solid var(--divider); padding-top: var(--space-2); }
+.nlist .ngo { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; display: grid; gap: 2px; color: var(--text2); }
+.nlist .ngo:hover .ntext { text-decoration: underline; }
+.nlist .nat { font-size: var(--text-xs); color: var(--muted); }
+.nlist .nlost { color: var(--warnText); font-weight: var(--weight-semibold); }
+.nlist .nquote { font-style: italic; overflow-wrap: anywhere; }
+.nlist .ntext { color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.npop, .nadd { position: absolute; z-index: 60; }
+.nadd { box-shadow: var(--shadow); }
+.npop { width: min(360px, calc(100vw - 24px)); display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--cardBorder);
+        border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-size: var(--text-sm); }
+.npop .nquote { color: var(--text2); font-style: italic; overflow-wrap: anywhere; }
+.npop textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-2); resize: vertical; min-height: 72px; }
+.npop .nmsg { color: var(--warnText); min-height: 1em; }
+.npop .nrow { display: flex; gap: var(--space-2); justify-content: flex-end; }
 </style>
 </head>
 <body>
@@ -785,7 +813,8 @@ const PR_REVIEW = { approved: ["Approved", "t-done"], "changes-requested": ["Cha
 const S = {
   route: { view: "home" }, home: null, homeErr: null, feature: {}, featErr: {}, docs: {}, docNodes: {}, pr: {}, prErr: {},
   system: null, filters: { q: "", step: "", who: "" }, taskFilter: {}, reviewFilter: {}, changesUI: {}, cmOpen: {}, source: {},
-  positions: {}, entry: null, entries: 0, lastHash: null, lastSig: null, seq: 0, mermaid: null, mmd: 0, dropped: false
+  positions: {}, entry: null, entries: 0, lastHash: null, lastSig: null, seq: 0, mermaid: null, mmd: 0, dropped: false,
+  notes: {}, notesBusy: {}
 };
 
 // ------------------------------------------------------------------ DOM helpers
@@ -887,6 +916,14 @@ setInterval(function () {
 
 async function api(path) {
   const res = await fetch(path, { cache: "no-store", headers: { Accept: "application/json" } });
+  return answer(res);
+}
+async function apiPost(path, body) {
+  const res = await fetch(path, { method: "POST", cache: "no-store",
+                                  headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return answer(res);
+}
+async function answer(res) {
   if (!res.ok) {
     let msg = "The dashboard answered " + res.status + ".";
     try { const body = await res.json(); if (body && body.error) msg = String(body.error); } catch (e) { /* not JSON */ }
@@ -935,8 +972,12 @@ async function load() {
     const first = [api("/api/feature/" + r.n).then(function (d) { S.feature[r.n] = d; delete S.featErr[r.n]; },
                                                     function (e) { S.featErr[r.n] = e.message; })];
     for (const p of known) first.push(loadDoc(r.n, p));
+    const notedAt = notesPath(r);
+    if (notedAt) first.push(loadNotes(r.n, notedAt));
     await Promise.all(first);
     if (!current()) return;
+    const noted = notesPath(r);
+    if (noted && noted !== notedAt) await loadNotes(r.n, noted);
     const more = docsFor(r, S.feature[r.n]).filter(function (p) { return known.indexOf(p) < 0; });
     if (more.length) { render(); await Promise.all(more.map(function (p) { return loadDoc(r.n, p); })); }
   } else if (r.view === "pr") {
@@ -1077,7 +1118,10 @@ function featSig(r) {
                 f.stage, f.auto && f.auto.stopped, f.auto && f.auto.current];
   let part = null;
   if (r.tab === "overview") part = f;
-  else if (r.tab === "doc") { const p = docPath(r, f); part = [p, p && S.docs[docKey(r.n, p)], S.source]; }
+  else if (r.tab === "doc") {
+    const p = docPath(r, f);
+    part = [p, p && S.docs[docKey(r.n, p)], S.source, p && S.notes[docKey(r.n, p)], p && S.notesBusy[docKey(r.n, p)]];
+  }
   else if (r.tab === "compare") part = [S.docs[docKey(r.n, DOC_PATH.design)], S.docs[docKey(r.n, DOC_PATH.spec)]];
   else if (r.tab === "tasks") {
     const t = r.task && (f.tasks || []).find(function (x) { return x.id === r.task; });
@@ -1124,7 +1168,8 @@ function render(opts) {
     window.scrollTo(0, opts.y === -1 ? Math.min(opts.prevY || 0, tabsTop()) : (opts.y || 0));
   }
   drawMermaid(view);
-  colourCode(view);
+  markAfterRender();
+  colourCode(view).then(markAfterRender);   // colouring swaps the code's text nodes, so mark again after it
 }
 function redraw() { render({ force: true }); }
 function chrome() {
@@ -1855,7 +1900,9 @@ function docTab(root, f, r) {
   }
   const d = S.docs[docKey(f.number, path)];
   const missing = DOC_MISSING[Object.keys(DOC_PATH).find(function (k) { return DOC_PATH[k] === path; })];
-  root.append(docPane(docKey(f.number, path), d, { missing: missing, extra: el("span", { class: "path" }, path) }));
+  const pathChip = el("span", { class: "path" }, path);
+  const extra = /\.md$/i.test(path) && !S.source[docKey(f.number, path)] ? el("span", { class: "docx" }, pathChip, noteBar(f.number, path)) : pathChip;
+  root.append(docPane(docKey(f.number, path), d, { missing: missing, extra: extra }));
 }
 function compare(root, f) {
   const grid = el("div", { class: "compare" });
@@ -1875,6 +1922,306 @@ function compare(root, f) {
   }
   root.append(grid);
 }
+
+// ---- notes on a document (new in P2). Note text, quotes and headings only go in through el() and textContent.
+
+const NOTE_SKIP = ".ch-embed, .dcard, .diagram, pre.mermaid, svg";   // the file explorer and diagrams take no text notes
+const NOTE_SIDE = 40, NOTE_QUOTE = 1000;
+const noteCover = {};   // a note inside another note's text has no mark of its own: its click goes to the other mark
+let notePop = null, noteAdd = null;
+
+function notesUrl(n, path) { return "/api/notes/" + n + "?path=" + encodeURIComponent(path); }
+function notesPath(r) {
+  // The open document, when it is a .md file on the doc tab. Compare, tasks and the source view take no notes.
+  if (!r || r.view !== "feature" || r.tab !== "doc") return null;
+  const p = docPath(r, S.feature[r.n]);
+  return p && /\.md$/i.test(p) ? p : null;
+}
+async function loadNotes(n, path) {
+  const key = docKey(n, path);
+  try { S.notes[key] = await api(notesUrl(n, path)); }
+  catch (e) { S.notes[key] = { notes: [], block: "", error: "Notes could not be loaded." }; }
+  render();   // draws the list if it changed; every render ends with markAfterRender
+}
+function reloadNotes() {
+  const path = notesPath(S.route);
+  if (path) loadNotes(S.route.n, path);
+}
+async function changeNotes(n, path, change) {
+  // change(list) gives the new list: one note more, one id less, or [] for Clear all.
+  // It always gets the list on disk, loaded first, so a note saved from another tab is kept.
+  const key = docKey(n, path);
+  if (S.notesBusy[key]) return false;
+  S.notesBusy[key] = true;
+  redraw();   // the bar's buttons are disabled while busy
+  let fresh = null, ok = true;
+  try {
+    fresh = await api(notesUrl(n, path));
+    S.notes[key] = await apiPost(notesUrl(n, path), { notes: change(Array.isArray(fresh.notes) ? fresh.notes : []) });
+  } catch (e) {
+    ok = false;   // the list on screen stays as it is on disk
+    S.notes[key] = Object.assign({}, fresh || S.notes[key] || { notes: [], block: "" }, { error: "Not saved. Try again." });
+  }
+  S.notesBusy[key] = false;
+  redraw();
+  return ok;
+}
+function textModel(root) {
+  // All text of root as one string with runs of spaces made one, so bold and links do not matter.
+  // nodes[i] and offs[i] say where character i comes from. Diagrams and the file explorer are left out.
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (t) {
+    return t.parentElement && t.parentElement.closest(NOTE_SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+  } });
+  const chars = [], nodes = [], offs = [], parts = [];
+  let space = true;   // no space at the very start
+  for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+    const v = t.nodeValue;
+    parts.push({ node: t, from: chars.length });
+    for (let i = 0; i < v.length; i++) {
+      const ws = /\s/.test(v[i]);
+      if (ws && space) continue;
+      chars.push(ws ? " " : v[i]);
+      nodes.push(t);
+      offs.push(i);
+      space = ws;
+    }
+  }
+  return { text: chars.join(""), nodes: nodes, offs: offs, parts: parts };
+}
+function startIndex(model, range) {
+  // The first character of the model that is not before the start of the range.
+  for (const part of model.parts) {
+    if (range.comparePoint(part.node, part.node.nodeValue.length) < 0) continue;
+    let k = part.from;
+    while (k < model.nodes.length && model.nodes[k] === part.node && range.comparePoint(part.node, model.offs[k]) < 0) k++;
+    return k;
+  }
+  return model.text.length;
+}
+function wholeChars(text) {
+  // A cut can split an emoji in two. Drop the lone half at either edge: the server cannot write it.
+  return text.replace(/^[\uDC00-\uDFFF]/, "").replace(/[\uD800-\uDBFF]$/, "");
+}
+function headingText(h) { return h.textContent.replace(/\s+/g, " ").trim(); }
+function headingPath(root, range) {
+  // The h2 to h4 headings above the start of the range, joined with " > ": "4. Scope > In scope".
+  const path = [];
+  root.querySelectorAll("h2, h3, h4").forEach(function (h) {
+    if (h.closest(NOTE_SKIP) || range.comparePoint(h, 0) >= 0) return;
+    const level = Number(h.tagName.charAt(1));
+    while (path.length && path[path.length - 1].level >= level) path.pop();
+    path.push({ level: level, text: headingText(h) });
+  });
+  return wholeChars(path.map(function (x) { return x.text; }).join(" > ").slice(0, 300));
+}
+function anchorOf(range, root) {
+  // Where a selection is, kept without line numbers: heading, quote, 40 characters on each side, and which match it is.
+  // { error } says why a selection cannot take a note.
+  const inside = function (node) { return node && root.contains(node); };
+  const elOf = function (node) { return node.nodeType === 1 ? node : node.parentElement; };
+  if (!range || range.collapsed || !inside(range.startContainer) || !inside(range.endContainer)) {
+    return { error: "Select text in this document first." };
+  }
+  if (elOf(range.startContainer).closest(NOTE_SKIP) || elOf(range.endContainer).closest(NOTE_SKIP)) {
+    return { error: "Diagrams and the file list take no text notes. Select text outside them." };
+  }
+  const quote = range.toString().replace(/\s+/g, " ").trim();
+  if (!quote) return { error: "Select some text first." };
+  if (quote.length > NOTE_QUOTE) return { error: "Select less text: " + NOTE_QUOTE + " characters at most." };
+  const model = textModel(root), text = model.text;
+  const from = startIndex(model, range);
+  const at = text.indexOf(quote, from);
+  if (at < 0 || at > from + 1) return { error: "This text cannot be kept as a note. Select less, with no diagram in it." };
+  let match = 0;
+  for (let k = text.indexOf(quote); k >= 0 && k < at; k = text.indexOf(quote, k + 1)) match++;
+  if (match > 999) return { error: "This text shows too many times. Select a longer part." };
+  return { heading: headingPath(root, range), quote: quote, before: wholeChars(text.slice(Math.max(0, at - NOTE_SIDE), at)),
+           after: wholeChars(text.slice(at + quote.length, at + quote.length + NOTE_SIDE)), match: match };
+}
+function markNotes(root, list) {
+  // Old marks go first, so marking twice on the cached docBody node is safe.
+  root.querySelectorAll("mark.note").forEach(function (m) { m.replaceWith.apply(m, Array.from(m.childNodes)); });
+  root.normalize();
+  for (const k in noteCover) delete noteCover[k];
+  const notes = (list || []).filter(function (x) { return x && typeof x.quote === "string"; });
+  if (!notes.length) return;
+  const model = textModel(root), text = model.text;
+  const found = [];
+  notes.forEach(function (note) {
+    const quote = note.quote.replace(/\s+/g, " ").trim();
+    const before = note.before || "", after = note.after || "";
+    const places = [];
+    for (let k = quote ? text.indexOf(quote) : -1; k >= 0; k = text.indexOf(quote, k + 1)) places.push(k);
+    const fits = function (k) {
+      return text.slice(Math.max(0, k - before.length), k) === before && text.slice(k + quote.length, k + quote.length + after.length) === after;
+    };
+    // The quote with the same text around it, else its match-th place, else it is lost.
+    let at = places[note.match] != null && fits(places[note.match]) ? places[note.match] : places.find(fits);
+    if (at == null) at = places[note.match];
+    if (at == null) { note.lost = true; return; }
+    delete note.lost;
+    found.push({ id: note.id, a: at, b: at + quote.length });
+  });
+  found.sort(function (x, y) { return x.a - y.a; });
+  const segs = [];
+  let end = 0, last = null;
+  found.forEach(function (f) {
+    if (f.a < end) {
+      if (f.b <= end) { noteCover[f.id] = last.id; return; }
+      f.a = end;
+    }
+    end = f.b;
+    last = f;
+    for (let k = f.a; k < f.b;) {   // one part per text node
+      const node = model.nodes[k];
+      let j = k;
+      while (j + 1 < f.b && model.nodes[j + 1] === node) j++;
+      segs.push({ node: node, s: model.offs[k], e: model.offs[j] + 1, id: f.id });
+      k = j + 1;
+    }
+  });
+  for (let i = segs.length - 1; i >= 0; i--) {   // from the end, so the offsets before each part stay right
+    const g = segs[i];
+    if (!/\S/.test(g.node.nodeValue.slice(g.s, g.e))) continue;
+    let t = g.node;
+    if (g.e < t.nodeValue.length) t.splitText(g.e);
+    if (g.s > 0) t = t.splitText(g.s);
+    const m = el("mark", { class: "note", data: { note: g.id } });
+    t.parentNode.replaceChild(m, t);
+    m.append(t);
+  }
+}
+function lostLine(list) { return list.map(function (x) { return x && x.lost ? "1" : "0"; }).join(""); }
+function markAfterRender() {
+  // Called at the end of render() and after colourCode() is done. Marks the open .md doc tab only:
+  // a cached body shown anywhere else (compare, a task) has its marks taken off.
+  const view = document.getElementById("view");
+  const r = S.route, path = notesPath(r);
+  const key = path ? docKey(r.n, path) : null;
+  const c = key ? S.docNodes[key] : null;
+  const root = c && view.contains(c.node) ? c.node : null;
+  view.querySelectorAll(".md").forEach(function (md) { if (md !== root && md.querySelector("mark.note")) markNotes(md, []); });
+  if (!root) return;
+  const list = (S.notes[key] && Array.isArray(S.notes[key].notes)) ? S.notes[key].notes : [];
+  if (!list.length && !root.querySelector("mark.note")) return;
+  const was = lostLine(list);
+  markNotes(root, list);
+  if (lostLine(list) !== was) redraw();   // the list shows "Text not found": draw it once more
+}
+function short(text, max) { text = String(text || ""); return text.length > max ? text.slice(0, max - 1) + "…" : text; }
+function showNote(note) {
+  const view = document.getElementById("view");
+  const smooth = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  const id = noteCover[note.id] || note.id;
+  const marks = Array.from(view.querySelectorAll('mark.note[data-note="' + CSS.escape(String(id)) + '"]'));
+  if (marks.length) {
+    marks[0].scrollIntoView({ block: "center", behavior: smooth });
+    marks.forEach(function (m) { m.classList.add("flash"); setTimeout(function () { m.classList.remove("flash"); }, 1600); });
+    return;
+  }
+  const last = String(note.heading || "").split(" > ").pop();   // text not found: go to its heading, if it is still there
+  const h = last && Array.from(view.querySelectorAll(".md h2, .md h3, .md h4")).find(function (x) { return headingText(x) === last; });
+  if (h) h.scrollIntoView({ block: "start", behavior: smooth });
+}
+function noteBar(n, path) {
+  const key = docKey(n, path);
+  const box = S.notes[key] || { notes: [] };
+  const list = Array.isArray(box.notes) ? box.notes : [];
+  const busy = !!S.notesBusy[key];
+  const copy = el("button", { class: "btn quiet", type: "button", disabled: busy || !list.length }, "Copy all comments");
+  copy.addEventListener("click", function () { copyText(box.block || "", copy); });
+  const clear = el("button", { class: "btn quiet", type: "button", disabled: busy || !list.length }, "Clear all");
+  clear.addEventListener("click", function () {
+    if (!window.confirm("Delete all notes on this document?")) return;
+    changeNotes(n, path, function () { return []; });
+  });
+  const items = list.map(function (note, i) {
+    const where = note.heading || "the top of the document";
+    const go = el("button", { type: "button", class: "ngo", title: "Show it in the page", on: { click: function () { showNote(note); } } },
+                  el("span", { class: "nat" }, note.lost ? [el("span", { class: "nlost" }, "Text not found"), " · Under: " + where]
+                                                         : (i + 1) + ". At: " + where),
+                  note.quote ? el("span", { class: "nquote" }, "“" + short(note.quote, 160) + "”") : null,
+                  el("span", { class: "ntext" }, note.text || ""));
+    const del = el("button", { class: "btn quiet", type: "button", disabled: busy, "aria-label": "Delete note " + (i + 1) }, "Delete");
+    del.addEventListener("click", function () {
+      changeNotes(n, path, function (all) { return all.filter(function (x) { return x.id !== note.id; }); });
+    });
+    return el("li", null, go, del);
+  });
+  return el("details", { class: "notebar", open: true, data: { keep: "notes-" + key } },
+            el("summary", null, list.length ? plural(list.length, "note") : "Notes"),
+            el("div", { class: "ntools" }, copy, clear,
+               busy ? el("span", { class: "nhint" }, "Saving.") : null,
+               !list.length && !busy ? el("span", { class: "nhint" }, "Select text in the page to add a note.") : null),
+            box.error || box.warning ? el("p", { class: "nerr", role: "alert" }, box.error || box.warning) : null,
+            items.length ? el("ol", { class: "nlist" }, items) : null);
+}
+function newNoteId() { return "n-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
+function closeNotePop() {
+  if (notePop) { notePop.remove(); notePop = null; }
+  if (noteAdd) { noteAdd.remove(); noteAdd = null; }
+}
+function placeNear(node, rect) {
+  const room = window.scrollX + document.documentElement.clientWidth - node.offsetWidth - 8;
+  node.style.left = Math.max(window.scrollX + 8, Math.min(rect.left + window.scrollX, room)) + "px";
+  node.style.top = (rect.bottom + window.scrollY + 6) + "px";
+}
+function notePopover(range, place) {
+  // A small form on document.body (outside #view), so a render or a live update never wipes what is typed.
+  // range places it (a Range or an element). place is where the note is; for a text selection anchorOf finds it.
+  const r = S.route, path = notesPath(r);
+  if (!path) return;
+  const n = r.n, c = S.docNodes[docKey(n, path)];
+  closeNotePop();
+  if (!place) place = c ? anchorOf(range, c.node) : { error: "Open the page view of this document first." };
+  const text = el("textarea", { rows: "3", maxlength: "2000", "aria-label": "Your note" });
+  const msg = el("p", { class: "nmsg", role: "status" }, place.error || "");
+  const save = el("button", { class: "btn", type: "submit" }, "Save");
+  const cancel = el("button", { class: "btn quiet", type: "button", on: { click: closeNotePop } }, place.error ? "Close" : "Cancel");
+  const form = el("form", { class: "npop", role: "dialog", "aria-label": "Add a note" },
+                  place.quote ? el("p", { class: "nquote" }, "“" + short(place.quote, 160) + "”") : null,
+                  place.error ? null : text, msg, el("div", { class: "nrow" }, cancel, place.error ? null : save));
+  form.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); closeNotePop(); } });
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const words = text.value.trim();
+    if (!words) { msg.textContent = "Write a note first"; text.focus(); return; }
+    save.disabled = true;
+    msg.textContent = "Saving.";
+    const note = Object.assign({ id: newNoteId(), text: words, created: new Date().toISOString() }, place);
+    const ok = await changeNotes(n, path, function (all) { return all.concat([note]); });
+    if (notePop !== form) return;
+    if (ok) { closeNotePop(); return; }
+    save.disabled = false;
+    msg.textContent = (S.notes[docKey(n, path)] || {}).error || "Not saved. Try again.";
+  });
+  notePop = form;
+  document.body.append(form);
+  placeNear(form, range.getBoundingClientRect());
+  (place.error ? cancel : text).focus({ preventScroll: true });
+}
+function noteSelection(e) {
+  // After a selection in the open document, offer "Add note" next to it.
+  if (notePop || (noteAdd && noteAdd.contains(e.target))) return;
+  setTimeout(function () {
+    if (noteAdd) { noteAdd.remove(); noteAdd = null; }
+    const r = S.route, path = notesPath(r);
+    const c = path ? S.docNodes[docKey(r.n, path)] : null;
+    const sel = window.getSelection();
+    if (!c || !document.getElementById("view").contains(c.node) || !sel || sel.isCollapsed || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0).cloneRange();
+    if (!c.node.contains(range.commonAncestorContainer)) return;
+    const add = el("button", { class: "btn nadd", type: "button" }, "Add note");
+    add.addEventListener("mousedown", function (ev) { ev.preventDefault(); });   // keep the selection
+    add.addEventListener("click", function () { notePopover(range); });
+    noteAdd = add;
+    document.body.append(add);
+    placeNear(add, range.getBoundingClientRect());
+  }, 0);
+}
+document.addEventListener("mouseup", noteSelection);
+document.addEventListener("keyup", function (e) { if (e.shiftKey || e.key === "Shift") noteSelection(e); });
+window.addEventListener("hashchange", closeNotePop);
 
 // ---- tasks
 
@@ -1994,24 +2341,36 @@ function taskDrawer(f, r) {
 
 // ---- review
 
-function copyButton(target) {
-  const btn = el("button", { class: "btn", type: "button" }, "Copy");
-  btn.addEventListener("click", function () {
-    const text = target.textContent;
-    const done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1600); };
-    const select = function () {
+function copyText(text, btn, target) {
+  // Copy plain text, then say so on the button. With no clipboard, select the target (or a hidden copy of the text).
+  const label = btn.dataset.label || (btn.dataset.label = btn.textContent);
+  const done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = label; }, 1600); };
+  const select = function () {
+    let spare = null;
+    if (!target) {
+      spare = el("textarea", { readonly: true, "aria-hidden": "true", style: "position:fixed;top:0;left:-9999px" });
+      spare.value = text;
+      document.body.append(spare);
+      spare.select();
+    } else {
       const range = document.createRange();
       range.selectNodeContents(target);
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
-      let ok = false;
-      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
-      if (ok) done(); else { btn.textContent = "Selected: press Ctrl+C"; setTimeout(function () { btn.textContent = "Copy"; }, 4000); }
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
-    else select();
-  });
+    }
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    if (spare) spare.remove();
+    if (ok) done();
+    else { btn.textContent = target ? "Selected: press Ctrl+C" : "Could not copy"; setTimeout(function () { btn.textContent = label; }, 4000); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
+  else select();
+}
+function copyButton(target) {
+  const btn = el("button", { class: "btn", type: "button" }, "Copy");
+  btn.addEventListener("click", function () { copyText(target.textContent, btn, target); });
   return btn;
 }
 function threadWhere(t) {
@@ -2831,6 +3190,7 @@ document.addEventListener("visibilitychange", function () {
     S.dropped = true;
   } else {
     connect();
+    reloadNotes();   // another tab may have saved notes on this document
   }
 });
 
