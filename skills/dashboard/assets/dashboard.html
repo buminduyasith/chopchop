@@ -54,6 +54,7 @@
   --track: #2C2D30; --band: #17181A; --bandBorder: #2E2F33; --line: #8C8B86; --card: #232427; --cardBorder: #3A3B3F;
   --changed: #F5B35B; --changedSoft: #3A2A12; --purple: #C4A8FF; --purpleSoft: #2A2140; --orange: #F3AE6B; --orangeSoft: #33220F;
   --shadow: 0 0 0 1px rgba(255, 255, 255, .06), -12px 0 32px rgba(0, 0, 0, .55);
+  --mark: #5A4A16; --markLine: #E0B44A;
   color-scheme: dark;
 }
 :root.cc-light {
@@ -65,6 +66,7 @@
   --track: #E6E5E0; --band: #F4F3EF; --bandBorder: #E2E0D9; --line: #8A877F; --card: #FFFFFF; --cardBorder: #D9D7D0;
   --changed: #9A4A0B; --changedSoft: #FDEFD9; --purple: #6B3FC4; --purpleSoft: #F1ECFB; --orange: #9A4A0B; --orangeSoft: #FFF1E6;
   --shadow: 0 0 0 1px rgba(27, 26, 23, .06), -10px 0 30px rgba(27, 26, 23, .14);
+  --mark: #FCEBB6; --markLine: #C99A1E;
   color-scheme: light;
 }
 
@@ -725,6 +727,41 @@ h1, h2, h3 { font-family: var(--font-sans); color: var(--text); }
 .dstage.grab { cursor: grabbing; }
 .dstage svg { display: block; margin: 0 auto; }
 .dvhint { padding: var(--space-2) var(--space-6); color: var(--muted); font-size: var(--text-sm); border-top: 1px solid var(--border); }
+/* notes on a document */
+.md mark.note { background: var(--mark); color: inherit; border-bottom: 2px solid var(--markLine); border-radius: 2px; padding: 0 1px; scroll-margin-top: calc(var(--top) + 80px); }
+.md mark.note.flash { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dochead .docx { flex: 1 1 100%; display: grid; gap: var(--space-2); }
+.notebar { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); background: var(--surface); color: var(--text2); font-size: var(--text-sm); }
+.notebar summary { cursor: pointer; font-weight: var(--weight-semibold); color: var(--text); }
+.notebar .btn { margin-left: 0; }
+.notebar .ntools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.notebar .nhint { color: var(--muted); }
+.notebar .nerr { color: var(--warnText); }
+.nlist { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.nlist li { display: flex; gap: var(--space-2); align-items: flex-start; border-top: 1px solid var(--divider); padding-top: var(--space-2); }
+.nlist .ngo { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; display: grid; gap: 2px; color: var(--text2); }
+.nlist .ngo:hover .ntext { text-decoration: underline; }
+.nlist .nat { font-size: var(--text-xs); color: var(--muted); }
+.nlist .nlost { color: var(--warnText); font-weight: var(--weight-semibold); }
+.nlist .nquote { font-style: italic; overflow-wrap: anywhere; }
+.nlist .ntext { color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.npop, .nadd { position: absolute; z-index: 60; }
+.nadd { box-shadow: var(--shadow); }
+.npop { width: min(360px, calc(100vw - 24px)); display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--cardBorder);
+        border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-size: var(--text-sm); }
+.npop .nquote { color: var(--text2); font-style: italic; overflow-wrap: anywhere; }
+.npop textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-2); resize: vertical; min-height: 72px; }
+.npop .nmsg { color: var(--warnText); min-height: 1em; }
+.npop .nrow { display: flex; gap: var(--space-2); justify-content: flex-end; }
+/* notes on a diagram */
+.dcard { scroll-margin-top: calc(var(--top) + 80px); }
+.dcard.flash { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dcard.picking .dbox { cursor: crosshair; outline: 2px dashed var(--markLine); outline-offset: 2px; }
+.dcard.picking .dbox g.node { cursor: pointer; }
+.dcard .dbox g.node.note-box > :is(rect, polygon, path, circle, ellipse) { stroke: var(--markLine) !important; stroke-width: 3px !important; stroke-dasharray: none !important; }
+.dcard .dpick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text2); font-size: var(--text-sm); }
+.dcard .dpick p { margin: 0; }
+.dcard .dcount { align-self: center; color: var(--muted); font-size: var(--text-sm); }
 </style>
 </head>
 <body>
@@ -785,7 +822,8 @@ const PR_REVIEW = { approved: ["Approved", "t-done"], "changes-requested": ["Cha
 const S = {
   route: { view: "home" }, home: null, homeErr: null, feature: {}, featErr: {}, docs: {}, docNodes: {}, pr: {}, prErr: {},
   system: null, filters: { q: "", step: "", who: "" }, taskFilter: {}, reviewFilter: {}, changesUI: {}, cmOpen: {}, source: {},
-  positions: {}, entry: null, entries: 0, lastHash: null, lastSig: null, seq: 0, mermaid: null, mmd: 0, dropped: false
+  positions: {}, entry: null, entries: 0, lastHash: null, lastSig: null, seq: 0, mermaid: null, mmd: 0, dropped: false,
+  notes: {}, notesBusy: {}, pick: null
 };
 
 // ------------------------------------------------------------------ DOM helpers
@@ -887,6 +925,14 @@ setInterval(function () {
 
 async function api(path) {
   const res = await fetch(path, { cache: "no-store", headers: { Accept: "application/json" } });
+  return answer(res);
+}
+async function apiPost(path, body) {
+  const res = await fetch(path, { method: "POST", cache: "no-store",
+                                  headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return answer(res);
+}
+async function answer(res) {
   if (!res.ok) {
     let msg = "The dashboard answered " + res.status + ".";
     try { const body = await res.json(); if (body && body.error) msg = String(body.error); } catch (e) { /* not JSON */ }
@@ -935,8 +981,12 @@ async function load() {
     const first = [api("/api/feature/" + r.n).then(function (d) { S.feature[r.n] = d; delete S.featErr[r.n]; },
                                                     function (e) { S.featErr[r.n] = e.message; })];
     for (const p of known) first.push(loadDoc(r.n, p));
+    const notedAt = notesPath(r);
+    if (notedAt) first.push(loadNotes(r.n, notedAt));
     await Promise.all(first);
     if (!current()) return;
+    const noted = notesPath(r);
+    if (noted && noted !== notedAt) await loadNotes(r.n, noted);
     const more = docsFor(r, S.feature[r.n]).filter(function (p) { return known.indexOf(p) < 0; });
     if (more.length) { render(); await Promise.all(more.map(function (p) { return loadDoc(r.n, p); })); }
   } else if (r.view === "pr") {
@@ -1077,7 +1127,10 @@ function featSig(r) {
                 f.stage, f.auto && f.auto.stopped, f.auto && f.auto.current];
   let part = null;
   if (r.tab === "overview") part = f;
-  else if (r.tab === "doc") { const p = docPath(r, f); part = [p, p && S.docs[docKey(r.n, p)], S.source]; }
+  else if (r.tab === "doc") {
+    const p = docPath(r, f);
+    part = [p, p && S.docs[docKey(r.n, p)], S.source, p && S.notes[docKey(r.n, p)], p && S.notesBusy[docKey(r.n, p)]];
+  }
   else if (r.tab === "compare") part = [S.docs[docKey(r.n, DOC_PATH.design)], S.docs[docKey(r.n, DOC_PATH.spec)]];
   else if (r.tab === "tasks") {
     const t = r.task && (f.tasks || []).find(function (x) { return x.id === r.task; });
@@ -1124,7 +1177,8 @@ function render(opts) {
     window.scrollTo(0, opts.y === -1 ? Math.min(opts.prevY || 0, tabsTop()) : (opts.y || 0));
   }
   drawMermaid(view);
-  colourCode(view);
+  markAfterRender();
+  colourCode(view).then(markAfterRender);   // colouring swaps the code's text nodes, so mark again after it
 }
 function redraw() { render({ force: true }); }
 function chrome() {
@@ -1855,7 +1909,9 @@ function docTab(root, f, r) {
   }
   const d = S.docs[docKey(f.number, path)];
   const missing = DOC_MISSING[Object.keys(DOC_PATH).find(function (k) { return DOC_PATH[k] === path; })];
-  root.append(docPane(docKey(f.number, path), d, { missing: missing, extra: el("span", { class: "path" }, path) }));
+  const pathChip = el("span", { class: "path" }, path);
+  const extra = /\.md$/i.test(path) && !S.source[docKey(f.number, path)] ? el("span", { class: "docx" }, pathChip, noteBar(f.number, path)) : pathChip;
+  root.append(docPane(docKey(f.number, path), d, { missing: missing, extra: extra }));
 }
 function compare(root, f) {
   const grid = el("div", { class: "compare" });
@@ -1875,6 +1931,336 @@ function compare(root, f) {
   }
   root.append(grid);
 }
+
+// ---- notes on a document (new in P2). Note text, quotes and headings only go in through el() and textContent.
+
+const NOTE_SKIP = ".ch-embed, .dcard, .diagram, pre.mermaid, svg";   // the file explorer and diagrams take no text notes
+const NOTE_SIDE = 40, NOTE_QUOTE = 1000;
+const noteCover = {};   // a note inside another note's text has no mark of its own: its click goes to the other mark
+const noteSaves = {};   // saves started per document, so loadNotes can drop an answer a save made old
+let notePop = null, noteAdd = null;
+
+function notesUrl(n, path) { return "/api/notes/" + n + "?path=" + encodeURIComponent(path); }
+function notesPath(r) {
+  // The open document, when it is a .md file on the doc tab. Compare, tasks and the source view take no notes.
+  if (!r || r.view !== "feature" || r.tab !== "doc") return null;
+  const p = docPath(r, S.feature[r.n]);
+  return p && /\.md$/i.test(p) ? p : null;
+}
+async function loadNotes(n, path) {
+  const key = docKey(n, path), saves = noteSaves[key] || 0;
+  if (S.notesBusy[key]) return;   // a save is running: this GET could read the file before the POST writes it
+  let got;
+  try { got = await api(notesUrl(n, path)); }
+  catch (e) { got = { notes: [], block: "", error: "Notes could not be loaded." }; }
+  // A save ran while this answer was on its way: the answer may be older than the save, and changeNotes sets the fresh list itself.
+  if (S.notesBusy[key] || (noteSaves[key] || 0) !== saves) return;
+  S.notes[key] = got;
+  render();   // draws the list if it changed; every render ends with markAfterRender
+}
+function reloadNotes() {
+  const path = notesPath(S.route);
+  if (path) loadNotes(S.route.n, path);
+}
+async function changeNotes(n, path, change) {
+  // change(list) gives the new list: one note more, one id less, or [] for Clear all.
+  // It always gets the list on disk, loaded first, so a note saved from another tab is kept.
+  const key = docKey(n, path);
+  if (S.notesBusy[key]) return false;
+  S.notesBusy[key] = true;
+  noteSaves[key] = (noteSaves[key] || 0) + 1;
+  redraw();   // the bar's buttons are disabled while busy
+  let fresh = null, ok = true;
+  try {
+    fresh = await api(notesUrl(n, path));
+    S.notes[key] = await apiPost(notesUrl(n, path), { notes: change(Array.isArray(fresh.notes) ? fresh.notes : []) });
+  } catch (e) {
+    ok = false;   // the list on screen stays as it is on disk
+    S.notes[key] = Object.assign({}, fresh || S.notes[key] || { notes: [], block: "" }, { error: "Not saved. Try again." });
+  }
+  S.notesBusy[key] = false;
+  redraw();
+  return ok;
+}
+function textModel(root) {
+  // All text of root as one string with runs of spaces made one, so bold and links do not matter.
+  // nodes[i] and offs[i] say where character i comes from. Diagrams and the file explorer are left out.
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (t) {
+    return t.parentElement && t.parentElement.closest(NOTE_SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+  } });
+  const chars = [], nodes = [], offs = [], parts = [];
+  let space = true;   // no space at the very start
+  for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+    const v = t.nodeValue;
+    parts.push({ node: t, from: chars.length });
+    for (let i = 0; i < v.length; i++) {
+      const ws = /\s/.test(v[i]);
+      if (ws && space) continue;
+      chars.push(ws ? " " : v[i]);
+      nodes.push(t);
+      offs.push(i);
+      space = ws;
+    }
+  }
+  return { text: chars.join(""), nodes: nodes, offs: offs, parts: parts };
+}
+function startIndex(model, range) {
+  // The first character of the model that is not before the start of the range.
+  for (const part of model.parts) {
+    if (range.comparePoint(part.node, part.node.nodeValue.length) < 0) continue;
+    let k = part.from;
+    while (k < model.nodes.length && model.nodes[k] === part.node && range.comparePoint(part.node, model.offs[k]) < 0) k++;
+    return k;
+  }
+  return model.text.length;
+}
+function wholeChars(text) {
+  // A cut can split an emoji in two. Drop the lone half at either edge: the server cannot write it.
+  return text.replace(/^[\uDC00-\uDFFF]/, "").replace(/[\uD800-\uDBFF]$/, "");
+}
+function headingText(h) { return h.textContent.replace(/\s+/g, " ").trim(); }
+function headingPath(root, range) {
+  // The h2 to h4 headings above the start of the range, joined with " > ": "4. Scope > In scope".
+  const path = [];
+  root.querySelectorAll("h2, h3, h4").forEach(function (h) {
+    if (h.closest(NOTE_SKIP) || range.comparePoint(h, 0) >= 0) return;
+    const level = Number(h.tagName.charAt(1));
+    while (path.length && path[path.length - 1].level >= level) path.pop();
+    path.push({ level: level, text: headingText(h) });
+  });
+  return wholeChars(path.map(function (x) { return x.text; }).join(" > ").slice(0, 300));
+}
+function anchorOf(range, root) {
+  // Where a selection is, kept without line numbers: heading, quote, 40 characters on each side, and which match it is.
+  // { error } says why a selection cannot take a note.
+  const inside = function (node) { return node && root.contains(node); };
+  const elOf = function (node) { return node.nodeType === 1 ? node : node.parentElement; };
+  if (!range || range.collapsed || !inside(range.startContainer) || !inside(range.endContainer)) {
+    return { error: "Select text in this document first." };
+  }
+  if (elOf(range.startContainer).closest(NOTE_SKIP) || elOf(range.endContainer).closest(NOTE_SKIP)) {
+    return { error: "Diagrams and the file list take no text notes. Select text outside them." };
+  }
+  const quote = range.toString().replace(/\s+/g, " ").trim();
+  if (!quote) return { error: "Select some text first." };
+  if (quote.length > NOTE_QUOTE) return { error: "Select less text: " + NOTE_QUOTE + " characters at most." };
+  const model = textModel(root), text = model.text;
+  const from = startIndex(model, range);
+  const at = text.indexOf(quote, from);
+  if (at < 0 || at > from + 1) return { error: "This text cannot be kept as a note. Select less, with no diagram in it." };
+  let match = 0;
+  for (let k = text.indexOf(quote); k >= 0 && k < at; k = text.indexOf(quote, k + 1)) match++;
+  if (match > 999) return { error: "This text shows too many times. Select a longer part." };
+  return { heading: headingPath(root, range), quote: quote, before: wholeChars(text.slice(Math.max(0, at - NOTE_SIDE), at)),
+           after: wholeChars(text.slice(at + quote.length, at + quote.length + NOTE_SIDE)), match: match };
+}
+function markNotes(root, list) {
+  // Old marks go first, so marking twice on the cached docBody node is safe.
+  root.querySelectorAll("mark.note").forEach(function (m) { m.replaceWith.apply(m, Array.from(m.childNodes)); });
+  root.normalize();
+  for (const k in noteCover) delete noteCover[k];
+  const notes = (list || []).filter(function (x) { return x && typeof x.quote === "string"; });
+  if (!notes.length) return;
+  const model = textModel(root), text = model.text;
+  const found = [];
+  notes.forEach(function (note) {
+    const quote = note.quote.replace(/\s+/g, " ").trim();
+    const before = note.before || "", after = note.after || "";
+    const places = [];
+    for (let k = quote ? text.indexOf(quote) : -1; k >= 0; k = text.indexOf(quote, k + 1)) places.push(k);
+    const fits = function (k) {
+      return text.slice(Math.max(0, k - before.length), k) === before && text.slice(k + quote.length, k + quote.length + after.length) === after;
+    };
+    // The quote with the same text around it, else its match-th place, else it is lost.
+    let at = places[note.match] != null && fits(places[note.match]) ? places[note.match] : places.find(fits);
+    if (at == null) at = places[note.match];
+    if (at == null) { note.lost = true; return; }
+    delete note.lost;
+    found.push({ id: note.id, a: at, b: at + quote.length });
+  });
+  found.sort(function (x, y) { return x.a - y.a; });
+  const segs = [];
+  let end = 0, last = null;
+  found.forEach(function (f) {
+    if (f.a < end) {
+      if (f.b <= end) { noteCover[f.id] = last.id; return; }
+      f.a = end;
+    }
+    end = f.b;
+    last = f;
+    for (let k = f.a; k < f.b;) {   // one part per text node
+      const node = model.nodes[k];
+      let j = k;
+      while (j + 1 < f.b && model.nodes[j + 1] === node) j++;
+      segs.push({ node: node, s: model.offs[k], e: model.offs[j] + 1, id: f.id });
+      k = j + 1;
+    }
+  });
+  for (let i = segs.length - 1; i >= 0; i--) {   // from the end, so the offsets before each part stay right
+    const g = segs[i];
+    if (!/\S/.test(g.node.nodeValue.slice(g.s, g.e))) continue;
+    let t = g.node;
+    if (g.e < t.nodeValue.length) t.splitText(g.e);
+    if (g.s > 0) t = t.splitText(g.s);
+    const m = el("mark", { class: "note", data: { note: g.id } });
+    t.parentNode.replaceChild(m, t);
+    m.append(t);
+  }
+}
+function lostLine(list) { return list.map(function (x) { return x && x.lost ? (x.lost === "diagram" ? "2" : "1") : "0"; }).join(""); }
+function markAfterRender() {
+  // Called at the end of render() and after colourCode() is done. Marks the open .md doc tab only:
+  // a cached body shown anywhere else (compare, a task) has its marks taken off.
+  const view = document.getElementById("view");
+  const r = S.route, path = notesPath(r);
+  const key = path ? docKey(r.n, path) : null;
+  const c = key ? S.docNodes[key] : null;
+  const root = c && view.contains(c.node) ? c.node : null;
+  view.querySelectorAll(".md").forEach(function (md) { if (md !== root && md.querySelector("mark.note")) markNotes(md, []); });
+  const list = (root && S.notes[key] && Array.isArray(S.notes[key].notes)) ? S.notes[key].notes : [];
+  const was = lostLine(list);
+  view.querySelectorAll(".dcard").forEach(markDiagram);   // diagram notes: outlined boxes, counts and the Add note button
+  if (root) {
+    // A diagram note whose diagram is not in the document any more (renamed heading, removed diagram) is lost too.
+    // The cards are there by now: drawMermaid builds them before its first await.
+    const titles = new Set(Array.from(root.querySelectorAll(".dcard")).map(function (card) { return card.dataset.title; }));
+    list.forEach(function (note) {
+      if (!note || !note.diagram) return;
+      if (!titles.has(note.diagram)) note.lost = "diagram";
+      else if (note.lost === "diagram") delete note.lost;   // a missing box stays as markDiagram set it
+    });
+  }
+  if (root && (list.length || root.querySelector("mark.note"))) markNotes(root, list);
+  if (lostLine(list) !== was) redraw();   // the list shows "Text not found": draw it once more
+}
+function short(text, max) { text = String(text || ""); return text.length > max ? text.slice(0, max - 1) + "…" : text; }
+function showNote(note) {
+  const view = document.getElementById("view");
+  const smooth = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  const card = note.diagram ? Array.from(view.querySelectorAll(".dcard")).find(function (c) { return c.dataset.title === note.diagram; }) : null;
+  if (card) {
+    card.scrollIntoView({ block: "start", behavior: smooth });
+    card.classList.add("flash");
+    setTimeout(function () { card.classList.remove("flash"); }, 1600);
+    return;
+  }
+  const id = noteCover[note.id] || note.id;
+  const marks = Array.from(view.querySelectorAll('mark.note[data-note="' + CSS.escape(String(id)) + '"]'));
+  if (marks.length) {
+    marks[0].scrollIntoView({ block: "center", behavior: smooth });
+    marks.forEach(function (m) { m.classList.add("flash"); setTimeout(function () { m.classList.remove("flash"); }, 1600); });
+    return;
+  }
+  const last = String(note.heading || "").split(" > ").pop();   // text not found: go to its heading, if it is still there
+  const h = last && Array.from(view.querySelectorAll(".md h2, .md h3, .md h4")).find(function (x) { return headingText(x) === last; });
+  if (h) h.scrollIntoView({ block: "start", behavior: smooth });
+}
+function noteWhere(note) {
+  // "4. Scope > In scope" for text, "diagram High-level design, box Notes route" for a diagram.
+  if (!note.diagram) return note.heading || "the top of the document";
+  return "diagram " + note.diagram + (note.box ? ", box " + (note.label || note.box) : "");
+}
+function noteBar(n, path) {
+  const key = docKey(n, path);
+  const box = S.notes[key] || { notes: [] };
+  const list = Array.isArray(box.notes) ? box.notes : [];
+  const busy = !!S.notesBusy[key];
+  const copy = el("button", { class: "btn quiet", type: "button", disabled: busy || !list.length }, "Copy all comments");
+  copy.addEventListener("click", function () { copyText(box.block || "", copy); });
+  const clear = el("button", { class: "btn quiet", type: "button", disabled: busy || !list.length }, "Clear all");
+  clear.addEventListener("click", function () {
+    if (!window.confirm("Delete all notes on this document?")) return;
+    changeNotes(n, path, function () { return []; });
+  });
+  const items = list.map(function (note, i) {
+    const where = note.heading || "the top of the document";
+    const lost = note.diagram ? [el("span", { class: "nlost" }, note.lost === "diagram" ? "Diagram not found" : "Box not found"), " · " + noteWhere(note)]
+                              : [el("span", { class: "nlost" }, "Text not found"), " · Under: " + where];
+    const go = el("button", { type: "button", class: "ngo", title: "Show it in the page", on: { click: function () { showNote(note); } } },
+                  el("span", { class: "nat" }, note.lost ? [(i + 1) + ". "].concat(lost) : (i + 1) + ". At: " + noteWhere(note)),   // same number as in the copied block
+                  note.quote ? el("span", { class: "nquote" }, "“" + short(note.quote, 160) + "”") : null,
+                  el("span", { class: "ntext" }, note.text || ""));
+    const del = el("button", { class: "btn quiet", type: "button", disabled: busy, "aria-label": "Delete note " + (i + 1) }, "Delete");
+    del.addEventListener("click", function () {
+      changeNotes(n, path, function (all) { return all.filter(function (x) { return x.id !== note.id; }); });
+    });
+    return el("li", null, go, del);
+  });
+  return el("details", { class: "notebar", open: true, data: { keep: "notes-" + key } },
+            el("summary", null, list.length ? plural(list.length, "note") : "Notes"),
+            el("div", { class: "ntools" }, copy, clear,
+               busy ? el("span", { class: "nhint" }, "Saving.") : null,
+               !list.length && !busy ? el("span", { class: "nhint" }, "Select text in the page, or press Add note on a diagram, to add a note.") : null),
+            box.error || box.warning ? el("p", { class: "nerr", role: "alert" }, box.error || box.warning) : null,
+            items.length ? el("ol", { class: "nlist" }, items) : null);
+}
+function newNoteId() { return "n-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
+function closeNotePop() {
+  if (notePop) { notePop.remove(); notePop = null; }
+  if (noteAdd) { noteAdd.remove(); noteAdd = null; }
+}
+function placeNear(node, rect) {
+  const room = window.scrollX + document.documentElement.clientWidth - node.offsetWidth - 8;
+  node.style.left = Math.max(window.scrollX + 8, Math.min(rect.left + window.scrollX, room)) + "px";
+  node.style.top = (rect.bottom + window.scrollY + 6) + "px";
+}
+function notePopover(range, place) {
+  // A small form on document.body (outside #view), so a render or a live update never wipes what is typed.
+  // range places it (a Range or an element). place is where the note is; for a text selection anchorOf finds it.
+  const r = S.route, path = notesPath(r);
+  if (!path) return;
+  const n = r.n, c = S.docNodes[docKey(n, path)];
+  closeNotePop();
+  if (!place) place = c ? anchorOf(range, c.node) : { error: "Open the page view of this document first." };
+  const text = el("textarea", { rows: "3", maxlength: "2000", "aria-label": "Your note" });
+  const msg = el("p", { class: "nmsg", role: "status" }, place.error || "");
+  const save = el("button", { class: "btn", type: "submit" }, "Save");
+  const cancel = el("button", { class: "btn quiet", type: "button", on: { click: closeNotePop } }, place.error ? "Close" : "Cancel");
+  const form = el("form", { class: "npop", role: "dialog", "aria-label": "Add a note" },
+                  place.quote ? el("p", { class: "nquote" }, "“" + short(place.quote, 160) + "”") : null,
+                  place.diagram ? el("p", { class: "nquote" }, "On " + noteWhere(place)) : null,
+                  place.error ? null : text, msg, el("div", { class: "nrow" }, cancel, place.error ? null : save));
+  form.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); closeNotePop(); } });
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const words = text.value.trim();
+    if (!words) { msg.textContent = "Write a note first"; text.focus(); return; }
+    save.disabled = true;
+    msg.textContent = "Saving.";
+    const note = Object.assign({ id: newNoteId(), text: words, created: new Date().toISOString() }, place);
+    const ok = await changeNotes(n, path, function (all) { return all.concat([note]); });
+    if (notePop !== form) return;
+    if (ok) { closeNotePop(); return; }
+    save.disabled = false;
+    msg.textContent = (S.notes[docKey(n, path)] || {}).error || "Not saved. Try again.";
+  });
+  notePop = form;
+  document.body.append(form);
+  placeNear(form, range.getBoundingClientRect());
+  (place.error ? cancel : text).focus({ preventScroll: true });
+}
+function noteSelection(e) {
+  // After a selection in the open document, offer "Add note" next to it.
+  if (notePop || (noteAdd && noteAdd.contains(e.target))) return;
+  setTimeout(function () {
+    if (noteAdd) { noteAdd.remove(); noteAdd = null; }
+    const r = S.route, path = notesPath(r);
+    const c = path ? S.docNodes[docKey(r.n, path)] : null;
+    const sel = window.getSelection();
+    if (!c || !document.getElementById("view").contains(c.node) || !sel || sel.isCollapsed || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0).cloneRange();
+    if (!c.node.contains(range.commonAncestorContainer)) return;
+    const add = el("button", { class: "btn nadd", type: "button" }, "Add note");
+    add.addEventListener("mousedown", function (ev) { ev.preventDefault(); });   // keep the selection
+    add.addEventListener("click", function () { notePopover(range); });
+    noteAdd = add;
+    document.body.append(add);
+    placeNear(add, range.getBoundingClientRect());
+  }, 0);
+}
+document.addEventListener("mouseup", noteSelection);
+document.addEventListener("keyup", function (e) { if (e.shiftKey || e.key === "Shift") noteSelection(e); });
+window.addEventListener("hashchange", closeNotePop);
 
 // ---- tasks
 
@@ -1994,24 +2380,36 @@ function taskDrawer(f, r) {
 
 // ---- review
 
-function copyButton(target) {
-  const btn = el("button", { class: "btn", type: "button" }, "Copy");
-  btn.addEventListener("click", function () {
-    const text = target.textContent;
-    const done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1600); };
-    const select = function () {
+function copyText(text, btn, target) {
+  // Copy plain text, then say so on the button. With no clipboard, select the target (or a hidden copy of the text).
+  const label = btn.dataset.label || (btn.dataset.label = btn.textContent);
+  const done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = label; }, 1600); };
+  const select = function () {
+    let spare = null;
+    if (!target) {
+      spare = el("textarea", { readonly: true, "aria-hidden": "true", style: "position:fixed;top:0;left:-9999px" });
+      spare.value = text;
+      document.body.append(spare);
+      spare.select();
+    } else {
       const range = document.createRange();
       range.selectNodeContents(target);
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
-      let ok = false;
-      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
-      if (ok) done(); else { btn.textContent = "Selected: press Ctrl+C"; setTimeout(function () { btn.textContent = "Copy"; }, 4000); }
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
-    else select();
-  });
+    }
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    if (spare) spare.remove();
+    if (ok) done();
+    else { btn.textContent = target ? "Selected: press Ctrl+C" : "Could not copy"; setTimeout(function () { btn.textContent = label; }, 4000); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
+  else select();
+}
+function copyButton(target) {
+  const btn = el("button", { class: "btn", type: "button" }, "Copy");
+  btn.addEventListener("click", function () { copyText(target.textContent, btn, target); });
   return btn;
 }
 function threadWhere(t) {
@@ -2629,14 +3027,121 @@ function diagramCard(pre) {
   const how = howToRead(src);
   const title = diagramTitle(holder);
   const full = el("button", { type: "button", class: "btn quiet full", disabled: true }, ico("expand"), "See full view");
-  const card = el("figure", { class: "dcard", data: { src: src } },
+  // Add note shows only when the card is in the open .md document: markDiagram sets hidden.
+  const note = el("button", { type: "button", class: "btn quiet dadd", hidden: true, "aria-pressed": "false" }, "Add note");
+  const card = el("figure", { class: "dcard", data: { src: src, title: wholeChars(title.slice(0, 200)) || "Diagram" } },
                   el("h3", null, title), how ? el("p", { class: "how" }, how) : null, box,
-                  el("div", { class: "dtools" }, full, btn), code);
+                  el("div", { class: "dtools" }, full, btn, note), code);
   full.addEventListener("click", function () { openDiagram(card, title, how); });
-  box.addEventListener("click", function () { if (card.dataset.state === "done") openDiagram(card, title, how); });
+  note.addEventListener("click", function () { startDiagramNote(card); });
+  box.addEventListener("click", function (e) {
+    if (S.pick === card) { pickDiagramPlace(card, e.target); return; }   // pick mode: the click says where the note goes
+    if (card.dataset.state === "done") openDiagram(card, title, how);
+  });
   holder.replaceWith(card);
   return card;
 }
+
+// ---- notes on a diagram (new in P3): a whole-diagram note, or a note on one box of an architecture diagram
+function boxOf(target) {
+  // A Mermaid flowchart box is a <g class="node"> whose id ends with flowchart-n_<id>-<number>.
+  // The id is read from the new SVG each time, so the number after it does not matter.
+  // The generator turns any character outside letters, numbers and _ into _, so the saved box is that form.
+  const g = target && target.closest ? target.closest("g.node") : null;
+  const m = g && /flowchart-n_([A-Za-z0-9_]+)-\d+$/.exec(g.id || "");
+  if (!m || m[1].length > 100) return null;   // null: a whole-diagram note
+  const label = g.textContent.replace(/\s+/g, " ").trim().replace(/ (NEW|CHANGED)$/, "");   // the generator's status tag is not the name
+  return { box: m[1], label: wholeChars(label.slice(0, 200)) };
+}
+function boxPicks(card) {
+  // Only flowcharts (the architecture diagram) take box notes. Sequence diagrams have no stable box ids.
+  return card.dataset.state === "done" && /^(flowchart|graph)\b/.test((card.dataset.src || "").trim());
+}
+function diagramDoc(card) {
+  // The open .md document that holds this card, or null when the card shows anywhere else (compare, a task, the source view).
+  const r = S.route, path = notesPath(r);
+  const c = path ? S.docNodes[docKey(r.n, path)] : null;
+  if (!c || !c.node.contains(card) || !document.getElementById("view").contains(card)) return null;
+  const box = S.notes[docKey(r.n, path)];
+  return { n: r.n, path: path, root: c.node, list: box && Array.isArray(box.notes) ? box.notes : [] };
+}
+function markDiagram(card) {
+  // Called at the end of paint() when state is done (every draw and theme change) and from markAfterRender().
+  // Outlines each noted box with class note-box and shows a count for whole-diagram notes.
+  // A noted box not in the drawing sets note.lost (Box not found). Gives true when a lost flag changed.
+  // markAfterRender sets note.lost = "diagram" (Diagram not found) when no card has the note's diagram.
+  const at = diagramDoc(card);
+  const add = card.querySelector("button.dadd");
+  if (add) add.hidden = !at;
+  card.querySelectorAll(".note-box").forEach(function (g) { g.classList.remove("note-box"); });
+  const old = card.querySelector(".dcount");
+  if (old) old.remove();
+  if (!at) {
+    if (S.pick === card) leavePick();
+    return false;
+  }
+  const mine = at.list.filter(function (x) { return x && x.diagram === card.dataset.title; });
+  const whole = mine.filter(function (x) { return !x.box; }).length;
+  if (whole) card.querySelector(".dtools").append(el("span", { class: "dcount" }, plural(whole, "note") + " on this diagram"));
+  if (card.dataset.state !== "done") return false;   // not drawn: a box cannot be looked for yet
+  const boxes = {}, drawn = new Set();
+  card.querySelectorAll(".dbox g.node").forEach(function (g) { const b = boxOf(g); if (b) boxes[b.box] = g; });
+  // Box not found is decided over every drawn card with this title, so two cards named the same agree.
+  at.root.querySelectorAll(".dcard[data-state=done]").forEach(function (c) {
+    if (c.dataset.title !== card.dataset.title) return;
+    c.querySelectorAll(".dbox g.node").forEach(function (g) { const b = boxOf(g); if (b) drawn.add(b.box); });
+  });
+  let changed = false;
+  mine.forEach(function (note) {
+    if (!note.box) return;
+    if (boxes[note.box]) boxes[note.box].classList.add("note-box");
+    const there = drawn.has(note.box);
+    if (!!note.lost === there) changed = true;
+    if (there) delete note.lost;
+    else note.lost = true;
+  });
+  return changed;
+}
+function leavePick() {
+  const card = S.pick;
+  if (!card) return;
+  S.pick = null;
+  card.classList.remove("picking");
+  const hint = card.querySelector(".dpick");
+  if (hint) hint.remove();
+  const add = card.querySelector("button.dadd");
+  if (add) add.setAttribute("aria-pressed", "false");
+}
+function startDiagramNote(card) {
+  // Add note: on a drawn flowchart the next click on the drawing picks a box, or the empty space for the whole diagram.
+  // Any other diagram takes a whole-diagram note at once. A second Add note leaves pick mode.
+  if (S.pick === card) { leavePick(); return; }
+  leavePick();
+  closeNotePop();
+  if (!boxPicks(card)) { pickDiagramPlace(card, null); return; }
+  S.pick = card;
+  card.classList.add("picking");
+  card.querySelector("button.dadd").setAttribute("aria-pressed", "true");
+  // The drawing takes no focus, so Whole diagram lets a keyboard user finish too.
+  const whole = el("button", { type: "button", class: "btn quiet" }, "Whole diagram");
+  whole.addEventListener("click", function () { pickDiagramPlace(card, null); });
+  card.querySelector(".dbox").after(el("div", { class: "dpick" },
+    el("p", { role: "status" }, "Click a box, or the empty space for the whole diagram. Esc stops."), whole));
+}
+function pickDiagramPlace(card, target) {
+  leavePick();
+  const at = diagramDoc(card);
+  if (!at) return;
+  const range = document.createRange();
+  range.selectNode(card);
+  const place = { heading: headingPath(at.root, range), diagram: card.dataset.title };
+  const b = target && boxPicks(card) ? boxOf(target) : null;
+  if (b) Object.assign(place, b);
+  // notePopover saves the place as is, with changeNotes(S.route.n, docPath(...)) for the open document.
+  notePopover(b ? target.closest("g.node") : card.querySelector("button.dadd"), place);
+}
+document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.pick) leavePick(); });
+window.addEventListener("hashchange", leavePick);
 
 // ---- a diagram on its own, fitted to the window: zoom in, zoom out, fit, and drag to move around
 function openDiagram(card, title, how) {
@@ -2731,6 +3236,7 @@ async function paint(m, card) {
     const junk = document.getElementById("d" + id) || document.getElementById(id);
     if (junk) junk.remove();
   }
+  if (markDiagram(card)) redraw();   // noted boxes are outlined again after each draw and theme change; a lost box redraws the list
 }
 async function drawMermaid(root) {
   const pres = Array.from(root.querySelectorAll("pre.mermaid"));
@@ -2831,6 +3337,7 @@ document.addEventListener("visibilitychange", function () {
     S.dropped = true;
   } else {
     connect();
+    reloadNotes();   // another tab may have saved notes on this document
   }
 });
 
