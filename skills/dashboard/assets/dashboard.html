@@ -753,6 +753,15 @@ h1, h2, h3 { font-family: var(--font-sans); color: var(--text); }
 .npop textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-2); resize: vertical; min-height: 72px; }
 .npop .nmsg { color: var(--warnText); min-height: 1em; }
 .npop .nrow { display: flex; gap: var(--space-2); justify-content: flex-end; }
+/* notes on a diagram */
+.dcard { scroll-margin-top: calc(var(--top) + 80px); }
+.dcard.flash { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dcard.picking .dbox { cursor: crosshair; outline: 2px dashed var(--markLine); outline-offset: 2px; }
+.dcard.picking .dbox g.node { cursor: pointer; }
+.dcard .dbox g.node.note-box > :is(rect, polygon, path, circle, ellipse) { stroke: var(--markLine) !important; stroke-width: 3px !important; stroke-dasharray: none !important; }
+.dcard .dpick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text2); font-size: var(--text-sm); }
+.dcard .dpick p { margin: 0; }
+.dcard .dcount { align-self: center; color: var(--muted); font-size: var(--text-sm); }
 </style>
 </head>
 <body>
@@ -814,7 +823,7 @@ const S = {
   route: { view: "home" }, home: null, homeErr: null, feature: {}, featErr: {}, docs: {}, docNodes: {}, pr: {}, prErr: {},
   system: null, filters: { q: "", step: "", who: "" }, taskFilter: {}, reviewFilter: {}, changesUI: {}, cmOpen: {}, source: {},
   positions: {}, entry: null, entries: 0, lastHash: null, lastSig: null, seq: 0, mermaid: null, mmd: 0, dropped: false,
-  notes: {}, notesBusy: {}
+  notes: {}, notesBusy: {}, pick: null
 };
 
 // ------------------------------------------------------------------ DOM helpers
@@ -1928,6 +1937,7 @@ function compare(root, f) {
 const NOTE_SKIP = ".ch-embed, .dcard, .diagram, pre.mermaid, svg";   // the file explorer and diagrams take no text notes
 const NOTE_SIDE = 40, NOTE_QUOTE = 1000;
 const noteCover = {};   // a note inside another note's text has no mark of its own: its click goes to the other mark
+const noteSaves = {};   // saves started per document, so loadNotes can drop an answer a save made old
 let notePop = null, noteAdd = null;
 
 function notesUrl(n, path) { return "/api/notes/" + n + "?path=" + encodeURIComponent(path); }
@@ -1938,9 +1948,14 @@ function notesPath(r) {
   return p && /\.md$/i.test(p) ? p : null;
 }
 async function loadNotes(n, path) {
-  const key = docKey(n, path);
-  try { S.notes[key] = await api(notesUrl(n, path)); }
-  catch (e) { S.notes[key] = { notes: [], block: "", error: "Notes could not be loaded." }; }
+  const key = docKey(n, path), saves = noteSaves[key] || 0;
+  if (S.notesBusy[key]) return;   // a save is running: this GET could read the file before the POST writes it
+  let got;
+  try { got = await api(notesUrl(n, path)); }
+  catch (e) { got = { notes: [], block: "", error: "Notes could not be loaded." }; }
+  // A save ran while this answer was on its way: the answer may be older than the save, and changeNotes sets the fresh list itself.
+  if (S.notesBusy[key] || (noteSaves[key] || 0) !== saves) return;
+  S.notes[key] = got;
   render();   // draws the list if it changed; every render ends with markAfterRender
 }
 function reloadNotes() {
@@ -1953,6 +1968,7 @@ async function changeNotes(n, path, change) {
   const key = docKey(n, path);
   if (S.notesBusy[key]) return false;
   S.notesBusy[key] = true;
+  noteSaves[key] = (noteSaves[key] || 0) + 1;
   redraw();   // the bar's buttons are disabled while busy
   let fresh = null, ok = true;
   try {
@@ -2091,7 +2107,7 @@ function markNotes(root, list) {
     m.append(t);
   }
 }
-function lostLine(list) { return list.map(function (x) { return x && x.lost ? "1" : "0"; }).join(""); }
+function lostLine(list) { return list.map(function (x) { return x && x.lost ? (x.lost === "diagram" ? "2" : "1") : "0"; }).join(""); }
 function markAfterRender() {
   // Called at the end of render() and after colourCode() is done. Marks the open .md doc tab only:
   // a cached body shown anywhere else (compare, a task) has its marks taken off.
@@ -2101,17 +2117,33 @@ function markAfterRender() {
   const c = key ? S.docNodes[key] : null;
   const root = c && view.contains(c.node) ? c.node : null;
   view.querySelectorAll(".md").forEach(function (md) { if (md !== root && md.querySelector("mark.note")) markNotes(md, []); });
-  if (!root) return;
-  const list = (S.notes[key] && Array.isArray(S.notes[key].notes)) ? S.notes[key].notes : [];
-  if (!list.length && !root.querySelector("mark.note")) return;
+  const list = (root && S.notes[key] && Array.isArray(S.notes[key].notes)) ? S.notes[key].notes : [];
   const was = lostLine(list);
-  markNotes(root, list);
+  view.querySelectorAll(".dcard").forEach(markDiagram);   // diagram notes: outlined boxes, counts and the Add note button
+  if (root) {
+    // A diagram note whose diagram is not in the document any more (renamed heading, removed diagram) is lost too.
+    // The cards are there by now: drawMermaid builds them before its first await.
+    const titles = new Set(Array.from(root.querySelectorAll(".dcard")).map(function (card) { return card.dataset.title; }));
+    list.forEach(function (note) {
+      if (!note || !note.diagram) return;
+      if (!titles.has(note.diagram)) note.lost = "diagram";
+      else if (note.lost === "diagram") delete note.lost;   // a missing box stays as markDiagram set it
+    });
+  }
+  if (root && (list.length || root.querySelector("mark.note"))) markNotes(root, list);
   if (lostLine(list) !== was) redraw();   // the list shows "Text not found": draw it once more
 }
 function short(text, max) { text = String(text || ""); return text.length > max ? text.slice(0, max - 1) + "…" : text; }
 function showNote(note) {
   const view = document.getElementById("view");
   const smooth = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  const card = note.diagram ? Array.from(view.querySelectorAll(".dcard")).find(function (c) { return c.dataset.title === note.diagram; }) : null;
+  if (card) {
+    card.scrollIntoView({ block: "start", behavior: smooth });
+    card.classList.add("flash");
+    setTimeout(function () { card.classList.remove("flash"); }, 1600);
+    return;
+  }
   const id = noteCover[note.id] || note.id;
   const marks = Array.from(view.querySelectorAll('mark.note[data-note="' + CSS.escape(String(id)) + '"]'));
   if (marks.length) {
@@ -2122,6 +2154,11 @@ function showNote(note) {
   const last = String(note.heading || "").split(" > ").pop();   // text not found: go to its heading, if it is still there
   const h = last && Array.from(view.querySelectorAll(".md h2, .md h3, .md h4")).find(function (x) { return headingText(x) === last; });
   if (h) h.scrollIntoView({ block: "start", behavior: smooth });
+}
+function noteWhere(note) {
+  // "4. Scope > In scope" for text, "diagram High-level design, box Notes route" for a diagram.
+  if (!note.diagram) return note.heading || "the top of the document";
+  return "diagram " + note.diagram + (note.box ? ", box " + (note.label || note.box) : "");
 }
 function noteBar(n, path) {
   const key = docKey(n, path);
@@ -2137,9 +2174,10 @@ function noteBar(n, path) {
   });
   const items = list.map(function (note, i) {
     const where = note.heading || "the top of the document";
+    const lost = note.diagram ? [el("span", { class: "nlost" }, note.lost === "diagram" ? "Diagram not found" : "Box not found"), " · " + noteWhere(note)]
+                              : [el("span", { class: "nlost" }, "Text not found"), " · Under: " + where];
     const go = el("button", { type: "button", class: "ngo", title: "Show it in the page", on: { click: function () { showNote(note); } } },
-                  el("span", { class: "nat" }, note.lost ? [el("span", { class: "nlost" }, "Text not found"), " · Under: " + where]
-                                                         : (i + 1) + ". At: " + where),
+                  el("span", { class: "nat" }, note.lost ? lost : (i + 1) + ". At: " + noteWhere(note)),
                   note.quote ? el("span", { class: "nquote" }, "“" + short(note.quote, 160) + "”") : null,
                   el("span", { class: "ntext" }, note.text || ""));
     const del = el("button", { class: "btn quiet", type: "button", disabled: busy, "aria-label": "Delete note " + (i + 1) }, "Delete");
@@ -2152,7 +2190,7 @@ function noteBar(n, path) {
             el("summary", null, list.length ? plural(list.length, "note") : "Notes"),
             el("div", { class: "ntools" }, copy, clear,
                busy ? el("span", { class: "nhint" }, "Saving.") : null,
-               !list.length && !busy ? el("span", { class: "nhint" }, "Select text in the page to add a note.") : null),
+               !list.length && !busy ? el("span", { class: "nhint" }, "Select text in the page, or press Add note on a diagram, to add a note.") : null),
             box.error || box.warning ? el("p", { class: "nerr", role: "alert" }, box.error || box.warning) : null,
             items.length ? el("ol", { class: "nlist" }, items) : null);
 }
@@ -2180,6 +2218,7 @@ function notePopover(range, place) {
   const cancel = el("button", { class: "btn quiet", type: "button", on: { click: closeNotePop } }, place.error ? "Close" : "Cancel");
   const form = el("form", { class: "npop", role: "dialog", "aria-label": "Add a note" },
                   place.quote ? el("p", { class: "nquote" }, "“" + short(place.quote, 160) + "”") : null,
+                  place.diagram ? el("p", { class: "nquote" }, "On " + noteWhere(place)) : null,
                   place.error ? null : text, msg, el("div", { class: "nrow" }, cancel, place.error ? null : save));
   form.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); closeNotePop(); } });
   form.addEventListener("submit", async function (e) {
@@ -2988,14 +3027,121 @@ function diagramCard(pre) {
   const how = howToRead(src);
   const title = diagramTitle(holder);
   const full = el("button", { type: "button", class: "btn quiet full", disabled: true }, ico("expand"), "See full view");
-  const card = el("figure", { class: "dcard", data: { src: src } },
+  // Add note shows only when the card is in the open .md document: markDiagram sets hidden.
+  const note = el("button", { type: "button", class: "btn quiet dadd", hidden: true, "aria-pressed": "false" }, "Add note");
+  const card = el("figure", { class: "dcard", data: { src: src, title: wholeChars(title.slice(0, 200)) || "Diagram" } },
                   el("h3", null, title), how ? el("p", { class: "how" }, how) : null, box,
-                  el("div", { class: "dtools" }, full, btn), code);
+                  el("div", { class: "dtools" }, full, btn, note), code);
   full.addEventListener("click", function () { openDiagram(card, title, how); });
-  box.addEventListener("click", function () { if (card.dataset.state === "done") openDiagram(card, title, how); });
+  note.addEventListener("click", function () { startDiagramNote(card); });
+  box.addEventListener("click", function (e) {
+    if (S.pick === card) { pickDiagramPlace(card, e.target); return; }   // pick mode: the click says where the note goes
+    if (card.dataset.state === "done") openDiagram(card, title, how);
+  });
   holder.replaceWith(card);
   return card;
 }
+
+// ---- notes on a diagram (new in P3): a whole-diagram note, or a note on one box of an architecture diagram
+function boxOf(target) {
+  // A Mermaid flowchart box is a <g class="node"> whose id ends with flowchart-n_<id>-<number>.
+  // The id is read from the new SVG each time, so the number after it does not matter.
+  // The generator turns any character outside letters, numbers and _ into _, so the saved box is that form.
+  const g = target && target.closest ? target.closest("g.node") : null;
+  const m = g && /flowchart-n_([A-Za-z0-9_]+)-\d+$/.exec(g.id || "");
+  if (!m || m[1].length > 100) return null;   // null: a whole-diagram note
+  const label = g.textContent.replace(/\s+/g, " ").trim().replace(/ (NEW|CHANGED)$/, "");   // the generator's status tag is not the name
+  return { box: m[1], label: wholeChars(label.slice(0, 200)) };
+}
+function boxPicks(card) {
+  // Only flowcharts (the architecture diagram) take box notes. Sequence diagrams have no stable box ids.
+  return card.dataset.state === "done" && /^(flowchart|graph)\b/.test((card.dataset.src || "").trim());
+}
+function diagramDoc(card) {
+  // The open .md document that holds this card, or null when the card shows anywhere else (compare, a task, the source view).
+  const r = S.route, path = notesPath(r);
+  const c = path ? S.docNodes[docKey(r.n, path)] : null;
+  if (!c || !c.node.contains(card) || !document.getElementById("view").contains(card)) return null;
+  const box = S.notes[docKey(r.n, path)];
+  return { n: r.n, path: path, root: c.node, list: box && Array.isArray(box.notes) ? box.notes : [] };
+}
+function markDiagram(card) {
+  // Called at the end of paint() when state is done (every draw and theme change) and from markAfterRender().
+  // Outlines each noted box with class note-box and shows a count for whole-diagram notes.
+  // A noted box not in the drawing sets note.lost (Box not found). Gives true when a lost flag changed.
+  // markAfterRender sets note.lost = "diagram" (Diagram not found) when no card has the note's diagram.
+  const at = diagramDoc(card);
+  const add = card.querySelector("button.dadd");
+  if (add) add.hidden = !at;
+  card.querySelectorAll(".note-box").forEach(function (g) { g.classList.remove("note-box"); });
+  const old = card.querySelector(".dcount");
+  if (old) old.remove();
+  if (!at) {
+    if (S.pick === card) leavePick();
+    return false;
+  }
+  const mine = at.list.filter(function (x) { return x && x.diagram === card.dataset.title; });
+  const whole = mine.filter(function (x) { return !x.box; }).length;
+  if (whole) card.querySelector(".dtools").append(el("span", { class: "dcount" }, plural(whole, "note") + " on this diagram"));
+  if (card.dataset.state !== "done") return false;   // not drawn: a box cannot be looked for yet
+  const boxes = {}, drawn = new Set();
+  card.querySelectorAll(".dbox g.node").forEach(function (g) { const b = boxOf(g); if (b) boxes[b.box] = g; });
+  // Box not found is decided over every drawn card with this title, so two cards named the same agree.
+  at.root.querySelectorAll(".dcard[data-state=done]").forEach(function (c) {
+    if (c.dataset.title !== card.dataset.title) return;
+    c.querySelectorAll(".dbox g.node").forEach(function (g) { const b = boxOf(g); if (b) drawn.add(b.box); });
+  });
+  let changed = false;
+  mine.forEach(function (note) {
+    if (!note.box) return;
+    if (boxes[note.box]) boxes[note.box].classList.add("note-box");
+    const there = drawn.has(note.box);
+    if (!!note.lost === there) changed = true;
+    if (there) delete note.lost;
+    else note.lost = true;
+  });
+  return changed;
+}
+function leavePick() {
+  const card = S.pick;
+  if (!card) return;
+  S.pick = null;
+  card.classList.remove("picking");
+  const hint = card.querySelector(".dpick");
+  if (hint) hint.remove();
+  const add = card.querySelector("button.dadd");
+  if (add) add.setAttribute("aria-pressed", "false");
+}
+function startDiagramNote(card) {
+  // Add note: on a drawn flowchart the next click on the drawing picks a box, or the empty space for the whole diagram.
+  // Any other diagram takes a whole-diagram note at once. A second Add note leaves pick mode.
+  if (S.pick === card) { leavePick(); return; }
+  leavePick();
+  closeNotePop();
+  if (!boxPicks(card)) { pickDiagramPlace(card, null); return; }
+  S.pick = card;
+  card.classList.add("picking");
+  card.querySelector("button.dadd").setAttribute("aria-pressed", "true");
+  // The drawing takes no focus, so Whole diagram lets a keyboard user finish too.
+  const whole = el("button", { type: "button", class: "btn quiet" }, "Whole diagram");
+  whole.addEventListener("click", function () { pickDiagramPlace(card, null); });
+  card.querySelector(".dbox").after(el("div", { class: "dpick" },
+    el("p", { role: "status" }, "Click a box, or the empty space for the whole diagram. Esc stops."), whole));
+}
+function pickDiagramPlace(card, target) {
+  leavePick();
+  const at = diagramDoc(card);
+  if (!at) return;
+  const range = document.createRange();
+  range.selectNode(card);
+  const place = { heading: headingPath(at.root, range), diagram: card.dataset.title };
+  const b = target && boxPicks(card) ? boxOf(target) : null;
+  if (b) Object.assign(place, b);
+  // notePopover saves the place as is, with changeNotes(S.route.n, docPath(...)) for the open document.
+  notePopover(b ? target.closest("g.node") : card.querySelector("button.dadd"), place);
+}
+document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.pick) leavePick(); });
+window.addEventListener("hashchange", leavePick);
 
 // ---- a diagram on its own, fitted to the window: zoom in, zoom out, fit, and drag to move around
 function openDiagram(card, title, how) {
@@ -3090,6 +3236,7 @@ async function paint(m, card) {
     const junk = document.getElementById("d" + id) || document.getElementById(id);
     if (junk) junk.remove();
   }
+  if (markDiagram(card)) redraw();   // noted boxes are outlined again after each draw and theme change; a lost box redraws the list
 }
 async function drawMermaid(root) {
   const pres = Array.from(root.querySelectorAll("pre.mermaid"));
