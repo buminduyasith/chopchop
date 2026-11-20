@@ -1,13 +1,13 @@
 ---
 name: dashboard
-description: Start, stop or check the chopchop live dashboard, a local page that shows every feature, its step, who it waits for, the brief, design and spec (side by side with Compare), the task board, the PR review comments and the activity log, updated live as files change. Use when the user runs dashboard, asks to open, show, start or stop the dashboard or the board, wants to see progress, or asks for the link. /chopchop:run starts it by itself.
+description: Start, stop or check the chopchop live dashboard, a local page that shows every feature, its step, who it waits for, the brief, design and spec (side by side with Compare), the task board, the PR review comments and the activity log, updated live as files change. The reviewer can add notes on a document and copy them for the agent. Use when the user runs dashboard, asks to open, show, start or stop the dashboard or the board, wants to see progress, or asks for the link. /chopchop:run starts it by itself.
 argument-hint: "[--stop | --status]"
 ---
 
 # Dashboard
 
-One live page for every feature in the `_chopchop` folder. It only reads files. It runs on this
-machine only (`127.0.0.1`).
+One live page for every feature in the `_chopchop` folder. It only reads files, except the
+reviewer's notes in `work/.dashboard-notes.json`. It runs on this machine only (`127.0.0.1`).
 
 The script is `${CLAUDE_SKILL_DIR}/scripts/chopchop_dashboard.py`. Run it with `python3` from the
 user's project folder. It needs the `tasks` skill folder next to it.
@@ -47,10 +47,13 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/chopchop_dashboard.py --status
 - **Changes:** every file the spec adds, changes or deletes, as a folder tree per repo with git colours.
 - **Tasks:** a board. A click on a task opens its Markdown with its diagrams.
 - **Review:** every PR comment explained, grouped, with the fix and a reply draft.
+- **Notes:** the reviewer's notes on a `.md` document, kept per document, with Copy all and Clear all.
 
 ## Rules
 
-- It listens on `127.0.0.1` only and answers reads only. It never changes a file.
+- It listens on `127.0.0.1` only and answers reads only. The one exception is
+  `work/.dashboard-notes.json` of a feature, written only when the reviewer saves notes on the
+  page. It never changes any other file.
 - It never sends workspace files anywhere.
 - Approvals happen in chat, not on the page.
 - If the script fails, show the error and the fix. Do not work around it.

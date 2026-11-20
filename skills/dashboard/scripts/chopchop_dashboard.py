@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dashboard: one live page for every feature in the workspace. It only reads files.
+"""Dashboard: one live page for every feature in the workspace. It only reads files, except the reviewer's notes.
 
 Usage
   chopchop_dashboard.py --start [--port N] [--no-open] [--json]   start it in the background, print the link
@@ -15,13 +15,19 @@ Files, in _chopchop/:
   .dashboard.json   pid, port, url, started, token, workspace, log (gone when it stops)
   .dashboard.log    what the server printed
 
-HTTP, on 127.0.0.1 only, GET only:
+In each feature folder:
+  work/.dashboard-notes.json   the reviewer's notes, one list per document (written only by POST /api/notes)
+
+HTTP, on 127.0.0.1 only, GET only, except POST /api/notes:
   /                          the page
   /api/features              every feature as stage.read() gives it, plus key and updated
   /api/feature/<n>           that, plus docs, tasks, events, comments, gates, links, run
   /api/doc/<n>?path=...      one .md or .json file inside the feature folder: {title, html, summary, updated, raw}
   /api/prs  /api/pr/<slug>   review stores of PRs that have no feature (_chopchop/prs/<slug>/)
   /api/system                the system map, when there is one
+  /api/notes/<n>?path=...    GET or POST the notes of one .md document: {path, notes, block}
+                             A POST needs Content-Type application/json, a body of 256 KB at most,
+                             and no Origin or this dashboard's own
   /api/stream                server-sent events: "changed" with the feature numbers, when a file changes
   /api/ping                  who is this (used by --start, --stop and --status)
 
@@ -55,7 +61,7 @@ sys.path.insert(0, str(TASKS / "scripts"))
 sys.path.insert(0, str(HERE))
 
 from chopchoplib.config import ConfigError, find_workspace, load_config  # noqa: E402
-from dashlib import data  # noqa: E402
+from dashlib import data, notes  # noqa: E402
 from dashlib.watch import Hub, Watcher, stamp  # noqa: E402
 
 APP = "chopchop-dashboard"
@@ -70,6 +76,7 @@ LOG_FILE = ".dashboard.log"
 LOG_KEEP = 512 * 1024
 PAGE = HERE.parent / "assets" / "dashboard.html"
 NONCE_MARK = "__CSP_NONCE__"
+MAX_BODY = 256 * 1024   # bytes: a bigger notes POST is refused before it is read
 
 
 class UsageError(Exception):
@@ -139,9 +146,12 @@ class Handler(BaseHTTPRequestHandler):
         self.route(False)
 
     def read_only(self):
-        self.send_json(405, {"error": "The dashboard is read only. It answers GET only."}, {"Allow": "GET, HEAD"})
+        self.send_json(405, {"error": "The dashboard only reads, except notes at /api/notes."}, {"Allow": "GET, HEAD"})
 
-    do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = read_only
+    def do_POST(self):
+        self.route(True, post=True)
+
+    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = read_only
 
     # ------------------------------------------------------------------ answers
 
@@ -190,7 +200,37 @@ class Handler(BaseHTTPRequestHandler):
         name = host[:host.find("]") + 1] if host.startswith("[") else host.rsplit(":", 1)[0]
         return name in ("127.0.0.1", "localhost", "[::1]")
 
-    def route(self, with_body):
+    def origin_ok(self):
+        """A browser always sends Origin on a POST. Allow none (a local script), or this dashboard only."""
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if not origin:
+            return True
+        try:
+            url = urlsplit(origin)
+            port = url.port
+        except ValueError:
+            return False
+        return (url.scheme == "http" and url.hostname in ("127.0.0.1", "localhost") and url.path in ("", "/")
+                and port == self.server.server_port)
+
+    def read_body(self):
+        """The JSON body of a notes POST. The type and size are checked before anything is read."""
+        if not (self.headers.get("Content-Type") or "").strip().lower().startswith("application/json"):
+            raise notes.BadType("Send the notes as application/json.")
+        try:
+            size = int(self.headers.get("Content-Length") or "")
+        except ValueError:
+            raise data.ApiError("Say the body size in Content-Length.")
+        if size < 0:
+            raise data.ApiError("Say the body size in Content-Length.")
+        if size > MAX_BODY:
+            raise data.TooBig("The notes are too big: 256 KB at most.")
+        try:
+            return json.loads(self.rfile.read(size).decode("utf-8") or "{}")
+        except ValueError:
+            raise data.ApiError("The notes are not JSON.")
+
+    def route(self, with_body, post=False):
         srv = self.server
         try:
             if not self.host_ok():
@@ -199,6 +239,16 @@ class Handler(BaseHTTPRequestHandler):
             path = unquote(url.path)
             query = parse_qs(url.query)
             ws = srv.workspace
+            m = re.match(r"^/api/notes/(\d{1,9})$", path)
+            if post and not m:
+                return self.read_only()
+            if m:
+                doc = (query.get("path") or [""])[0]
+                if not post:
+                    return self.send_json(200, notes.get(ws, m.group(1), doc))
+                if not self.origin_ok():
+                    return self.send_json(403, {"error": "Only the dashboard page can save notes."})
+                return self.send_json(200, notes.save(ws, m.group(1), doc, self.read_body()))
             if path in ("/", "/index.html"):
                 return self.send_page()
             if path == "/favicon.ico":
