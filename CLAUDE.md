@@ -13,7 +13,9 @@ Format `MAJOR.MINOR.PATCH` (now in `.claude-plugin/plugin.json`).
 
 ## Release
 
-After anything is merged to main, ask the user if they want a GitHub release. Only on a yes:
+After a merge to main that changes what users install (`skills/`, `agents/`, `.claude-plugin/`),
+ask the user if they want a GitHub release. Do not ask for internal files only (CLAUDE.md, docs,
+evals, repo config). Only on a yes:
 
 1. Bump the version in `.claude-plugin/plugin.json`, the `ref` in `.claude-plugin/marketplace.json`
    and `docs/HANDOFF.md`. Commit `chore(release): bump version to X.Y.Z`.
