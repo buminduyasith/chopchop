@@ -999,11 +999,17 @@ class WaitTest(Base):
         self.fetched_and_triaged()
         self.run_cc("--watch", "on")
         self.assertTrue(stage.comments_view(self.dir)["watching"])
+
+        def threads():
+            return len([c for c in self.gh.calls() if any("query Threads" in a for a in c)])
+
+        before = threads()
         out = self.run_cc("--wait", "--every", "0.05", "--for", "0.3", code=3)
         self.assertIn("Quiet:    nothing new on 001-IDEA-1-refunds", out)
         watch = self.load("prs.json")["watch"]
         self.assertTrue(watch["on"] and watch["since"] and watch["last"])
-        self.assertGreaterEqual(len([c for c in self.gh.calls() if any("query Threads" in a for a in c)]), 6)
+        # At least one full look at every PR. How many looks fit in 0.3 s depends on the machine.
+        self.assertGreaterEqual(threads() - before, len(self.load("prs.json")["prs"]))
 
     def test_a_comment_that_arrives_while_waiting(self):
         self.fetched_and_triaged()
