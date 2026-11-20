@@ -2177,7 +2177,7 @@ function noteBar(n, path) {
     const lost = note.diagram ? [el("span", { class: "nlost" }, note.lost === "diagram" ? "Diagram not found" : "Box not found"), " · " + noteWhere(note)]
                               : [el("span", { class: "nlost" }, "Text not found"), " · Under: " + where];
     const go = el("button", { type: "button", class: "ngo", title: "Show it in the page", on: { click: function () { showNote(note); } } },
-                  el("span", { class: "nat" }, note.lost ? lost : (i + 1) + ". At: " + noteWhere(note)),
+                  el("span", { class: "nat" }, note.lost ? [(i + 1) + ". "].concat(lost) : (i + 1) + ". At: " + noteWhere(note)),   // same number as in the copied block
                   note.quote ? el("span", { class: "nquote" }, "“" + short(note.quote, 160) + "”") : null,
                   el("span", { class: "ntext" }, note.text || ""));
     const del = el("button", { class: "btn quiet", type: "button", disabled: busy, "aria-label": "Delete note " + (i + 1) }, "Delete");
