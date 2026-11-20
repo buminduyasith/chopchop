@@ -1,6 +1,6 @@
 {
   "name": "chopchop",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "chopchop: take a feature from a Jira key or a one-line idea to merged PRs with one command, using the tools your team already has. Agents check the stories against the code and interview you, then write a brief, a design a lead can approve and a full spec. People approve those three. Then fresh agents build, review, fix, test and commit every task, one PR per repo. A live local dashboard shows every feature, document and task. Review comments on the PRs are explained in simple English, grouped by cause, fixed together and answered.",
   "author": {
     "name": "bumindu"

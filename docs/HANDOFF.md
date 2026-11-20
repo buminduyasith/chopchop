@@ -147,7 +147,7 @@ Content, in simple English:
 - Step 1: `--start`. Say the `Dashboard:` link in one line. Say it updates by itself.
 - Step 2: `--stop` stops it. `--status` says if it runs.
 - What the page shows, in 5 short lines (home, a feature, Compare, tasks board, Review tab).
-- Rules: it listens on `127.0.0.1` only, it is read only, it never sends files anywhere.
+- Rules: it listens on `127.0.0.1` only, it writes only reviewer notes (`work/.dashboard-notes.json`), it never sends files anywhere.
 
 Check the real flags first: `python3 skills/dashboard/scripts/chopchop_dashboard.py --help`. Today they are `--start`, `--stop`, `--status`, `--serve`, `--port N`, `--no-open`, `--json`, `--workspace`.
 
@@ -353,8 +353,8 @@ Check:
 | The build keeps one PR per repo with one commit per task. `--wave` only pauses. | Fewer PRs for people to review, and reviewers can go commit by commit. |
 | A merged PR marks its tasks done. | A person merges, so a person still decides. |
 | Mermaid loads from a pinned CDN link in the browser. Design diagrams are drawn on the server. | No big library in the repo, and the main diagrams work offline. |
-| The dashboard is read only. Approvals happen in chat. | Simpler and safer. |
-| Version is 0.10.2. | Released as the v0.10.2 GitHub release. The marketplace installs release tags only. Only the user decides when to release. |
+| The dashboard only reads, except reviewer notes in `work/.dashboard-notes.json`. Approvals happen in chat. | Simpler and safer. Notes are the one write, with host, Origin, type, size and path checks. |
+| Version is 0.11.0. | Released as the v0.11.0 GitHub release. The marketplace installs release tags only. Only the user decides when to release. |
 
 ## 8. Known risks
 

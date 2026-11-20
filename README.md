@@ -270,7 +270,7 @@ agents:                               # helpers (subagents); asked once
 - It posts a reply on a PR only after your yes.
 - In locked mode it never changes what the BA wrote.
 - It never asks for, stores or sets up logins, tokens or tools.
-- The dashboard listens on your machine only and is read only.
+- The dashboard listens on your machine only. It writes one file: your review notes, in `work/.dashboard-notes.json`.
 
 ## Without the plugin
 
